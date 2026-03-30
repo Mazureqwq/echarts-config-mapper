@@ -9,3 +9,6 @@ vue3 + vite + echarts
 
 ### 环境要求
 node 23.11.1 及以上版本
+
+### 项目截图
+![项目截图](./preview.png)

@@ -6,8 +6,8 @@
         :key="idx"
         class="item"
         @click="onEnd(idx)">
-        <p>{{ item.name }}</p>
         <img :src="item.img" />
+        <p>{{ item.name }}</p>
       </div>
     </div>
     <div class="center-container">
@@ -196,12 +196,12 @@ body,
   display: flex;
   flex-direction: row;
 }
-
 .left-mini {
   width: 140px;
   // position: absolute;
   // left: 0;
   // top: 0;
+  padding-top: 40px;
   height: 100%;
   background: rgba(0, 0, 0, 0.2);
   display: flex;
