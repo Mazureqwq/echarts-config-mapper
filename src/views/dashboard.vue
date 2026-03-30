@@ -1,34 +1,68 @@
 <template>
   <div class="body-wrap">
     <div class="left-mini">
-      <div v-for="(item, idx) in miniTools" :key="idx" class="item" @click="onEnd(idx)">
+      <div
+        v-for="(item, idx) in miniTools"
+        :key="idx"
+        class="item"
+        @click="onEnd(idx)">
         <p>{{ item.name }}</p>
         <img :src="item.img" />
       </div>
     </div>
     <div class="center-container">
+      <div style="position: absolute; top: 10px; right: 10px">
+        <ElButton size="small" type="primary" @click="copyOption"
+          >复制配置</ElButton
+        >
+      </div>
       <div class="config">
-        <span>宽:
-          <ElInputNumber v-model="width" controls-position="right" size="small" :min="1" :max="1200" :style="{
-            width: '80px'
-          }" placeholder="请输入索引" />
+        <span
+          >宽:
+          <ElInputNumber
+            v-model="width"
+            controls-position="right"
+            size="small"
+            :min="1"
+            :max="1200"
+            :style="{
+              width: '80px',
+            }"
+            placeholder="请输入索引" />
         </span>
         <span>
           高:
-          <ElInputNumber v-model="height" controls-position="right" size="small" :min="1" :max="1200" :style="{
-            width: '80px'
-          }" placeholder="请输入索引" />
+          <ElInputNumber
+            v-model="height"
+            controls-position="right"
+            size="small"
+            :min="1"
+            :max="1200"
+            :style="{
+              width: '80px',
+            }"
+            placeholder="请输入索引" />
         </span>
       </div>
-      <div class="wrapper" :style="{
-        width: width + 'px',
-        height: height + 'px'
-      }">
-        <DragItem v-for="(item, idx) in options" :key="item.id" :options="item" :idx="idx" @set-option="setOption" />
+      <div
+        class="wrapper"
+        :style="{
+          width: width + 'px',
+          height: height + 'px',
+        }">
+        <DragItem
+          v-for="(item, idx) in options"
+          :key="item.id"
+          :options="item"
+          :idx="idx"
+          @set-option="setOption" />
       </div>
     </div>
     <div class="rg-option">
-      <ConfigUi v-if="options.length > 0" :cur-option="options[0]" :index="index" />
+      <ConfigUi
+        v-if="options.length > 0"
+        :cur-option="options[0]"
+        :index="index" />
     </div>
   </div>
 </template>
@@ -39,7 +73,8 @@ import DragItem from "@/components/firm/drag-item.vue";
 import ConfigUi from "@/components/firm/config-ui";
 import config from "@/setting/config";
 import emitter from "@/utils/eventBus";
-import { ElInputNumber } from "element-plus";
+import { ElButton, ElInputNumber, ElMessage } from "element-plus";
+import { useClipboard } from "@vueuse/core";
 
 // 类型定义
 interface MiniTool {
@@ -59,6 +94,14 @@ interface ChartOption {
   [key: string]: any;
 }
 
+const { copy } = useClipboard();
+const copyOption = () => {
+  const option = options.value[0]?.echartOption.echartOption;
+  console.log(option);
+  copy(JSON.stringify(option));
+  ElMessage.success("复制成功");
+};
+
 // 数据
 const miniTools = ref<MiniTool[]>(config.types);
 const index = ref<number>(0);
@@ -74,7 +117,7 @@ const options = ref<ChartOption[]>([
 ]);
 const width = ref<number>(800);
 const height = ref<number>(600);
-provide('sizeOptions', { width, height });
+provide("sizeOptions", { width, height });
 // 监听事件总线
 onMounted(() => {
   // 设置配置项
@@ -106,18 +149,20 @@ const echartOption = async (type) => {
   const loader = echartModules[path];
   const module = await loader();
   return module?.default || {};
-}
+};
 // 拖拽结束 → 添加图表
 const onEnd = async (idx: any) => {
   const tool = miniTools.value[idx];
-  options.value = [{
-    type: tool.value,
-    x: tool.x,
-    y: tool.y,
-    id: Math.random(),
-    echartOption: await echartOption(tool.value),
-    isActive: true,
-  }];
+  options.value = [
+    {
+      type: tool.value,
+      x: tool.x,
+      y: tool.y,
+      id: Math.random(),
+      echartOption: await echartOption(tool.value),
+      isActive: true,
+    },
+  ];
 };
 </script>
 
@@ -167,7 +212,7 @@ body,
   //   cursor: pointer;
   // }
 
-  >.ghost {
+  > .ghost {
     background: red;
   }
 
@@ -182,6 +227,7 @@ body,
 .center-container {
   background-color: #fff;
   flex: 1;
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
