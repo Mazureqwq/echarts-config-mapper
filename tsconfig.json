@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "types": ["vite/client"], // 核心：引入 Vite 客户端类型
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2020",
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  }
+}
