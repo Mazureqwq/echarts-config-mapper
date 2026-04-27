@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy:pro": "pnpm build && ssh root@47.109.193.165 \"rm -rf /var/www/echarts-project/*\" && scp -r dist/* root@47.109.193.165:/var/www/echarts-project/ && ssh root@47.109.193.165 \"/usr/local/openresty/nginx/sbin/nginx -s reload\""
   },
   "dependencies": {
     "@vueuse/core": "^14.2.1",
