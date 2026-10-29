@@ -1,0 +1,160 @@
+:root {
+  /* 背景层级 */
+  --cf-bg-0: #0b0f17;
+  --cf-bg-1: #111826;
+  --cf-bg-2: #18202f;
+  --cf-bg-3: #1f2a3d;
+  --cf-bg-hover: #223049;
+  --cf-stage: #0e1420;
+
+  /* 边框 */
+  --cf-border: #24304a;
+  --cf-border-strong: #33415f;
+  --cf-border-soft: rgba(51, 65, 95, 0.45);
+
+  /* 文字 */
+  --cf-text: #e6eaf2;
+  --cf-text-dim: #a7b0c0;
+  --cf-text-muted: #8a94a6;
+  --cf-text-faint: #5f6a7d;
+
+  /* 主题色 */
+  --cf-accent: #6366f1;
+  --cf-accent-hover: #7c7ff5;
+  --cf-accent-soft: rgba(99, 102, 241, 0.16);
+  --cf-accent-ring: rgba(99, 102, 241, 0.45);
+  --cf-cyan: #22d3ee;
+  --cf-danger: #f87171;
+  --cf-danger-soft: rgba(248, 113, 113, 0.14);
+  --cf-success: #34d399;
+
+  /* 尺寸 */
+  --cf-radius-sm: 6px;
+  --cf-radius: 10px;
+  --cf-radius-lg: 14px;
+  --cf-header-h: 52px;
+  --cf-left-w: 208px;
+  --cf-right-w: 332px;
+
+  /* 动效 */
+  --cf-fast: 130ms cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* 字体 */
+  --cf-font: "Inter", "Segoe UI", system-ui, -apple-system, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --cf-font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Consolas,
+    "Liberation Mono", monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--cf-bg-0);
+  color: var(--cf-text);
+  font-family: var(--cf-font);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 统一细滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--cf-border-strong);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #46577d;
+  background-clip: padding-box;
+}
+
+/* Element Plus 暗色化（局部覆写，不污染全局） */
+.cf-app {
+  --el-color-primary: var(--cf-accent);
+  --el-bg-color: var(--cf-bg-2);
+  --el-bg-color-overlay: var(--cf-bg-2);
+  --el-text-color-primary: var(--cf-text);
+  --el-text-color-regular: var(--cf-text-dim);
+  --el-text-color-placeholder: var(--cf-text-faint);
+  --el-border-color: var(--cf-border);
+  --el-border-color-light: var(--cf-border);
+  --el-border-color-lighter: var(--cf-border-soft);
+  --el-fill-color-blank: var(--cf-bg-1);
+  --el-fill-color-light: var(--cf-bg-2);
+  --el-fill-color: var(--cf-bg-2);
+  --el-mask-color: rgba(11, 15, 23, 0.75);
+  --el-font-family: var(--cf-font);
+  --el-border-radius-base: var(--cf-radius-sm);
+  --el-font-size-base: 13px;
+  --el-input-bg-color: var(--cf-bg-1);
+  --el-input-text-color: var(--cf-text);
+  --el-input-border-color: var(--cf-border);
+  --el-input-hover-border-color: var(--cf-border-strong);
+  --el-disabled-bg-color: var(--cf-bg-2);
+}
+
+.cf-app .el-input__wrapper,
+.cf-app .el-textarea__inner,
+.cf-app .el-select__wrapper {
+  background-color: var(--cf-bg-1);
+  box-shadow: 0 0 0 1px var(--cf-border) inset;
+  border-radius: var(--cf-radius-sm);
+  transition: box-shadow var(--cf-fast);
+}
+
+.cf-app .el-input__wrapper:hover,
+.cf-app .el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--cf-border-strong) inset;
+}
+
+.cf-app .el-input__wrapper.is-focus,
+.cf-app .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--cf-accent) inset;
+}
+
+.cf-app .el-input__inner {
+  font-family: var(--cf-font);
+}
+
+.cf-app .el-switch {
+  --el-switch-off-color: #2b3852;
+  --el-switch-on-color: var(--cf-accent);
+}
+
+.cf-app .el-popper.is-light {
+  background: var(--cf-bg-2);
+  border: 1px solid var(--cf-border);
+  color: var(--cf-text);
+}
+
+.cf-app .el-select-dropdown__item.is-selected {
+  color: var(--cf-accent);
+}
+
+.cf-app .el-message {
+  background: var(--cf-bg-2);
+  border-color: var(--cf-border);
+  color: var(--cf-text);
+}

@@ -1,0 +1,4 @@
+# pnpm 11 turns "ignored build scripts" into a hard install failure.
+# esbuild needs its postinstall to produce the native binary that Vite uses.
+allowBuilds:
+  esbuild: true
