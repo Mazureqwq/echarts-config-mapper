@@ -40,12 +40,12 @@ import { ElInput } from "element-plus";
 import FieldControl from "@/components/editor/panels/FieldControl.vue";
 import Icon from "@/components/ui/Icon.vue";
 import { getSchema } from "@/config/schema";
-import { useWorkspaceStore } from "@/stores/workspace";
+import { useOptionEditor } from "@/composables/useOptionEditor";
 import type { ChartInstance, SchemaGroup } from "@/types/chart";
 import { getByPath, setByPath } from "@/utils/object";
 
 const props = defineProps<{ chart: ChartInstance }>();
-const store = useWorkspaceStore();
+const editor = useOptionEditor();
 
 const keyword = ref("");
 const activeKey = ref("title");
@@ -97,16 +97,16 @@ function readValue(key: string): unknown {
 }
 
 function onUpdate(key: string, value: unknown): void {
-  store.updateOption(props.chart.id, fullPath(key), value);
-  store.commit();
+  editor.update(fullPath(key), value);
+  editor.commit();
 }
 
 function onChildUpdate(key: string, childKey: string, value: unknown): void {
   const path = fullPath(key);
   const current = getByPath(props.chart.option, path);
   const base = current && typeof current === "object" ? current : {};
-  store.updateOption(props.chart.id, path, setByPath(base, childKey, value));
-  store.commit();
+  editor.update(path, setByPath(base, childKey, value));
+  editor.commit();
 }
 </script>
 

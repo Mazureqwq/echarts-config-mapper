@@ -18,8 +18,16 @@ import PreviewCanvas from "@/components/editor/PreviewCanvas.vue";
 import InspectorPanel from "@/components/editor/InspectorPanel.vue";
 import { CHART_META } from "@/config/editor";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { provideOptionEditor } from "@/composables/useOptionEditor";
 
 const store = useWorkspaceStore();
+
+provideOptionEditor({
+  read: (path, fallback) => store.readOption(path, fallback),
+  update: (path, value) => store.updateOption(store.type, path, value),
+  replace: (option, record) => store.replaceOption(store.type, option, record),
+  commit: () => store.commit(),
+});
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;

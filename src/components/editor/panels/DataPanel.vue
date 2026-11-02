@@ -40,12 +40,12 @@
 import { computed } from "vue";
 import Icon from "@/components/ui/Icon.vue";
 import { createDefaultOption } from "@/config/optionFactory";
-import { useWorkspaceStore } from "@/stores/workspace";
+import { useOptionEditor } from "@/composables/useOptionEditor";
 import type { ChartInstance } from "@/types/chart";
 import { getByPath, setByPath } from "@/utils/object";
 
 const props = defineProps<{ chart: ChartInstance }>();
-const store = useWorkspaceStore();
+const editor = useOptionEditor();
 
 interface Column {
   key: string;
@@ -177,7 +177,7 @@ function onCellInput(rowIndex: number, key: string, raw: string): void {
     }
   }
 
-  store.replaceOption(props.chart.id, option, false);
+  editor.replace(option, false);
 }
 
 function addRow(): void {
@@ -212,7 +212,7 @@ function addRow(): void {
     }
   }
 
-  store.replaceOption(props.chart.id, option, true);
+  editor.replace(option, true);
 }
 
 function removeRow(rowIndex: number): void {
@@ -246,12 +246,12 @@ function removeRow(rowIndex: number): void {
     }
   }
 
-  store.replaceOption(props.chart.id, option, true);
+  editor.replace(option, true);
 }
 
 function reset(): void {
   const fresh = createDefaultOption(props.chart.type);
-  store.replaceOption(props.chart.id, fresh, true);
+  editor.replace(fresh, true);
 }
 </script>
 

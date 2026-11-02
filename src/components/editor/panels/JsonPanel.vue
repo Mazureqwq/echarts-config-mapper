@@ -32,12 +32,12 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import Icon from "@/components/ui/Icon.vue";
-import { useWorkspaceStore } from "@/stores/workspace";
+import { useOptionEditor } from "@/composables/useOptionEditor";
 import type { ChartInstance } from "@/types/chart";
 import { deepClone } from "@/utils/object";
 
 const props = defineProps<{ chart: ChartInstance }>();
-const store = useWorkspaceStore();
+const editor = useOptionEditor();
 
 const text = ref(JSON.stringify(props.chart.option, null, 2));
 const error = ref<string | null>(null);
@@ -76,7 +76,7 @@ function apply(): void {
   try {
     const parsed = JSON.parse(text.value);
     error.value = null;
-    store.replaceOption(props.chart.id, deepClone(parsed), true);
+    editor.replace(deepClone(parsed), true);
     ElMessage.success("已应用到图表");
   } catch (err) {
     error.value = (err as Error).message;
