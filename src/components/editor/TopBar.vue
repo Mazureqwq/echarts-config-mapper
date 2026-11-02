@@ -22,6 +22,10 @@
       </button>
     </div>
 
+    <button class="tbtn wide" :disabled="!canSave" :title="canSave ? saveHint : readonlyHint" @click="saveAsAsset">
+      <Icon name="plus" /><span>存为资产</span>
+    </button>
+
     <div class="spacer" />
 
     <button class="copy-btn" title="复制当前图表 option JSON (Ctrl+C)" @click="copyOption">
@@ -42,14 +46,20 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import Icon from "@/components/ui/Icon.vue";
 import { CHART_META } from "@/config/editor";
+import { isSaveApiAvailable, useAssetsStore } from "@/stores/assets";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { getChart } from "@/utils/echartsRegistry";
 import { download, downloadText } from "@/utils/download";
+import { deepClone } from "@/utils/object";
 
 const store = useWorkspaceStore();
+const assetsStore = useAssetsStore();
+const canSave = isSaveApiAvailable();
+const saveHint = "保存当前图表到图表库";
+const readonlyHint = "生产环境只读";
 
 function optionJson(): string {
   return JSON.stringify(store.option, null, 2);
@@ -85,6 +95,28 @@ function exportPng(): void {
 function resetCurrent(): void {
   store.resetCurrent();
   ElMessage.success("已恢复默认配置");
+}
+
+async function saveAsAsset(): Promise<void> {
+  try {
+    const { value } = await ElMessageBox.prompt("资产名称", "存为资产", {
+      confirmButtonText: "保存",
+      cancelButtonText: "取消",
+      inputValue: CHART_META[store.type].label,
+      inputValidator: (input: string) => (input && input.trim().length > 0 ? true : "名称不能为空"),
+    });
+    const name = (value ?? "").trim();
+    if (!name) return;
+    await assetsStore.saveAsset({
+      name,
+      category: CHART_META[store.type].label,
+      chartType: store.type,
+      option: deepClone(store.option),
+    });
+    ElMessage.success("已保存到图表库");
+  } catch {
+    /* 用户取消或校验未通过 */
+  }
 }
 </script>
 

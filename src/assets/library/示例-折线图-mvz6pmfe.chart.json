@@ -1,0 +1,39 @@
+{
+  "id": "示例-折线图-mvz6pmfe",
+  "name": "示例-折线图",
+  "category": "折线图",
+  "tags": [
+    "示例"
+  ],
+  "chartType": "line",
+  "option": {
+    "xAxis": {
+      "type": "category",
+      "data": [
+        "一月",
+        "二月",
+        "三月",
+        "四月",
+        "五月"
+      ]
+    },
+    "yAxis": {
+      "type": "value"
+    },
+    "series": [
+      {
+        "type": "line",
+        "data": [
+          150,
+          230,
+          224,
+          218,
+          135
+        ],
+        "smooth": true
+      }
+    ]
+  },
+  "createdAt": "2026-11-02T11:37:31.850Z",
+  "updatedAt": "2026-11-02T11:37:31.851Z"
+}
