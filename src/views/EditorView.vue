@@ -21,6 +21,7 @@ import { CHART_META } from "@/config/editor";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { provideOptionEditor } from "@/composables/useOptionEditor";
 import { useAssetsStore } from "@/stores/assets";
+import { isTypingTarget } from "@/utils/dom";
 import { deepClone } from "@/utils/object";
 
 const store = useWorkspaceStore();
@@ -34,13 +35,6 @@ provideOptionEditor({
   replace: (option, record) => store.replaceOption(store.type, option, record),
   commit: () => store.commit(),
 });
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-}
 
 async function copyOption(): Promise<void> {
   try {

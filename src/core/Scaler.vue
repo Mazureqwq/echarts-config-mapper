@@ -7,15 +7,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, provide, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { SCREEN_STAGE_KEY, computeScale, toCanvasPoint } from "@/core/scaler";
 import type { ScreenStageContext } from "@/core/scaler";
 import { SCREEN_H, SCREEN_W } from "@/core/types";
 
-const props = withDefaults(defineProps<{ width?: number; height?: number }>(), {
-  width: SCREEN_W,
-  height: SCREEN_H,
-});
+const props = withDefaults(
+  defineProps<{
+    width?: number;
+    height?: number;
+    /** 固定缩放倍数；缺省时自适应容器（设计器非 fit 视图用固定档位） */
+    fixedScale?: number;
+  }>(),
+  {
+    width: SCREEN_W,
+    height: SCREEN_H,
+  },
+);
 
 const outerEl = ref<HTMLElement | null>(null);
 const scale = ref(1);
@@ -34,11 +42,17 @@ const innerStyle = computed(() => ({
 function measure(): void {
   const el = outerEl.value;
   if (!el) return;
-  const s = computeScale(el.clientWidth, el.clientHeight, props.width, props.height);
+  const s =
+    props.fixedScale ?? computeScale(el.clientWidth, el.clientHeight, props.width, props.height);
   scale.value = s;
   originX.value = el.clientWidth / 2 - (props.width * s) / 2;
   originY.value = el.clientHeight / 2 - (props.height * s) / 2;
 }
+
+watch(
+  () => props.fixedScale,
+  () => measure(),
+);
 
 onMounted(() => {
   measure();

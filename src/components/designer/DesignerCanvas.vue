@@ -4,6 +4,7 @@
       ref="scalerRef"
       :width="designer.schema?.canvas.width"
       :height="designer.schema?.canvas.height"
+      :fixed-scale="fixedScale"
     >
       <div
         class="canvas-surface"
@@ -45,19 +46,27 @@ import { applyResize } from "@/core/resize";
 import type { ResizeHandle } from "@/core/resize";
 import { createScreenItem } from "@/core/item";
 import { DEFAULT_SIZES, SCREEN_H, SCREEN_W } from "@/core/types";
-import type { ChartAsset, ItemType, Rect, ScreenItem } from "@/core/types";
+import type { ItemType, Rect, ScreenItem } from "@/core/types";
+import { useAssetsStore } from "@/stores/assets";
 import { useDesignerStore } from "@/stores/designer";
 
+/** 物料拖拽载荷：资产只带 assetId，落点时再查（避免拖大对象进 dataTransfer） */
 interface PalettePayload {
   kind: "chart-asset" | "chart-default" | "widget";
-  asset?: ChartAsset;
+  assetId?: string;
   type?: ItemType;
 }
 
 const HANDLES: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 const designer = useDesignerStore();
+const assetsStore = useAssetsStore();
 const scalerRef = ref<InstanceType<typeof Scaler> | null>(null);
+
+/** 非 fit 视图用固定缩放档位（0.5 / 1），fit 时交给 Scaler 自适应 */
+const fixedScale = computed<number | undefined>(() =>
+  designer.viewMode === "fit" ? undefined : designer.viewMode,
+);
 
 const surfaceStyle = computed<Record<string, string>>(() => ({
   background: designer.schema?.canvas.background ?? "transparent",
@@ -124,10 +133,12 @@ function onDrop(event: DragEvent): void {
     return;
   }
   const pos = toCanvasPoint(event);
-  if (payload.kind === "chart-asset" && payload.asset) {
+  if (payload.kind === "chart-asset" && payload.assetId) {
+    const asset = assetsStore.byId(payload.assetId);
+    if (!asset) return;
     const size = DEFAULT_SIZES.chart;
     designer.addItemFromAsset(
-      payload.asset,
+      asset,
       clampPos(pos.x - size.w / 2, pos.y - size.h / 2, size.w, size.h),
     );
     return;
