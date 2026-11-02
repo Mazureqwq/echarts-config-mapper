@@ -15,6 +15,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import ChartRenderer from "@/components/chart/ChartRenderer.vue";
 import type { ChartInstance } from "@/types/chart";
+import { toChartInstance } from "./item";
 import { formatDateTime } from "./format";
 import type { ScreenItem } from "./types";
 
@@ -27,25 +28,8 @@ const isDatetime = computed(() => props.item.type === "datetime");
 const widgetSrc = computed(() => props.item.props?.src ?? "");
 const widgetText = computed(() => props.item.props?.text ?? "");
 
-/**
- * chart item → ChartInstance。定位字段取自 item.rect（本组件只填满父级容器，
- * 实际定位由父级处理）；item.chart 缺失时返回 null（容错渲染空 div）。
- * Task 9 落地共享 toChartInstance 后替换此实现。
- */
-const chartInstance = computed<ChartInstance | null>(() => {
-  const chart = props.item.chart;
-  if (props.item.type !== "chart" || !chart) return null;
-  return {
-    id: props.item.id,
-    type: chart.chartType,
-    title: props.item.name,
-    x: props.item.rect.x,
-    y: props.item.rect.y,
-    w: props.item.rect.w,
-    h: props.item.rect.h,
-    option: chart.option,
-  };
-});
+/** chart item → ChartInstance（共享实现见 core/item；chart 缺失时为 null，容错渲染空 div） */
+const chartInstance = computed<ChartInstance | null>(() => toChartInstance(props.item));
 
 const textStyle = computed(() => ({
   fontSize: (props.item.props?.fontSize ?? 24) + "px",

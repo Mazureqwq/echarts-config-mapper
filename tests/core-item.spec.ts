@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createDefaultDataSource, createScreenItem, createScreenSchema } from "../src/core/item";
+import { createDefaultDataSource, createScreenItem, createScreenSchema, toChartInstance } from "../src/core/item";
 import { DEFAULT_SIZES, SCREEN_H, SCREEN_W } from "../src/core/types";
 
 describe("createScreenItem", () => {
@@ -49,6 +49,28 @@ describe("createScreenSchema", () => {
     expect(schema.items).toEqual([]);
     expect(new Date(schema.createdAt).toISOString()).toBe(schema.createdAt);
     expect(new Date(schema.updatedAt).toISOString()).toBe(schema.updatedAt);
+  });
+});
+
+
+describe("toChartInstance", () => {
+  test("chart 元素转换为 ChartInstance：id/name/rect 映射，type 取 chartType", () => {
+    const item = createScreenItem("chart", { x: 10, y: 20, w: 300, h: 200 });
+    const inst = toChartInstance(item);
+    expect(inst).not.toBeNull();
+    expect(inst!.id).toBe(item.id);
+    expect(inst!.type).toBe("line");
+    expect(inst!.title).toBe(item.name);
+    expect(inst!.x).toBe(10);
+    expect(inst!.y).toBe(20);
+    expect(inst!.w).toBe(300);
+    expect(inst!.h).toBe(200);
+    expect(inst!.option).toBe(item.chart!.option);
+  });
+
+  test("非 chart 元素返回 null", () => {
+    expect(toChartInstance(createScreenItem("text"))).toBeNull();
+    expect(toChartInstance(createScreenItem("datetime"))).toBeNull();
   });
 });
 

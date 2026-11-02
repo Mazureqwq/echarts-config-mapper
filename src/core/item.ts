@@ -1,3 +1,4 @@
+import type { ChartInstance } from "@/types/chart";
 import { createDefaultOption } from "@/config/optionFactory";
 import { createId } from "@/utils/id";
 import type {
@@ -85,5 +86,21 @@ export function createScreenSchema(id: string, name: string): ScreenSchema {
     items: [],
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+/** 运行态/舞台渲染用：chart 元素 → ChartInstance（type 取 chartType）；非 chart 返回 null */
+export function toChartInstance(item: ScreenItem): ChartInstance | null {
+  const chart = item.chart;
+  if (item.type !== "chart" || !chart) return null;
+  return {
+    id: item.id,
+    type: chart.chartType,
+    title: item.name,
+    x: item.rect.x,
+    y: item.rect.y,
+    w: item.rect.w,
+    h: item.rect.h,
+    option: chart.option,
   };
 }

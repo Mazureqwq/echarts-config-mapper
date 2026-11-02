@@ -1,32 +1,57 @@
 <template>
-  <main class="page">
-    <h1 class="title">大屏预览</h1>
-    <p class="tip">运行态建设中（Task 9/10 实现），当前大屏 id：{{ id }}</p>
+  <main v-if="!schema" class="missing">
+    <p class="missing-title">大屏不存在</p>
+    <p class="missing-tip">未找到大屏：{{ id }}</p>
+    <el-button type="primary" @click="goBack">返回大屏列表</el-button>
   </main>
+  <div v-else class="render-page">
+    <ScreenStage :schema="schema" />
+  </div>
 </template>
 
 <script setup lang="ts">
-import { useRoute } from "vue-router";
+import { computed, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import type { ScreenSchema } from "@/core/types";
+import ScreenStage from "@/core/ScreenStage.vue";
 
-// 占位视图：Task 9/10 替换为大屏运行态
 const route = useRoute();
-const id = route.params.id;
+const router = useRouter();
+
+/** Task 10 接入 screensStore 后改为 store.byId(route.params.id) 提供 */
+const schema = ref<ScreenSchema | null>(null);
+
+const id = computed(() => String(route.params.id ?? ""));
+
+function goBack(): void {
+  router.push("/screens");
+}
 </script>
 
 <style scoped>
-.page {
+.missing {
   height: 100%;
-  overflow: auto;
-  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
-.title {
-  margin: 0 0 8px;
+.missing-title {
+  margin: 0;
   font-size: 18px;
   color: var(--cf-text);
 }
 
-.tip {
+.missing-tip {
+  margin: 0;
+  font-size: 13px;
   color: var(--cf-text-dim);
+}
+
+.render-page {
+  width: 100%;
+  height: 100%;
 }
 </style>
