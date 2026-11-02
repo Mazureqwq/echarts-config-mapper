@@ -51,13 +51,15 @@ onBeforeUnmount(() => {
   observer = null;
 });
 
-function toCanvas(event: PointerEvent): { x: number; y: number } {
+function toCanvas(event: { clientX: number; clientY: number }): { x: number; y: number } {
   return toCanvasPoint(event.clientX, event.clientY, scale.value, originX.value, originY.value);
 }
 
 const context: ScreenStageContext = { scale, originX, originY, toCanvas };
 
 provide(SCREEN_STAGE_KEY, context);
+
+defineExpose({ scale, originX, originY, toCanvas });
 </script>
 
 <style scoped>

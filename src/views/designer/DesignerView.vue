@@ -1,32 +1,32 @@
 <template>
   <main class="page">
-    <h1 class="title">大屏设计器</h1>
-    <p class="tip">设计器建设中（Task 12/13 实现），当前大屏 id：{{ id }}</p>
+    <DesignerCanvas />
   </main>
 </template>
 
 <script setup lang="ts">
+import { onMounted } from "vue";
 import { useRoute } from "vue-router";
+import DesignerCanvas from "@/components/designer/DesignerCanvas.vue";
+import { useDesignerStore } from "@/stores/designer";
 
-// 占位视图：Task 13 替换为设计器正式布局
+// 临时布局：Task 13 替换为设计器正式布局（顶栏/面板/快捷键）
 const route = useRoute();
-const id = route.params.id;
+const designer = useDesignerStore();
+
+onMounted(() => {
+  const id = String(route.params.id ?? "");
+  if (!id || !designer.load(id)) {
+    designer.newSchema();
+  }
+});
 </script>
 
 <style scoped>
 .page {
   height: 100%;
-  overflow: auto;
-  padding: 24px 32px;
-}
-
-.title {
-  margin: 0 0 8px;
-  font-size: 18px;
-  color: var(--cf-text);
-}
-
-.tip {
-  color: var(--cf-text-dim);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 </style>

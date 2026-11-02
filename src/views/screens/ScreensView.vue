@@ -67,7 +67,7 @@ function goDesigner(id: string): void {
 }
 
 function openPreview(id: string): void {
-  window.open("/screen/" + id, "_blank");
+  window.open("/#/screen/" + id, "_blank");
 }
 
 function exportJson(schema: ScreenSchema): void {

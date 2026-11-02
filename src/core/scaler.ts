@@ -23,7 +23,7 @@ export interface ScreenStageContext {
   scale: Ref<number>;
   originX: Ref<number>;
   originY: Ref<number>;
-  toCanvas(event: PointerEvent): { x: number; y: number };
+  toCanvas(event: { clientX: number; clientY: number }): { x: number; y: number };
 }
 
 /** provide/inject 键（Scaler 提供，设计器画布注入） */
