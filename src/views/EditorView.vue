@@ -11,6 +11,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import TopBar from "@/components/editor/TopBar.vue";
 import ChartLibrary from "@/components/editor/ChartLibrary.vue";
@@ -19,8 +20,13 @@ import InspectorPanel from "@/components/editor/InspectorPanel.vue";
 import { CHART_META } from "@/config/editor";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { provideOptionEditor } from "@/composables/useOptionEditor";
+import { useAssetsStore } from "@/stores/assets";
+import { deepClone } from "@/utils/object";
 
 const store = useWorkspaceStore();
+const route = useRoute();
+const router = useRouter();
+const assetsStore = useAssetsStore();
 
 provideOptionEditor({
   read: (path, fallback) => store.readOption(path, fallback),
@@ -39,7 +45,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 async function copyOption(): Promise<void> {
   try {
     await navigator.clipboard.writeText(JSON.stringify(store.option, null, 2));
-    ElMessage.success(`已复制 ${CHART_META[store.type].label} 的 option`);
+    ElMessage.success("已复制 " + CHART_META[store.type].label + " 的 option");
   } catch {
     ElMessage.error("复制失败，请检查浏览器剪贴板权限");
   }
@@ -79,8 +85,23 @@ function onKeyDown(event: KeyboardEvent): void {
 onMounted(() => {
   store.restore();
   store.ensureOption(store.type);
+  loadFromAssetQuery();
   window.addEventListener("keydown", onKeyDown);
 });
+
+/** 图表库「编辑副本」跳转而来：以资产快照载入 option（深拷贝副本语义，不回写资产） */
+function loadFromAssetQuery(): void {
+  const fromAsset = route.query.fromAsset;
+  if (typeof fromAsset !== "string" || !fromAsset) return;
+  const asset = assetsStore.byId(fromAsset);
+  if (asset) {
+    store.selectType(asset.chartType);
+    store.replaceOption(store.type, deepClone(asset.option), true);
+  } else {
+    ElMessage.warning("来源资产不存在或已被删除");
+  }
+  router.replace({ query: {} });
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);

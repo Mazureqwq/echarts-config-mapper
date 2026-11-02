@@ -56,10 +56,11 @@ describe("assets store", () => {
   it("saveAsset 失败时不插入列表", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({ ok: false }) })));
     const store = useAssetsStore();
+    const before = store.assets.length;
     await expect(
       store.saveAsset({ name: "失败的", category: "折线图", chartType: "line", option: {} }),
     ).rejects.toThrow();
-    expect(store.assets).toHaveLength(0);
+    expect(store.assets).toHaveLength(before);
   });
 
   it("filtered 按 name 或 tags 不区分大小写匹配", () => {
