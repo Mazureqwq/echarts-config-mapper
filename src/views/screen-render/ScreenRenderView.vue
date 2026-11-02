@@ -10,18 +10,65 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ScreenSchema } from "@/core/types";
 import ScreenStage from "@/core/ScreenStage.vue";
+import { applyApiData, createPoller, pickByPath } from "@/core/data-source";
+import type { Poller } from "@/core/data-source";
+import { useScreensStore } from "@/stores/screens";
+import { deepClone } from "@/utils/object";
 
 const route = useRoute();
 const router = useRouter();
-
-/** Task 10 接入 screensStore 后改为 store.byId(route.params.id) 提供 */
-const schema = ref<ScreenSchema | null>(null);
+const store = useScreensStore();
 
 const id = computed(() => String(route.params.id ?? ""));
+const schema = ref<ScreenSchema | null>(null);
+const pollers: Poller[] = [];
+
+function stopPollers(): void {
+  for (const poller of pollers) poller.stop();
+  pollers.length = 0;
+}
+
+/** 载入 schema 快照并为 API 数据源图表建立轮询（interval 为 0 只拉取一次） */
+function initScreen(): void {
+  stopPollers();
+  const source = store.byId(id.value);
+  if (!source) {
+    schema.value = null;
+    return;
+  }
+  const clone = reactive(deepClone(source));
+  schema.value = clone;
+  for (const item of clone.items) {
+    const chart = item.chart;
+    if (item.type !== "chart" || !chart) continue;
+    const config = chart.dataSource;
+    if (config.mode !== "api" || !config.api.url) continue;
+    const api = config.api;
+    const poller = createPoller(
+      () =>
+        fetch(api.url, { method: api.method, headers: api.headers }).then((response) =>
+          response.json(),
+        ),
+      (data) => {
+        const value = pickByPath(data, api.dataPath);
+        if (value !== undefined) {
+          chart.option = applyApiData(chart.option, value, api.optionPath);
+        }
+      },
+      api.interval,
+    );
+    poller.start();
+    pollers.push(poller);
+  }
+}
+
+watch(id, initScreen, { immediate: true });
+
+onBeforeUnmount(stopPollers);
 
 function goBack(): void {
   router.push("/screens");
