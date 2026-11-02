@@ -7,15 +7,17 @@ export function computeScale(cw: number, ch: number, w = SCREEN_W, h = SCREEN_H)
   return Math.min(cw / w, ch / h);
 }
 
-/** 屏幕坐标 → 画布坐标：扣除舞台原点后除以 scale */
+/** 屏幕坐标 → 画布坐标：扣除容器视口偏移与舞台原点后除以 scale（容器在视口原点时 rectLeft/rectTop 可省略） */
 export function toCanvasPoint(
   px: number,
   py: number,
   scale: number,
   originX: number,
   originY: number,
+  rectLeft = 0,
+  rectTop = 0,
 ): { x: number; y: number } {
-  return { x: (px - originX) / scale, y: (py - originY) / scale };
+  return { x: (px - rectLeft - originX) / scale, y: (py - rectTop - originY) / scale };
 }
 
 /** Scaler 提供的舞台上下文：画布交互据此换算屏幕坐标 → 画布坐标 */

@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import type { ChartAsset } from "@/core/types";
 import type { ChartType, EChartsOptionLike } from "@/types/chart";
+import { normalizeChartAsset } from "@/core/item";
 import { slugifyName } from "@/utils/slug";
 
 export interface SaveAssetInput {
@@ -16,11 +17,12 @@ export function isSaveApiAvailable(): boolean {
   return import.meta.env.DEV;
 }
 
-/** 从仓库内图表库目录加载资产（构建期打包，按名称排序） */
+/** 从仓库内图表库目录加载资产（构建期打包，规范化补齐缺失字段，按名称排序） */
 function loadAssets(): ChartAsset[] {
-  const modules = import.meta.glob<ChartAsset>("../assets/library/*.chart.json", { eager: true });
+  const modules = import.meta.glob<unknown>("../assets/library/*.chart.json", { eager: true });
   return Object.values(modules)
-    .filter((asset): asset is ChartAsset => Boolean(asset) && typeof asset.id === "string")
+    .map(normalizeChartAsset)
+    .filter((asset): asset is ChartAsset => asset !== null)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

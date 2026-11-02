@@ -20,6 +20,7 @@
           :class="{ locked: item.locked }"
           :style="itemStyle(item)"
           @pointerdown.stop="startDrag(item, $event)"
+          @dragstart.prevent
         >
           <ScreenItemView :item="item" />
         </div>
@@ -161,7 +162,7 @@ function onDrop(event: DragEvent): void {
   }
 }
 
-/** pointerdown 拖动：实时位移走 updateRect(record=false)，pointerup 统一 commit */
+/** pointerdown 拖动：实时位移走 updateRect(record=false)，pointerup/pointercancel 统一收尾 */
 function startDrag(item: ScreenItem, event: PointerEvent): void {
   designer.select(item.id);
   if (item.locked) return;
@@ -171,6 +172,7 @@ function startDrag(item: ScreenItem, event: PointerEvent): void {
   const target = event.currentTarget as HTMLElement;
   target.setPointerCapture(event.pointerId);
   let moved = false;
+  let finished = false;
 
   const onMove = (moveEvent: PointerEvent): void => {
     const pos = toCanvasPoint(moveEvent);
@@ -181,13 +183,17 @@ function startDrag(item: ScreenItem, event: PointerEvent): void {
       false,
     );
   };
-  const onUp = (): void => {
+  const finish = (): void => {
+    if (finished) return;
+    finished = true;
     target.removeEventListener("pointermove", onMove);
-    target.removeEventListener("pointerup", onUp);
+    target.removeEventListener("pointerup", finish);
+    target.removeEventListener("pointercancel", finish);
     if (moved) designer.commit();
   };
   target.addEventListener("pointermove", onMove);
-  target.addEventListener("pointerup", onUp);
+  target.addEventListener("pointerup", finish);
+  target.addEventListener("pointercancel", finish);
 }
 
 function startResize(item: ScreenItem, handle: ResizeHandle, event: PointerEvent): void {
@@ -196,6 +202,7 @@ function startResize(item: ScreenItem, handle: ResizeHandle, event: PointerEvent
   const target = event.currentTarget as HTMLElement;
   target.setPointerCapture(event.pointerId);
   let moved = false;
+  let finished = false;
 
   const onMove = (moveEvent: PointerEvent): void => {
     const pos = toCanvasPoint(moveEvent);
@@ -203,13 +210,17 @@ function startResize(item: ScreenItem, handle: ResizeHandle, event: PointerEvent
     moved = true;
     designer.updateRect(item.id, next, false);
   };
-  const onUp = (): void => {
+  const finish = (): void => {
+    if (finished) return;
+    finished = true;
     target.removeEventListener("pointermove", onMove);
-    target.removeEventListener("pointerup", onUp);
+    target.removeEventListener("pointerup", finish);
+    target.removeEventListener("pointercancel", finish);
     if (moved) designer.commit();
   };
   target.addEventListener("pointermove", onMove);
-  target.addEventListener("pointerup", onUp);
+  target.addEventListener("pointerup", finish);
+  target.addEventListener("pointercancel", finish);
 }
 
 function startResizeSelected(handle: ResizeHandle, event: PointerEvent): void {
@@ -234,6 +245,7 @@ function startResizeSelected(handle: ResizeHandle, event: PointerEvent): void {
 .canvas-item {
   position: absolute;
   cursor: move;
+  user-select: none;
 }
 
 .canvas-item.locked {

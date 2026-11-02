@@ -66,7 +66,16 @@ onBeforeUnmount(() => {
 });
 
 function toCanvas(event: { clientX: number; clientY: number }): { x: number; y: number } {
-  return toCanvasPoint(event.clientX, event.clientY, scale.value, originX.value, originY.value);
+  const rect = outerEl.value?.getBoundingClientRect();
+  return toCanvasPoint(
+    event.clientX,
+    event.clientY,
+    scale.value,
+    originX.value,
+    originY.value,
+    rect?.left ?? 0,
+    rect?.top ?? 0,
+  );
 }
 
 const context: ScreenStageContext = { scale, originX, originY, toCanvas };

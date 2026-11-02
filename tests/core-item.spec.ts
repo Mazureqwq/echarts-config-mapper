@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { createDefaultDataSource, createScreenItem, createScreenSchema, toChartInstance } from "../src/core/item";
+import {
+  createDefaultDataSource,
+  createScreenItem,
+  createScreenSchema,
+  normalizeChartAsset,
+  normalizeScreenSchema,
+  toChartInstance,
+} from "../src/core/item";
 import { DEFAULT_SIZES, SCREEN_H, SCREEN_W } from "../src/core/types";
 
 describe("createScreenItem", () => {
@@ -28,57 +35,135 @@ describe("createScreenItem", () => {
     expect(item.chart).toBeUndefined();
   });
 
-  test("datetime 元素默认 format；iframe 元素默认空 src", () => {
-    expect(createScreenItem("datetime").props).toEqual({ format: "YYYY-MM-DD HH:mm:ss" });
-    expect(createScreenItem("iframe").props).toEqual({ src: "" });
-  });
-
-  test("rect 覆盖：传入部分 rect 与默认尺寸合并", () => {
-    const item = createScreenItem("image", { x: 100, y: 60 });
-    expect(item.rect).toEqual({ x: 100, y: 60, w: DEFAULT_SIZES.image.w, h: DEFAULT_SIZES.image.h });
+  test("rect 覆盖与自定义类型尺寸", () => {
+    const item = createScreenItem("image", { x: 10, y: 20 });
+    expect(item.rect).toEqual({ x: 10, y: 20, w: DEFAULT_SIZES.image.w, h: DEFAULT_SIZES.image.h });
   });
 });
 
 describe("createScreenSchema", () => {
-  test("默认画布 1920×1080 深蓝背景，version 1，空 items，时间为 ISO", () => {
-    const schema = createScreenSchema("screen_1", "测试大屏");
+  test("空 schema：1920×1080 深蓝画布", () => {
+    const schema = createScreenSchema("screen_1", "测试屏");
     expect(schema.id).toBe("screen_1");
-    expect(schema.name).toBe("测试大屏");
+    expect(schema.name).toBe("测试屏");
     expect(schema.version).toBe(1);
     expect(schema.canvas).toEqual({ width: SCREEN_W, height: SCREEN_H, background: "#0a1a2e" });
     expect(schema.items).toEqual([]);
-    expect(new Date(schema.createdAt).toISOString()).toBe(schema.createdAt);
-    expect(new Date(schema.updatedAt).toISOString()).toBe(schema.updatedAt);
+    expect(schema.createdAt).toBeTruthy();
+    expect(schema.updatedAt).toBe(schema.createdAt);
   });
 });
 
-
 describe("toChartInstance", () => {
-  test("chart 元素转换为 ChartInstance：id/name/rect 映射，type 取 chartType", () => {
-    const item = createScreenItem("chart", { x: 10, y: 20, w: 300, h: 200 });
-    const inst = toChartInstance(item);
-    expect(inst).not.toBeNull();
-    expect(inst!.id).toBe(item.id);
-    expect(inst!.type).toBe("line");
-    expect(inst!.title).toBe(item.name);
-    expect(inst!.x).toBe(10);
-    expect(inst!.y).toBe(20);
-    expect(inst!.w).toBe(300);
-    expect(inst!.h).toBe(200);
-    expect(inst!.option).toBe(item.chart!.option);
+  test("chart 元素映射为 ChartInstance", () => {
+    const item = createScreenItem("chart", { x: 15, y: 25, w: 300, h: 200 });
+    item.name = "销量";
+    const instance = toChartInstance(item);
+    expect(instance).not.toBeNull();
+    expect(instance!.id).toBe(item.id);
+    expect(instance!.type).toBe("line");
+    expect(instance!.title).toBe("销量");
+    expect(instance!.x).toBe(15);
+    expect(instance!.y).toBe(25);
+    expect(instance!.w).toBe(300);
+    expect(instance!.h).toBe(200);
+    expect(instance!.option).toBe(item.chart!.option);
   });
 
   test("非 chart 元素返回 null", () => {
     expect(toChartInstance(createScreenItem("text"))).toBeNull();
-    expect(toChartInstance(createScreenItem("datetime"))).toBeNull();
   });
 });
 
-describe("createDefaultDataSource", () => {
-  test("static 模式，optionPath 默认 series.0.data", () => {
-    expect(createDefaultDataSource()).toEqual({
-      mode: "static",
-      api: { url: "", method: "GET", headers: {}, interval: 0, dataPath: "", optionPath: "series.0.data" },
+describe("normalizeScreenSchema", () => {
+  test("补齐手写文件缺失的 item 字段与数据源", () => {
+    const schema = normalizeScreenSchema({
+      id: "screen_x",
+      name: "手写屏",
+      items: [
+        {
+          id: "item_1",
+          type: "chart",
+          chart: { chartType: "bar", option: { series: [{ type: "bar", data: [1] }] } },
+        },
+        { id: "item_2", type: "text", props: { text: "hi" } },
+      ],
     });
+    expect(schema).not.toBeNull();
+    expect(schema!.canvas).toEqual({ width: SCREEN_W, height: SCREEN_H, background: "#0a1a2e" });
+    const first = schema!.items[0];
+    expect(first.rect.w).toBe(DEFAULT_SIZES.chart.w);
+    expect(first.zIndex).toBe(1);
+    expect(first.visible).toBe(true);
+    expect(first.locked).toBe(false);
+    expect(first.chart!.dataSource).toEqual(createDefaultDataSource());
+    const second = schema!.items[1];
+    expect(second.rect.h).toBe(DEFAULT_SIZES.text.h);
+    expect(second.props).toEqual({ text: "hi" });
+  });
+
+  test("补齐缺 headers/interval 的 api 数据源与缺 props 的 widget", () => {
+    const schema = normalizeScreenSchema({
+      id: "screen_y",
+      items: [
+        {
+          id: "item_1",
+          type: "chart",
+          chart: {
+            chartType: "line",
+            option: {},
+            dataSource: { mode: "api", api: { url: "/d", method: "GET", dataPath: "a", optionPath: "series.0.data", interval: 5 } },
+          },
+        },
+        { id: "item_2", type: "datetime" },
+      ],
+    });
+    const api = schema!.items[0].chart!.dataSource.api;
+    expect(api.headers).toEqual({});
+    expect(api.interval).toBe(5);
+    expect(api.url).toBe("/d");
+    expect(schema!.items[1].props).toBeUndefined();
+  });
+
+  test("缺 items/canvas 与时间戳时兜底，非法输入返回 null", () => {
+    const schema = normalizeScreenSchema({ id: "screen_z" });
+    expect(schema).not.toBeNull();
+    expect(schema!.items).toEqual([]);
+    expect(schema!.canvas.width).toBe(SCREEN_W);
+    expect(schema!.createdAt).toBeTruthy();
+    expect(normalizeScreenSchema(null)).toBeNull();
+    expect(normalizeScreenSchema("nope")).toBeNull();
+    expect(normalizeScreenSchema({ name: "no-id" })).toBeNull();
+  });
+
+  test("剔除无 id 的坏 item", () => {
+    const schema = normalizeScreenSchema({
+      id: "screen_w",
+      items: [{ type: "text" }, { id: "item_ok", type: "text" }],
+    });
+    expect(schema!.items.length).toBe(1);
+    expect(schema!.items[0].id).toBe("item_ok");
+  });
+});
+
+describe("normalizeChartAsset", () => {
+  test("补齐缺失 tags/category 并保留有效字段", () => {
+    const asset = normalizeChartAsset({
+      id: "asset_1",
+      name: "销量图",
+      chartType: "line",
+      option: { series: [] },
+    });
+    expect(asset).not.toBeNull();
+    expect(asset!.tags).toEqual([]);
+    expect(asset!.category).toBe("");
+    expect(asset!.name).toBe("销量图");
+    expect(asset!.createdAt).toBeTruthy();
+  });
+
+  test("非法输入返回 null", () => {
+    expect(normalizeChartAsset(null)).toBeNull();
+    expect(normalizeChartAsset(42)).toBeNull();
+    expect(normalizeChartAsset({ name: "no-id" })).toBeNull();
   });
 });

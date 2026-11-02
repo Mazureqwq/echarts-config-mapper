@@ -1,14 +1,15 @@
 import { defineStore } from "pinia";
 import type { ScreenSchema } from "@/core/types";
-import { createScreenSchema } from "@/core/item";
+import { createScreenSchema, normalizeScreenSchema } from "@/core/item";
 import { deepClone } from "@/utils/object";
 import { slugifyName } from "@/utils/slug";
 
-/** 从仓库内大屏目录加载 schema（构建期打包，按 updatedAt 降序） */
+/** 从仓库内大屏目录加载 schema（构建期打包，规范化补齐缺失字段，按 updatedAt 降序） */
 function loadScreens(): ScreenSchema[] {
-  const modules = import.meta.glob<ScreenSchema>("../assets/screens/*.screen.json", { eager: true });
+  const modules = import.meta.glob<unknown>("../assets/screens/*.screen.json", { eager: true });
   return Object.values(modules)
-    .filter((schema): schema is ScreenSchema => Boolean(schema) && typeof schema.id === "string")
+    .map(normalizeScreenSchema)
+    .filter((schema): schema is ScreenSchema => schema !== null)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 

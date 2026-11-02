@@ -9,19 +9,30 @@ interface SaveBody {
   content?: string;
 }
 
+/** 请求体上限（1MB），超过直接拒绝 */
+const MAX_BODY_BYTES = 1024 * 1024;
+
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(payload));
 }
 
+/** 聚合 Buffer 后统一按 utf8 解码（避免多字节字符跨 chunk 拆坏），超限拒绝 */
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    let data = "";
+    const chunks: Buffer[] = [];
+    let total = 0;
     req.on("data", (chunk: Buffer) => {
-      data += chunk.toString("utf8");
+      total += chunk.length;
+      if (total > MAX_BODY_BYTES) {
+        reject(new Error("body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
     });
-    req.on("end", () => resolve(data));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }
@@ -35,6 +46,18 @@ async function readJsonBody(req: IncomingMessage): Promise<SaveBody | null> {
   }
 }
 
+/** 仅允许本机同源的 POST（防任意网页跨站写盘/删盘）；无 Origin 的本地工具请求放行 */
+function isLocalPost(req: IncomingMessage): boolean {
+  if (req.method !== "POST") return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === (req.headers.host ?? "");
+  } catch {
+    return false;
+  }
+}
+
 /** dev 保存/删除 API 中间件：白名单路径校验防穿越，仅限本地开发使用 */
 export function saveApiPlugin(): Plugin {
   return {
@@ -45,6 +68,10 @@ export function saveApiPlugin(): Plugin {
 
       server.middlewares.use("/api/save", (req, res) => {
         void (async () => {
+          if (!isLocalPost(req)) {
+            sendJson(res, 403, { ok: false, error: "forbidden" });
+            return;
+          }
           const body = await readJsonBody(req);
           if (!body || typeof body.path !== "string" || !isAllowedSavePath(body.path)) {
             sendJson(res, 400, { ok: false, error: "path not allowed" });
@@ -66,6 +93,10 @@ export function saveApiPlugin(): Plugin {
 
       server.middlewares.use("/api/delete", (req, res) => {
         void (async () => {
+          if (!isLocalPost(req)) {
+            sendJson(res, 403, { ok: false, error: "forbidden" });
+            return;
+          }
           const body = await readJsonBody(req);
           if (!body || typeof body.path !== "string" || !isAllowedSavePath(body.path)) {
             sendJson(res, 400, { ok: false, error: "path not allowed" });

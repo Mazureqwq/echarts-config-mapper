@@ -25,4 +25,13 @@ describe("toCanvasPoint", () => {
   test("含舞台偏移 origin 的换算", () => {
     expect(toCanvasPoint(1100, 650, 0.5, 100, 50)).toEqual({ x: 2000, y: 1200 });
   });
+
+  test("容器不在视口原点时扣除容器偏移", () => {
+    // 视口点 (340,148) = 容器偏移 (240,48) + 舞台内偏移 (100,50) + 画布点 0,100
+    expect(toCanvasPoint(340, 148, 0.5, 100, 50, 240, 48)).toEqual({ x: 0, y: 100 });
+  });
+
+  test("显式传入零偏移与省略参数等价", () => {
+    expect(toCanvasPoint(1100, 650, 0.5, 100, 50, 0, 0)).toEqual({ x: 2000, y: 1200 });
+  });
 });

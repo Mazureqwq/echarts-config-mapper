@@ -4,7 +4,7 @@
       <span class="layer-title">图层（{{ rows.length }}）</span>
       <span class="layer-actions">
         <el-button size="small" :disabled="!designer.selectedId" @click="onBringToFront">置顶</el-button>
-        <el-button size="small" :disabled="!designer.selectedId" @click="onSendBackward">上移一层</el-button>
+        <el-button size="small" :disabled="!designer.selectedId" @click="onSendBackward">下移一层</el-button>
       </span>
     </header>
 
