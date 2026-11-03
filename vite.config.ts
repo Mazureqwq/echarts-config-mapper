@@ -1,12 +1,11 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { resolve } from "path";
 import vue from "@vitejs/plugin-vue";
 import vueJsx from "@vitejs/plugin-vue-jsx";
-import { saveApiPlugin } from "./server/save-api";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), vueJsx(), saveApiPlugin()],
+  plugins: [vue(), vueJsx()],
   resolve: {
     extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json", ".vue"],
     alias: {
@@ -21,5 +20,8 @@ export default defineConfig({
   build: {
     target: "es2020",
     chunkSizeWarningLimit: 1200,
+  },
+  test: {
+    environment: "node",
   },
 });

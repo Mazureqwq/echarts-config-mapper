@@ -1,0 +1,109 @@
+export type ChartType = "line" | "bar" | "pie" | "map" | "scatter" | "radar";
+
+export interface Frame {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotate: number;
+}
+
+export interface TextSpec {
+  text: string;
+  fontSize: number;
+  color: string;
+  align: "left" | "center" | "right";
+  weight: "normal" | "bold";
+  lineHeight?: number;
+}
+
+export interface ImageSpec {
+  src: string;
+  fit: "contain" | "cover" | "fill";
+}
+
+export interface ShapeSpec {
+  shape: "rect" | "ellipse" | "line";
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  radius?: number;
+}
+
+export interface LiveSource {
+  url: string;
+  intervalSec: number;
+  dataPath?: string;
+}
+
+export type ChartData =
+  | { kind: "category"; categories: string[]; series: { name: string; values: number[] }[] }
+  | { kind: "nameValue"; rows: { name: string; value: number }[] }
+  | { kind: "xy"; rows: { x: number; y: number; name?: string; group?: string }[] }
+  | { kind: "radar"; indicators: { name: string; max: number }[]; series: { name: string; values: number[] }[] };
+
+export interface ChartSpec {
+  type: ChartType;
+  option: Record<string, unknown>;
+  data: ChartData;
+  source?: LiveSource;
+}
+
+export interface BaseItem {
+  id: string;
+  name: string;
+  frame: Frame;
+  locked?: boolean;
+  hidden?: boolean;
+  opacity?: number;
+  groupId?: string;
+}
+
+export interface ChartItem extends BaseItem {
+  kind: "chart";
+  spec: ChartSpec;
+}
+
+export interface TextItem extends BaseItem, TextSpec {
+  kind: "text";
+}
+
+export interface ImageItem extends BaseItem, ImageSpec {
+  kind: "image";
+}
+
+export interface ShapeItem extends BaseItem, ShapeSpec {
+  kind: "shape";
+}
+
+export type ScreenItem = ChartItem | TextItem | ImageItem | ShapeItem;
+
+export type Background =
+  | { kind: "color"; color: string }
+  | { kind: "gradient"; from: string; to: string; angle: number }
+  | { kind: "image"; src: string };
+
+export interface Screen {
+  id: string;
+  name: string;
+  canvas: { width: number; height: number; background: Background };
+  items: ScreenItem[];
+  updatedAt: number;
+  thumbnail?: string;
+}
+
+export interface ChartAsset {
+  id: string;
+  name: string;
+  thumbnail: string;
+  spec: ChartSpec;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Workspace {
+  version: 1;
+  assets: ChartAsset[];
+  screens: Screen[];
+  settings: { autosave: boolean };
+}
