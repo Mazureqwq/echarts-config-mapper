@@ -131,11 +131,43 @@ describe("chart/optionBuilder", () => {
     expect(out.series).toBeTruthy();
   });
 
-  it("deepMerge 数组整体替换、对象递归合并", () => {
-    expect(deepMerge({ a: [1, 2], b: { c: 1, d: 2 } }, { a: [3], b: { c: 9 } })).toEqual({
+  it("deepMerge 标量数组整体替换、对象数组逐项合并、空数组清空", () => {
+    expect(
+      deepMerge(
+        { a: [1, 2], b: { c: 1, d: 2 }, s: [{ x: 1, y: 2 }, { x: 3 }] },
+        { a: [3], b: { c: 9 }, s: [{ y: 9 }] }
+      )
+    ).toEqual({
       a: [3],
       b: { c: 9, d: 2 },
+      s: [{ x: 1, y: 9 }, { x: 3 }],
     });
+    expect(deepMerge({ a: [1, 2] }, { a: [] })).toEqual({ a: [] });
+  });
+
+  it("buildOption 系列配置不冲掉生成的 type/data（雷达图回归）", () => {
+    const spec: ChartSpec = {
+      type: "radar",
+      option: { series: [{ shape: "circle", areaStyle: { opacity: 0.3 } }] },
+      data: emptyChartData("radar"),
+    };
+    const out = buildOption(spec) as Record<string, any>;
+    expect(out.series[0].type).toBe("radar");
+    expect(out.series[0].shape).toBe("circle");
+    expect(out.series[0].areaStyle.opacity).toBe(0.3);
+    expect(out.series[0].data).toHaveLength(2);
+    expect(out.radar.indicators).toHaveLength(4);
+
+    const line: ChartSpec = {
+      type: "line",
+      option: { series: [{ smooth: false }] },
+      data: emptyChartData("line"),
+    };
+    const lo = buildOption(line) as Record<string, any>;
+    expect(lo.series).toHaveLength(2);
+    expect(lo.series[0].smooth).toBe(false);
+    expect(lo.series[0].type).toBe("line");
+    expect(lo.series[1].name).toBe("利润");
   });
 });
 

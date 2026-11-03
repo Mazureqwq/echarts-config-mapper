@@ -146,7 +146,7 @@ function onRotateDown(ev: MouseEvent): void {
 </script>
 
 <template>
-  <div ref="wrapperEl" class="transform-handles" :style="wrapperStyle">
+  <div ref="wrapperEl" class="transform-handles" data-ui-only :style="wrapperStyle">
     <div class="transform-handles__rotate-line" />
     <button
       class="transform-handles__rotate"

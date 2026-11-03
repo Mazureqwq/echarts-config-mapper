@@ -15,7 +15,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="selection-overlay">
+  <div class="selection-overlay" data-ui-only>
     <div
       v-for="item in selected"
       :key="item.id"

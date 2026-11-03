@@ -89,6 +89,7 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
     <div
       v-if="item.kind === 'chart' && doc.liveStatus[item.id]?.stale"
       class="item-view__stale"
+      data-ui-only
       title="实时数据拉取失败，显示的是最后一次成功数据"
     >
       数据过期

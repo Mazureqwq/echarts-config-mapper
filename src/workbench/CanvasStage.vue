@@ -392,7 +392,7 @@ defineExpose({ canvasPoint, DROP_MIME });
         @dblclick.stop="onItemDblclick($event, item)"
       />
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
-      <div v-if="!ui.previewing" class="canvas-stage__toolbar" @mousedown.stop>
+      <div v-if="!ui.previewing" class="canvas-stage__toolbar" data-ui-only @mousedown.stop>
         <button
           class="canvas-stage__tool-btn"
           :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
@@ -431,6 +431,7 @@ defineExpose({ canvasPoint, DROP_MIME });
               ? { left: `${g.position}px`, top: '0', width: '1px', height: '100%' }
               : { left: '0', top: `${g.position}px`, width: '100%', height: '1px' }
           "
+        data-ui-only
         />
         <TransformHandles
           v-if="selectedItems.length > 0"

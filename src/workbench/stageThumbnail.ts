@@ -2,6 +2,7 @@ import { makeThumbnail, THUMBNAIL_MAX_SIDE } from "@/core/storage/thumbnail";
 
 export async function snapshotStage(source: HTMLElement, maxSide: number = THUMBNAIL_MAX_SIDE, mime: string = "image/jpeg"): Promise<string> {
   const clone = source.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("[data-ui-only]").forEach((n) => n.remove());
   clone.style.transform = "none";
   clone.style.boxShadow = "none";
 

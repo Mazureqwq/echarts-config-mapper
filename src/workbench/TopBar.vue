@@ -16,6 +16,16 @@ const ws = useWorkspaceStore();
 const doc = useDocumentStore();
 const ui = useUiStore();
 const exporting = ref(false);
+const exportMsg = ref("");
+let msgTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flash(msg: string, isError = false): void {
+  exportMsg.value = isError ? `导出失败：${msg}` : msg;
+  if (msgTimer !== null) clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => {
+    exportMsg.value = "";
+  }, 4000);
+}
 
 const screen = computed(() => ws.screens.find((s) => s.id === props.screenId) ?? null);
 
@@ -60,11 +70,17 @@ function exportJsonFile(): void {
 
 async function exportPng(): Promise<void> {
   const el = document.querySelector(".canvas-stage__canvas") as HTMLElement | null;
-  if (!el) return;
+  if (!el) {
+    flash("未找到画布", true);
+    return;
+  }
   exporting.value = true;
   try {
     const dataUrl = await snapshotStagePng(el);
     download(`${screen.value?.name || "大屏"}@2x.png`, dataUrl, true);
+    flash("已导出 2 倍 PNG");
+  } catch (e) {
+    flash(e instanceof Error ? e.message : String(e), true);
   } finally {
     exporting.value = false;
   }
@@ -120,6 +136,12 @@ function goPlay(): void {
       <button class="topbar__btn" :disabled="exporting" title="导出 2 倍 PNG" @click="exportPng">
         <Icon name="image" :size="15" /> PNG@2x
       </button>
+      <span
+        v-if="exportMsg"
+        class="topbar__export-msg"
+        :class="{ 'topbar__export-msg--error': exportMsg.startsWith('导出失败') }"
+        >{{ exportMsg }}</span
+      >
     </div>
   </header>
 </template>
@@ -210,5 +232,14 @@ function goPlay(): void {
   width: 1px;
   height: 16px;
   background: var(--cf-border);
+}
+.topbar__export-msg {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--cf-success, #2f9e6e);
+  white-space: nowrap;
+}
+.topbar__export-msg--error {
+  color: var(--cf-danger, #d54941);
 }
 </style>
