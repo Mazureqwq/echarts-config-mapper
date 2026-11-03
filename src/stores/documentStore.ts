@@ -7,6 +7,7 @@ import { rotateFrame } from "@/core/geometry/transform";
 import { matrixToChartData, validateChartData } from "@/core/chart/chartData";
 import { MIN_INTERVAL_SEC } from "@/core/live/liveExecutor";
 import type {
+  ChartAsset,
   ChartData,
   Frame,
   LiveSource,
@@ -371,6 +372,27 @@ export const useDocumentStore = defineStore("document", {
         createdAt: now,
         updatedAt: now,
       });
+      this.commit();
+    },
+    upsertAsset(asset: ChartAsset) {
+      const ws = useWorkspaceStore();
+      const idx = ws.workspace.assets.findIndex((a) => a.id === asset.id);
+      if (idx === -1) ws.workspace.assets.push(asset);
+      else ws.workspace.assets[idx] = asset;
+      this.commit();
+    },
+    setCanvas(patch: Partial<Workspace["screens"][number]["canvas"]>) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      if (patch.width !== undefined) screen.canvas.width = patch.width;
+      if (patch.height !== undefined) screen.canvas.height = patch.height;
+      if (patch.background !== undefined) screen.canvas.background = patch.background;
+      this.commit();
+    },
+    setScreenName(name: string) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      screen.name = name || screen.name;
       this.commit();
     },
     removeAsset(id: string) {

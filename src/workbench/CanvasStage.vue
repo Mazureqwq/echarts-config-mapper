@@ -205,6 +205,12 @@ function onStageDown(ev: MouseEvent): void {
   window.addEventListener("mouseup", onWindowUp);
 }
 
+function onItemDblclick(_ev: MouseEvent, item: ScreenItem): void {
+  if (item.kind === "chart" && !item.locked && !item.hidden) {
+    ui.setEditing(item.id);
+  }
+}
+
 function onItemClick(ev: MouseEvent, item: ScreenItem): void {
   if (item.locked || item.hidden) return;
   ev.stopPropagation();
@@ -269,7 +275,11 @@ function onKeyDown(ev: KeyboardEvent): void {
   } else if (ev.key === "?") {
     ui.setHelpVisible(!ui.helpVisible);
   } else if (ev.key === "Escape") {
-    doc.selectedIds = [];
+    if (ui.editingId) {
+      ui.setEditing(null);
+    } else {
+      doc.selectedIds = [];
+    }
   }
 }
 
@@ -340,6 +350,7 @@ defineExpose({ canvasPoint, DROP_MIME });
         :key="item.id"
         :item="item"
         @mousedown.stop="onItemClick($event, item)"
+        @dblclick.stop="onItemDblclick($event, item)"
       />
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
       <div v-if="!ui.previewing" class="canvas-stage__toolbar" @mousedown.stop>

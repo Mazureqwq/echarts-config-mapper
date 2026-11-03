@@ -4,6 +4,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import CanvasStage from "@/workbench/CanvasStage.vue";
 import LayersPanel from "@/workbench/LayersPanel.vue";
+import InspectorPanel from "@/workbench/InspectorPanel.vue";
 
 const props = defineProps<{ id: string }>();
 const ws = useWorkspaceStore();
@@ -24,10 +25,13 @@ onMounted(() => {
 
 <template>
   <div class="workbench">
-    <aside class="workbench__side">
+    <aside class="workbench__side workbench__side--left">
       <LayersPanel />
     </aside>
     <CanvasStage />
+    <aside class="workbench__side workbench__side--right">
+      <InspectorPanel />
+    </aside>
   </div>
 </template>
 
@@ -37,10 +41,16 @@ onMounted(() => {
   display: flex;
 }
 .workbench__side {
-  width: 220px;
   flex-shrink: 0;
   background: var(--cf-panel);
-  border-right: 1px solid var(--cf-border);
   overflow-y: auto;
+}
+.workbench__side--left {
+  width: 220px;
+  border-right: 1px solid var(--cf-border);
+}
+.workbench__side--right {
+  width: 300px;
+  border-left: 1px solid var(--cf-border);
 }
 </style>
