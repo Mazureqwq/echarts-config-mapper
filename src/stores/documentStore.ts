@@ -172,7 +172,11 @@ export const useDocumentStore = defineStore("document", {
       const screen = this.currentScreen;
       if (!screen) return;
       const set = new Set(ids);
-      screen.items.splice(0, screen.items.length, ...screen.items.filter((i) => !set.has(i.id)));
+      screen.items.splice(
+        0,
+        screen.items.length,
+        ...screen.items.filter((i) => !set.has(i.id) || i.locked)
+      );
       this.selectedIds = [];
       this.commit();
     },
@@ -329,8 +333,14 @@ export const useDocumentStore = defineStore("document", {
       this.commit();
     },
     duplicate() {
-      this.copy();
-      this.paste();
+      const items = this.items.filter((i) => this.selectedIds.includes(i.id));
+      if (items.length === 0) return;
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const clones = deepClone(items).map((it) => ({ ...it, id: newId() }));
+      screen.items.push(...clones);
+      this.selectedIds = clones.map((it) => it.id);
+      this.commit();
     },
     bringToFront(id: string) {
       const screen = this.currentScreen;

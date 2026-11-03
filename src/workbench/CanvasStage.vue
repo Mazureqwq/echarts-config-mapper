@@ -41,9 +41,7 @@ const items = computed<ScreenItem[]>(() => doc.items);
 const selectedItems = computed<ScreenItem[]>(() =>
   doc.items.filter((i) => doc.selectedIds.includes(i.id))
 );
-const singleSelected = computed<ScreenItem | null>(() =>
-  selectedItems.value.length === 1 && !ui.previewing ? selectedItems.value[0] : null
-);
+
 
 const canvasStyle = computed<Record<string, string>>(() => ({
   width: `${doc.currentScreen?.canvas.width ?? 1920}px`,
@@ -231,12 +229,16 @@ function onItemDblclick(_ev: MouseEvent, item: ScreenItem): void {
 function onItemClick(ev: MouseEvent, item: ScreenItem): void {
   if (item.locked || item.hidden) return;
   ev.stopPropagation();
+  const groupIds = item.groupId
+    ? doc.items.filter((i) => i.groupId === item.groupId).map((i) => i.id)
+    : [item.id];
   if (ev.shiftKey) {
-    doc.selectedIds = doc.selectedIds.includes(item.id)
-      ? doc.selectedIds.filter((id) => id !== item.id)
-      : [...doc.selectedIds, item.id];
+    const allIn = groupIds.every((id) => doc.selectedIds.includes(id));
+    doc.selectedIds = allIn
+      ? doc.selectedIds.filter((id) => !groupIds.includes(id))
+      : [...new Set([...doc.selectedIds, ...groupIds])];
   } else if (!doc.selectedIds.includes(item.id)) {
-    doc.selectedIds = [item.id];
+    doc.selectedIds = groupIds;
   }
   if (!ev.shiftKey && doc.selectedIds.includes(item.id)) {
     moveState = { start: canvasPoint(ev), ids: [...doc.selectedIds], started: false };
@@ -430,7 +432,11 @@ defineExpose({ canvasPoint, DROP_MIME });
               : { left: '0', top: `${g.position}px`, width: '100%', height: '1px' }
           "
         />
-        <TransformHandles v-if="singleSelected" :item="singleSelected" :zoom="ui.zoom" />
+        <TransformHandles
+          v-if="selectedItems.length > 0"
+          :items="selectedItems"
+          :zoom="ui.zoom"
+        />
       </template>
     </div>
   </div>

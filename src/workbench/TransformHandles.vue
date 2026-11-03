@@ -1,15 +1,30 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
-import type { ScreenItem } from "@/core/model/types";
+import type { Frame, ScreenItem } from "@/core/model/types";
 import { resizeFrame, rotateFrame } from "@/core/geometry/transform";
 import type { Handle } from "@/core/geometry/transform";
-import { frameCenter } from "@/core/geometry/hit";
+import { frameCenter, rotatePoint } from "@/core/geometry/hit";
 
-const props = defineProps<{ item: ScreenItem; zoom: number }>();
+const props = defineProps<{ items: ScreenItem[]; zoom: number }>();
 const doc = useDocumentStore();
 
 const wrapperEl = ref<HTMLDivElement | null>(null);
+
+const single = computed<ScreenItem | null>(() =>
+  props.items.length === 1 ? props.items[0] : null
+);
+
+const virtualFrame = computed<Frame>(() => {
+  if (single.value) return { ...single.value.frame };
+  const xs = props.items.map((i) => i.frame.x);
+  const ys = props.items.map((i) => i.frame.y);
+  const x2 = props.items.map((i) => i.frame.x + i.frame.w);
+  const y2 = props.items.map((i) => i.frame.y + i.frame.h);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...x2) - x, h: Math.max(...y2) - y, rotate: 0 };
+});
 
 const HANDLES: Array<{ handle: Handle; cursor: string; left: string; top: string }> = [
   { handle: "nw", cursor: "nwse-resize", left: "0%", top: "0%" },
@@ -23,7 +38,7 @@ const HANDLES: Array<{ handle: Handle; cursor: string; left: string; top: string
 ];
 
 const wrapperStyle = computed(() => {
-  const f = props.item.frame;
+  const f = virtualFrame.value;
   return {
     left: `${f.x}px`,
     top: `${f.y}px`,
@@ -35,23 +50,47 @@ const wrapperStyle = computed(() => {
 });
 
 function toLocalDelta(dx: number, dy: number): { dx: number; dy: number } {
-  const rad = (-props.item.frame.rotate * Math.PI) / 180;
+  const rad = (-virtualFrame.value.rotate * Math.PI) / 180;
   return {
     dx: dx * Math.cos(rad) - dy * Math.sin(rad),
     dy: dx * Math.sin(rad) + dy * Math.cos(rad),
   };
 }
 
+function applyMultiResize(next: Frame): void {
+  const vb = virtualFrame.value;
+  const sx = vb.w > 0 ? next.w / vb.w : 1;
+  const sy = vb.h > 0 ? next.h / vb.h : 1;
+  for (const it of props.items) {
+    if (it.locked) continue;
+    doc.updateItemFrame(
+      it.id,
+      {
+        x: next.x + (it.frame.x - vb.x) * sx,
+        y: next.y + (it.frame.y - vb.y) * sy,
+        w: it.frame.w * sx,
+        h: it.frame.h * sy,
+      },
+      { commit: false }
+    );
+  }
+}
+
 function onHandleDown(ev: MouseEvent, handle: Handle): void {
   ev.stopPropagation();
   ev.preventDefault();
   const start = { x: ev.clientX, y: ev.clientY };
-  const frame0 = { ...props.item.frame };
+  const frame0 = { ...virtualFrame.value };
   const zoom = props.zoom / 100;
+  const isSingle = single.value !== null;
   const move = (e: MouseEvent) => {
     const local = toLocalDelta((e.clientX - start.x) / zoom, (e.clientY - start.y) / zoom);
     const next = resizeFrame(frame0, handle, local.dx, local.dy, { keepAspect: e.shiftKey });
-    doc.updateItemFrame(props.item.id, next, { commit: false });
+    if (isSingle) {
+      doc.updateItemFrame(single.value!.id, next, { commit: false });
+    } else {
+      applyMultiResize(next);
+    }
   };
   const up = () => {
     window.removeEventListener("mousemove", move);
@@ -65,17 +104,36 @@ function onHandleDown(ev: MouseEvent, handle: Handle): void {
 function onRotateDown(ev: MouseEvent): void {
   ev.stopPropagation();
   ev.preventDefault();
-  const frame0 = { ...props.item.frame };
+  const frame0 = { ...virtualFrame.value };
   const c = frameCenter(frame0);
   const rect = wrapperEl.value?.getBoundingClientRect();
   const cx = rect ? rect.left + rect.width / 2 : ev.clientX;
   const cy = rect ? rect.top + rect.height / 2 : ev.clientY;
   const startAngle = (Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180) / Math.PI;
+  const isSingle = single.value !== null;
   const move = (e: MouseEvent) => {
     const angle = (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
-    const target = frame0.rotate + (angle - startAngle);
-    const next = rotateFrame(frame0, c, target, { snap: e.shiftKey });
-    doc.updateItemFrame(props.item.id, next, { commit: false });
+    let delta = angle - startAngle;
+    if (e.shiftKey) delta = Math.round(delta / 15) * 15;
+    if (isSingle) {
+      const next = rotateFrame(frame0, c, frame0.rotate + delta, {});
+      doc.updateItemFrame(single.value!.id, next, { commit: false });
+    } else {
+      for (const it of props.items) {
+        if (it.locked) continue;
+        const ic = frameCenter(it.frame);
+        const nc = rotatePoint(ic, c, delta);
+        doc.updateItemFrame(
+          it.id,
+          {
+            x: nc.x - it.frame.w / 2,
+            y: nc.y - it.frame.h / 2,
+            rotate: (((it.frame.rotate + delta) % 360) + 360) % 360,
+          },
+          { commit: false }
+        );
+      }
+    }
   };
   const up = () => {
     window.removeEventListener("mousemove", move);
@@ -92,7 +150,7 @@ function onRotateDown(ev: MouseEvent): void {
     <div class="transform-handles__rotate-line" />
     <button
       class="transform-handles__rotate"
-      title="旋转（Shift 吸附 15°）"
+      :title="single ? '旋转（Shift 吸附 15°）' : '整体旋转'"
       @mousedown="onRotateDown"
     />
     <button

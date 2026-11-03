@@ -179,6 +179,28 @@ describe("stores/documentStore", () => {
     expect(screen.items.map((i) => i.id)).toEqual([a.id, b.id]);
   });
 
+  it("duplicate 原位复制生成新 id 不偏移", () => {
+    const { doc, screen } = seedScreen();
+    const item = createItem("shape", { x: 30, y: 40 }) as ScreenItem;
+    screen.items.push(item);
+    doc.selectedIds = [item.id];
+    doc.duplicate();
+    expect(screen.items).toHaveLength(2);
+    expect(screen.items[1].id).not.toBe(item.id);
+    expect(screen.items[1].frame.x).toBe(30);
+    expect(screen.items[1].frame.y).toBe(40);
+  });
+
+  it("removeItems 不删除锁定元素", () => {
+    const { doc, screen } = seedScreen();
+    const a = createItem("shape", {});
+    const b = createItem("shape", {});
+    screen.items.push(a, b);
+    doc.updateItemProps(b.id, { locked: true });
+    doc.removeItems([a.id, b.id]);
+    expect(screen.items.map((i) => i.id)).toEqual([b.id]);
+  });
+
   it("saveAsAsset 保存图表为资产", () => {
     const { doc, screen } = seedScreen();
     const item = createItem("chart") as ChartItem;
