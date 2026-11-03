@@ -4,25 +4,31 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useUiStore } from "@/stores/uiStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
+import { snapDelta } from "@/core/geometry/snap";
+import type { SnapCandidate, SnapGuide } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
 import type { ScreenItem, ChartType } from "@/core/model/types";
 import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
+import TransformHandles from "./TransformHandles.vue";
 
 const doc = useDocumentStore();
 const ui = useUiStore();
 
 const stageEl = ref<HTMLDivElement | null>(null);
 const marquee = ref<{ x: number; y: number; w: number; h: number } | null>(null);
+const guides = ref<SnapGuide[]>([]);
 
 interface Point {
-  x: number;
-  y: number;
+  x: number; y: number;
 }
 
 const items = computed<ScreenItem[]>(() => doc.items);
 const selectedItems = computed<ScreenItem[]>(() =>
   doc.items.filter((i) => doc.selectedIds.includes(i.id))
+);
+const singleSelected = computed<ScreenItem | null>(() =>
+  selectedItems.value.length === 1 && !ui.previewing ? selectedItems.value[0] : null
 );
 
 const canvasStyle = computed<Record<string, string>>(() => ({
@@ -39,9 +45,7 @@ const bgStyle = computed<Record<string, string>>(() => {
     return { background: `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})` };
   }
   if (bg.kind === "image") {
-    return {
-      background: `url(${bg.src}) center/cover no-repeat`,
-    };
+    return { background: `url(${bg.src}) center/cover no-repeat` };
   }
   return { background: bg.color };
 });
@@ -59,7 +63,8 @@ function canvasPoint(ev: { clientX: number; clientY: number }): Point {
 // ---- 缩放平移 ----
 let spacePressed = false;
 let panState: { startX: number; startY: number; panX: number; panY: number } | null = null;
-let marqueeState: { start: Point } | null = null;
+let marqueeState: { start: Point; additive: boolean } | null = null;
+let moveState: { start: Point; ids: string[]; started: boolean; last?: { x: number; y: number } } | null = null;
 
 function onWheel(ev: WheelEvent): void {
   const before = canvasPoint(ev);
@@ -73,6 +78,41 @@ function onWheel(ev: WheelEvent): void {
   });
 }
 
+// ---- 吸附 ----
+function buildCandidates(bbox: { x: number; y: number; w: number; h: number }): SnapCandidate[] {
+  const out: SnapCandidate[] = [];
+  const movingX = [bbox.x, bbox.x + bbox.w / 2, bbox.x + bbox.w];
+  const movingY = [bbox.y, bbox.y + bbox.h / 2, bbox.y + bbox.h];
+  const statics: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const canvas = doc.currentScreen?.canvas;
+  if (canvas) {
+    statics.push({ x: 0, y: 0, w: canvas.width, h: canvas.height });
+  }
+  for (const it of doc.items) {
+    if (moveState && moveState.ids.includes(it.id)) continue;
+    if (it.hidden) continue;
+    statics.push(it.frame);
+  }
+  for (const s of statics) {
+    const sx = [s.x, s.x + s.w / 2, s.x + s.w];
+    const sy = [s.y, s.y + s.h / 2, s.y + s.h];
+    for (const m of movingX) for (const st of sx) out.push({ axis: "x", moving: m, static: st });
+    for (const m of movingY) for (const st of sy) out.push({ axis: "y", moving: m, static: st });
+  }
+  return out;
+}
+
+function selectionBBox(ids: string[]): { x: number; y: number; w: number; h: number } | null {
+  const sel = doc.items.filter((i) => ids.includes(i.id));
+  if (sel.length === 0) return null;
+  const minX = Math.min(...sel.map((i) => i.frame.x));
+  const minY = Math.min(...sel.map((i) => i.frame.y));
+  const maxX = Math.max(...sel.map((i) => i.frame.x + i.frame.w));
+  const maxY = Math.max(...sel.map((i) => i.frame.y + i.frame.h));
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+// ---- 指针交互 ----
 function onWindowMove(ev: MouseEvent): void {
   if (panState) {
     ui.setPan({
@@ -84,27 +124,54 @@ function onWindowMove(ev: MouseEvent): void {
   if (marqueeState) {
     const cur = canvasPoint(ev);
     const s = marqueeState.start;
-    const rect = {
+    marquee.value = {
       x: Math.min(s.x, cur.x),
       y: Math.min(s.y, cur.y),
       w: Math.abs(cur.x - s.x),
       h: Math.abs(cur.y - s.y),
     };
-    marquee.value = rect;
+    return;
+  }
+  if (moveState) {
+    const cur = canvasPoint(ev);
+    const rawDx = cur.x - moveState.start.x;
+    const rawDy = cur.y - moveState.start.y;
+    if (!moveState.started && Math.hypot(rawDx, rawDy) < 3) return;
+    moveState.started = true;
+    let dx = rawDx;
+    let dy = rawDy;
+    if (ui.snapEnabled) {
+      const bbox = selectionBBox(moveState.ids);
+      if (bbox) {
+        const snapped = snapDelta({ dx, dy }, buildCandidates(bbox));
+        dx = snapped.dx;
+        dy = snapped.dy;
+        guides.value = snapped.guides;
+      }
+    }
+    // 以增量方式移动（相对上次位置）
+    const last = moveState.last ?? { x: 0, y: 0 };
+    doc.moveBy(moveState.ids, dx - last.x, dy - last.y, { commit: false });
+    moveState.last = { x: dx, y: dy };
   }
 }
 
-function onWindowUp(ev: MouseEvent): void {
+function onWindowUp(): void {
   if (marqueeState && marquee.value) {
     const hits = boxSelect(doc.items, marquee.value);
     const ids = hits.filter((i) => !i.hidden && !i.locked).map((i) => i.id);
-    doc.selectedIds = ev.shiftKey
+    doc.selectedIds = marqueeState.additive
       ? [...new Set([...doc.selectedIds, ...ids])]
       : ids;
+  }
+  if (moveState && moveState.started) {
+    doc.commit();
   }
   marqueeState = null;
   marquee.value = null;
   panState = null;
+  moveState = null;
+  guides.value = [];
   window.removeEventListener("mousemove", onWindowMove);
   window.removeEventListener("mouseup", onWindowUp);
 }
@@ -118,7 +185,7 @@ function onStageDown(ev: MouseEvent): void {
       panY: ui.pan.y,
     };
   } else if (ev.button === 0) {
-    marqueeState = { start: canvasPoint(ev) };
+    marqueeState = { start: canvasPoint(ev), additive: ev.shiftKey };
     if (!ev.shiftKey) doc.selectedIds = [];
   }
   window.addEventListener("mousemove", onWindowMove);
@@ -132,17 +199,64 @@ function onItemClick(ev: MouseEvent, item: ScreenItem): void {
     doc.selectedIds = doc.selectedIds.includes(item.id)
       ? doc.selectedIds.filter((id) => id !== item.id)
       : [...doc.selectedIds, item.id];
-  } else {
+  } else if (!doc.selectedIds.includes(item.id)) {
     doc.selectedIds = [item.id];
   }
+  if (!ev.shiftKey && doc.selectedIds.includes(item.id)) {
+    moveState = { start: canvasPoint(ev), ids: [...doc.selectedIds], started: false };
+  }
+  window.addEventListener("mousemove", onWindowMove);
+  window.addEventListener("mouseup", onWindowUp);
+}
+
+// ---- 键盘 ----
+function isTypingTarget(ev: KeyboardEvent): boolean {
+  const t = ev.target as HTMLElement | null;
+  if (!t) return false;
+  return (
+    t.tagName === "INPUT" ||
+    t.tagName === "TEXTAREA" ||
+    t.tagName === "SELECT" ||
+    t.isContentEditable
+  );
 }
 
 function onKeyDown(ev: KeyboardEvent): void {
-  if (ev.key === "Escape") {
-    doc.selectedIds = [];
-  } else if (ev.code === "Space") {
+  if (ev.code === "Space") {
     spacePressed = true;
+    if (!isTypingTarget(ev)) ev.preventDefault();
+    return;
+  }
+  if (isTypingTarget(ev)) return;
+  const step = ev.shiftKey ? 10 : 1;
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  if (ctrl && ev.key.toLowerCase() === "c") {
+    doc.copy();
+  } else if (ctrl && ev.key.toLowerCase() === "v") {
+    doc.paste();
+  } else if (ctrl && ev.key.toLowerCase() === "d") {
     ev.preventDefault();
+    doc.duplicate();
+  } else if (ctrl && ev.shiftKey && ev.key.toLowerCase() === "g") {
+    ev.preventDefault();
+    doc.ungroup();
+  } else if (ctrl && ev.key.toLowerCase() === "g") {
+    ev.preventDefault();
+    doc.addGroup();
+  } else if (ev.key === "Delete" || ev.key === "Backspace") {
+    if (doc.selectedIds.length > 0) {
+      ev.preventDefault();
+      doc.removeItems([...doc.selectedIds]);
+    }
+  } else if (ev.key.startsWith("Arrow") && doc.selectedIds.length > 0) {
+    ev.preventDefault();
+    const dx = ev.key === "ArrowLeft" ? -step : ev.key === "ArrowRight" ? step : 0;
+    const dy = ev.key === "ArrowUp" ? -step : ev.key === "ArrowDown" ? step : 0;
+    doc.moveBy([...doc.selectedIds], dx, dy);
+  } else if (ev.key === "?") {
+    ui.setHelpVisible(!ui.helpVisible);
+  } else if (ev.key === "Escape") {
+    doc.selectedIds = [];
   }
 }
 
@@ -215,6 +329,19 @@ defineExpose({ canvasPoint, DROP_MIME });
         @mousedown.stop="onItemClick($event, item)"
       />
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
+      <template v-if="!ui.previewing">
+        <div
+          v-for="(g, i) in guides"
+          :key="`g${i}`"
+          class="canvas-stage__guide"
+          :style="
+            g.axis === 'x'
+              ? { left: `${g.position}px`, top: '0', width: '1px', height: '100%' }
+              : { left: '0', top: `${g.position}px`, width: '100%', height: '1px' }
+          "
+        />
+        <TransformHandles v-if="singleSelected" :item="singleSelected" :zoom="ui.zoom" />
+      </template>
     </div>
   </div>
 </template>
@@ -236,5 +363,10 @@ defineExpose({ canvasPoint, DROP_MIME });
 .canvas-stage__bg {
   position: absolute;
   inset: 0;
+}
+.canvas-stage__guide {
+  position: absolute;
+  background: #f5222d;
+  pointer-events: none;
 }
 </style>

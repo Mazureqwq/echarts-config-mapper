@@ -3,6 +3,7 @@ import { markRaw } from "vue";
 import { History, HISTORY_LIMIT } from "@/core/history/history";
 import { createScreen } from "@/core/model/schema";
 import { deepMerge } from "@/core/chart/optionBuilder";
+import { rotateFrame } from "@/core/geometry/transform";
 import { matrixToChartData, validateChartData } from "@/core/chart/chartData";
 import { MIN_INTERVAL_SEC } from "@/core/live/liveExecutor";
 import type {
@@ -142,10 +143,35 @@ export const useDocumentStore = defineStore("document", {
       }
       this.commit();
     },
-    updateItemFrame(id: string, frame: Partial<Frame>) {
+    updateItemFrame(id: string, frame: Partial<Frame>, opts?: { commit?: boolean }) {
       const item = this.items.find((i) => i.id === id);
       if (!item) return;
       Object.assign(item.frame, frame);
+      if (opts?.commit !== false) this.commit();
+    },
+    moveBy(ids: string[], dx: number, dy: number, opts?: { commit?: boolean }) {
+      for (const id of ids) {
+        const item = this.items.find((i) => i.id === id);
+        if (!item || item.locked) continue;
+        item.frame.x += dx;
+        item.frame.y += dy;
+      }
+      if (opts?.commit !== false) this.commit();
+    },
+    rotateFrameTo(id: string, angle: number, opts?: { snap?: boolean; commit?: boolean }) {
+      const item = this.items.find((i) => i.id === id);
+      if (!item || item.locked) return;
+      const f = item.frame;
+      const c = { x: f.x + f.w / 2, y: f.y + f.h / 2 };
+      item.frame = rotateFrame(f, c, angle, { snap: opts?.snap });
+      if (opts?.commit !== false) this.commit();
+    },
+    removeItems(ids: string[]) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const set = new Set(ids);
+      screen.items.splice(0, screen.items.length, ...screen.items.filter((i) => !set.has(i.id)));
+      this.selectedIds = [];
       this.commit();
     },
     updateItemProps(id: string, props: Record<string, unknown>) {

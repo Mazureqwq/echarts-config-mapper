@@ -10,6 +10,8 @@ export const useUiStore = defineStore("ui", {
     pan: { x: 0, y: 0 },
     previewing: false,
     aligning: true,
+    snapEnabled: true,
+    helpVisible: false,
     editingId: null as string | null,
   }),
   getters: {
@@ -30,6 +32,12 @@ export const useUiStore = defineStore("ui", {
     },
     setEditing(id: string | null) {
       this.editingId = id;
+    },
+    setSnapEnabled(v: boolean) {
+      this.snapEnabled = v;
+    },
+    setHelpVisible(v: boolean) {
+      this.helpVisible = v;
     },
     setView(view: AppView) {
       this.view = view;
