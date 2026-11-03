@@ -64,6 +64,6 @@ const d = PATHS[props.name] ?? PATHS.help;
 <style scoped>
 .cf-icon {
   display: inline-block;
-  "vertical-align": -3px;
+  vertical-align: -3px;
 }
 </style>

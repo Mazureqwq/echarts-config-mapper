@@ -332,6 +332,24 @@ export const useDocumentStore = defineStore("document", {
       this.copy();
       this.paste();
     },
+    bringToFront(id: string) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const idx = screen.items.findIndex((i) => i.id === id);
+      if (idx === -1 || idx === screen.items.length - 1) return;
+      const [it] = screen.items.splice(idx, 1);
+      screen.items.push(it);
+      this.commit();
+    },
+    sendToBack(id: string) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const idx = screen.items.findIndex((i) => i.id === id);
+      if (idx <= 0) return;
+      const [it] = screen.items.splice(idx, 1);
+      screen.items.unshift(it);
+      this.commit();
+    },
     reorderItem(id: string, toIndex: number) {
       const screen = this.currentScreen;
       if (!screen) return;

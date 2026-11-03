@@ -1,6 +1,6 @@
 import { makeThumbnail, THUMBNAIL_MAX_SIDE } from "@/core/storage/thumbnail";
 
-export async function snapshotStage(source: HTMLElement): Promise<string> {
+export async function snapshotStage(source: HTMLElement, maxSide: number = THUMBNAIL_MAX_SIDE, mime: string = "image/jpeg"): Promise<string> {
   const clone = source.cloneNode(true) as HTMLElement;
   clone.style.transform = "none";
   clone.style.boxShadow = "none";
@@ -35,15 +35,25 @@ export async function snapshotStage(source: HTMLElement): Promise<string> {
       img.onerror = () => reject(new Error("缩略图渲染失败"));
       img.src = url;
     });
-    const scale = THUMBNAIL_MAX_SIDE / Math.max(w, h);
+    const scale = maxSide / Math.max(w, h);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(w * scale));
     canvas.height = Math.max(1, Math.round(h * scale));
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("无法创建画布");
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    if (mime === "image/png") {
+      return canvas.toDataURL("image/png");
+    }
     return makeThumbnail(canvas);
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** 2 倍 PNG 导出：1920x1080 画布 -> 3840x2160 */
+export async function snapshotStagePng(source: HTMLElement): Promise<string> {
+  const w = source.offsetWidth || 1920;
+  const h = source.offsetHeight || 1080;
+  return snapshotStage(source, Math.max(w, h) * 2, "image/png");
 }

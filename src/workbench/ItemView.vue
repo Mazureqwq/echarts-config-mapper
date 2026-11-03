@@ -4,6 +4,9 @@ import type { CSSProperties } from "vue";
 import type { ScreenItem } from "@/core/model/types";
 import { buildOption } from "@/core/chart/optionBuilder";
 import { themeMode } from "@/shared/theme";
+import { useDocumentStore } from "@/stores/documentStore";
+
+const doc = useDocumentStore();
 import EChartsView from "./EChartsView.vue";
 
 const props = defineProps<{ item: ScreenItem }>();
@@ -83,6 +86,13 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
 
 <template>
   <div class="item-view" :style="boxStyle" :data-item-id="item.id">
+    <div
+      v-if="item.kind === 'chart' && doc.liveStatus[item.id]?.stale"
+      class="item-view__stale"
+      title="实时数据拉取失败，显示的是最后一次成功数据"
+    >
+      数据过期
+    </div>
     <template v-if="item.kind === 'text'">
       <div :style="textStyle">{{ item.text }}</div>
     </template>
@@ -100,6 +110,18 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
 </template>
 
 <style scoped>
+.item-view__stale {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 5;
+  padding: 1px 8px;
+  border-radius: 9px;
+  background: #faad14;
+  color: #fff;
+  font-size: 11px;
+  pointer-events: none;
+}
 .item-view__img-empty {
   width: 100%;
   height: 100%;

@@ -44,6 +44,13 @@ function toggleHidden(item: ScreenItem): void {
   doc.updateItemProps(item.id, { hidden: !item.hidden });
 }
 
+function layerOp(op: "top" | "up" | "down" | "bottom", item: ScreenItem): void {
+  if (op === "top") doc.bringToFront(item.id);
+  else if (op === "bottom") doc.sendToBack(item.id);
+  else if (op === "up") doc.bringForward(item.id);
+  else doc.sendBackward(item.id);
+}
+
 function toggleLock(item: ScreenItem): void {
   doc.updateItemProps(item.id, { locked: !item.locked });
 }
@@ -91,6 +98,10 @@ function onRowDrop(ev: DragEvent, target: ScreenItem): void {
       <span v-else class="layers-panel__name" @dblclick.stop="startRename(item)">
         {{ item.name || item.kind }}
       </span>
+      <button class="layers-panel__btn" title="置顶" @click.stop="layerOp('top', item)">⤒</button>
+      <button class="layers-panel__btn" title="上移一层" @click.stop="layerOp('up', item)">↑</button>
+      <button class="layers-panel__btn" title="下移一层" @click.stop="layerOp('down', item)">↓</button>
+      <button class="layers-panel__btn" title="置底" @click.stop="layerOp('bottom', item)">⤓</button>
       <button class="layers-panel__btn" :title="item.hidden ? '显示' : '隐藏'" @click.stop="toggleHidden(item)">
         <Icon :name="item.hidden ? 'eye-off' : 'eye'" :size="13" />
       </button>

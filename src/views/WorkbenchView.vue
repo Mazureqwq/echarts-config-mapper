@@ -5,6 +5,8 @@ import { useDocumentStore } from "@/stores/documentStore";
 import CanvasStage from "@/workbench/CanvasStage.vue";
 import LeftPanel from "@/workbench/LeftPanel.vue";
 import InspectorPanel from "@/workbench/InspectorPanel.vue";
+import TopBar from "@/workbench/TopBar.vue";
+import ShortcutsHelp from "@/workbench/ShortcutsHelp.vue";
 import { snapshotStage } from "@/workbench/stageThumbnail";
 
 const props = defineProps<{ id: string }>();
@@ -38,21 +40,23 @@ async function refreshThumbnail(): Promise<void> {
 onBeforeUnmount(() => {
   void refreshThumbnail();
 });
-
-defineExpose({ refreshThumbnail });
 </script>
 
 <template>
   <div class="workbench">
-    <aside class="workbench__side workbench__side--left">
-      <LeftPanel />
-    </aside>
-    <div ref="stageWrap" class="workbench__stage">
-      <CanvasStage />
+    <TopBar :screen-id="doc.currentScreenId ?? id" @saved="refreshThumbnail" />
+    <div class="workbench__main">
+      <aside class="workbench__side workbench__side--left">
+        <LeftPanel />
+      </aside>
+      <div ref="stageWrap" class="workbench__stage">
+        <CanvasStage />
+      </div>
+      <aside class="workbench__side workbench__side--right">
+        <InspectorPanel />
+      </aside>
     </div>
-    <aside class="workbench__side workbench__side--right">
-      <InspectorPanel />
-    </aside>
+    <ShortcutsHelp />
   </div>
 </template>
 
@@ -60,6 +64,12 @@ defineExpose({ refreshThumbnail });
 .workbench {
   height: 100%;
   display: flex;
+  flex-direction: column;
+}
+.workbench__main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
 .workbench__side {
   flex-shrink: 0;

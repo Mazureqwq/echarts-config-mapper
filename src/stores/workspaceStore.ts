@@ -44,7 +44,11 @@ export const useWorkspaceStore = defineStore("workspace", {
       }
       saveTimer = setTimeout(() => {
         saveTimer = null;
-        this.save();
+        try {
+          this.save();
+        } catch {
+          /* saveState 已置 error，顶栏提示并可重试 */
+        }
       }, SAVE_DEBOUNCE_MS);
     },
     duplicateScreen(id: string) {

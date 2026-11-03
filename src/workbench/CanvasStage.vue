@@ -80,6 +80,22 @@ let panState: { startX: number; startY: number; panX: number; panY: number } | n
 let marqueeState: { start: Point; additive: boolean } | null = null;
 let moveState: { start: Point; ids: string[]; started: boolean; last?: { x: number; y: number } } | null = null;
 
+function fitToWindow(): void {
+  const rect = stageEl.value?.getBoundingClientRect();
+  const canvas = doc.currentScreen?.canvas;
+  if (!rect || !canvas) return;
+  const z = Math.min(rect.width / canvas.width, rect.height / canvas.height) * 100;
+  ui.setZoom(z * 0.92);
+  ui.setPan({
+    x: (rect.width - canvas.width * (ui.zoom / 100)) / 2,
+    y: (rect.height - canvas.height * (ui.zoom / 100)) / 2,
+  });
+}
+
+function zoomReset(): void {
+  ui.setZoom(100);
+}
+
 function onWheel(ev: WheelEvent): void {
   const before = canvasPoint(ev);
   const factor = ev.deltaY > 0 ? 0.9 : 1.1;
@@ -250,7 +266,13 @@ function onKeyDown(ev: KeyboardEvent): void {
   if (isTypingTarget(ev)) return;
   const step = ev.shiftKey ? 10 : 1;
   const ctrl = ev.ctrlKey || ev.metaKey;
-  if (ctrl && ev.key.toLowerCase() === "c") {
+  if (ctrl && !ev.shiftKey && ev.key.toLowerCase() === "z") {
+    ev.preventDefault();
+    doc.undo();
+  } else if (ctrl && (ev.key.toLowerCase() === "y" || (ev.shiftKey && ev.key.toLowerCase() === "z"))) {
+    ev.preventDefault();
+    doc.redo();
+  } else if (ctrl && ev.key.toLowerCase() === "c") {
     doc.copy();
   } else if (ctrl && ev.key.toLowerCase() === "v") {
     doc.paste();
@@ -350,6 +372,14 @@ defineExpose({ canvasPoint, DROP_MIME });
     @dragover.prevent
     @drop.prevent="onDrop"
   >
+    <div v-if="!ui.previewing" class="canvas-stage__zoom-bar" @mousedown.stop>
+      <button class="canvas-stage__tool-btn" title="缩小" @click="ui.zoomOut()">−</button>
+      <span class="canvas-stage__zoom-label">{{ ui.zoom }}%</span>
+      <button class="canvas-stage__tool-btn" title="放大" @click="ui.zoomIn()">＋</button>
+      <span class="canvas-stage__tool-sep" />
+      <button class="canvas-stage__tool-btn" title="适应窗口" @click="fitToWindow">适应</button>
+      <button class="canvas-stage__tool-btn" title="恢复 100%" @click="zoomReset">100%</button>
+    </div>
     <div class="canvas-stage__canvas" :style="canvasStyle">
       <div class="canvas-stage__bg" :style="bgStyle" />
       <ItemView
@@ -428,6 +458,26 @@ defineExpose({ canvasPoint, DROP_MIME });
   position: absolute;
   background: #f5222d;
   pointer-events: none;
+}
+.canvas-stage__zoom-bar {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--cf-panel);
+  box-shadow: var(--cf-shadow);
+  border: 1px solid var(--cf-border);
+}
+.canvas-stage__zoom-label {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--cf-text-2);
 }
 .canvas-stage__toolbar {
   position: absolute;
