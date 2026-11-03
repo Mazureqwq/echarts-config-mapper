@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import CanvasStage from "@/workbench/CanvasStage.vue";
-import LayersPanel from "@/workbench/LayersPanel.vue";
+import LeftPanel from "@/workbench/LeftPanel.vue";
 import InspectorPanel from "@/workbench/InspectorPanel.vue";
+import { snapshotStage } from "@/workbench/stageThumbnail";
 
 const props = defineProps<{ id: string }>();
 const ws = useWorkspaceStore();
 const doc = useDocumentStore();
+const stageWrap = ref<HTMLDivElement | null>(null);
 
 onMounted(() => {
   ws.load();
@@ -21,14 +23,33 @@ onMounted(() => {
   doc.currentScreenId = target ? target.id : ws.workspace.screens[0].id;
   doc.initHistory();
 });
+
+async function refreshThumbnail(): Promise<void> {
+  const el = stageWrap.value?.querySelector(".canvas-stage__canvas") as HTMLElement | null;
+  if (!el || !doc.currentScreenId) return;
+  try {
+    const dataUrl = await snapshotStage(el);
+    doc.setScreenThumbnail(doc.currentScreenId, dataUrl);
+  } catch {
+    /* 缩略图失败不阻塞 */
+  }
+}
+
+onBeforeUnmount(() => {
+  void refreshThumbnail();
+});
+
+defineExpose({ refreshThumbnail });
 </script>
 
 <template>
   <div class="workbench">
     <aside class="workbench__side workbench__side--left">
-      <LayersPanel />
+      <LeftPanel />
     </aside>
-    <CanvasStage />
+    <div ref="stageWrap" class="workbench__stage">
+      <CanvasStage />
+    </div>
     <aside class="workbench__side workbench__side--right">
       <InspectorPanel />
     </aside>
@@ -46,11 +67,16 @@ onMounted(() => {
   overflow-y: auto;
 }
 .workbench__side--left {
-  width: 220px;
+  width: 240px;
   border-right: 1px solid var(--cf-border);
 }
 .workbench__side--right {
   width: 300px;
   border-left: 1px solid var(--cf-border);
+}
+.workbench__stage {
+  flex: 1;
+  display: flex;
+  min-width: 0;
 }
 </style>

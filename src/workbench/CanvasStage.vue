@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUiStore } from "@/stores/uiStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
 import { snapDelta } from "@/core/geometry/snap";
@@ -300,6 +301,7 @@ const DROP_MIME = "application/x-chartforge-item";
 interface DropPayload {
   kind: ScreenItem["kind"];
   chartType?: ChartType;
+  assetId?: string;
 }
 
 function onDrop(ev: DragEvent): void {
@@ -315,10 +317,15 @@ function onDrop(ev: DragEvent): void {
   let item: ScreenItem;
   if (payload.kind === "chart") {
     const type = payload.chartType ?? "line";
+    let spec = chartRegistry[type].defaultSpec();
+    if (payload.assetId) {
+      const asset = useWorkspaceStore().assets.find((a) => a.id === payload.assetId);
+      if (asset) spec = JSON.parse(JSON.stringify(asset.spec));
+    }
     item = createItem(
       "chart",
       { x: Math.round(pt.x - 200), y: Math.round(pt.y - 150) },
-      chartRegistry[type].defaultSpec()
+      spec
     );
   } else if (payload.kind === "text") {
     item = createItem("text", { x: Math.round(pt.x - 80), y: Math.round(pt.y - 16) });

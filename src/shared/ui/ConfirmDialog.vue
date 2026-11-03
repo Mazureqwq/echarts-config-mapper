@@ -18,6 +18,7 @@ const emit = defineEmits<{
       <div class="cf-confirm__box" role="dialog">
         <div class="cf-confirm__title">{{ title }}</div>
         <div class="cf-confirm__message">{{ message }}</div>
+        <div class="cf-confirm__slot"><slot /></div>
         <div class="cf-confirm__actions">
           <button class="cf-confirm__btn" @click="emit('cancel')">{{ cancelText ?? "取消" }}</button>
           <button class="cf-confirm__btn cf-confirm__btn--primary" @click="emit('confirm')">

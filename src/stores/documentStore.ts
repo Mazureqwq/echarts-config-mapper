@@ -15,6 +15,7 @@ import type {
   ScreenItem,
   Workspace,
 } from "@/core/model/types";
+import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
 
 // Pinia 响应式 Proxy 无法被 structuredClone 克隆，统一走 JSON 深克隆（数据均为纯 JSON）
@@ -394,6 +395,18 @@ export const useDocumentStore = defineStore("document", {
       if (!screen) return;
       screen.name = name || screen.name;
       this.commit();
+    },
+    exportAsset(id: string): string | null {
+      const ws = useWorkspaceStore();
+      const asset = ws.workspace.assets.find((a) => a.id === id);
+      return asset ? exportJson(asset) : null;
+    },
+    setScreenThumbnail(screenId: string, dataUrl: string) {
+      const ws = useWorkspaceStore();
+      const screen = ws.workspace.screens.find((s) => s.id === screenId);
+      if (!screen) return;
+      screen.thumbnail = dataUrl;
+      ws.save();
     },
     removeAsset(id: string) {
       const ws = useWorkspaceStore();

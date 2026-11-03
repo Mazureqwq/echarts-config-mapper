@@ -47,6 +47,24 @@ export const useWorkspaceStore = defineStore("workspace", {
         this.save();
       }, SAVE_DEBOUNCE_MS);
     },
+    duplicateScreen(id: string) {
+      const src = this.workspace.screens.find((s) => s.id === id);
+      if (!src) return;
+      const clone = JSON.parse(JSON.stringify(src)) as (typeof this.workspace.screens)[number];
+      clone.id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `id-${Date.now().toString(36)}`;
+      clone.name = `${src.name} 副本`;
+      clone.items.forEach((it) => {
+        it.id =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      });
+      this.workspace.screens.push(clone);
+      this.save();
+    },
     exportAll(): string {
       return exportJson(this.workspace);
     },
