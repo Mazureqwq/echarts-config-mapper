@@ -1,0 +1,46 @@
+:root {
+  --cf-bg: #f5f6f8;
+  --cf-panel: #ffffff;
+  --cf-border: #e2e4e8;
+  --cf-text: #1f2329;
+  --cf-text-2: #646a73;
+  --cf-primary: #4f6ef7;
+  --cf-danger: #d4380d;
+  --cf-canvas-bg: #e9ebf0;
+  --cf-radius: 8px;
+  --cf-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+html.dark {
+  --cf-bg: #17181c;
+  --cf-panel: #22242a;
+  --cf-border: #363941;
+  --cf-text: #e8eaed;
+  --cf-text-2: #9aa0a8;
+  --cf-primary: #6e8bff;
+  --cf-danger: #ff7875;
+  --cf-canvas-bg: #101114;
+  --cf-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  background: var(--cf-bg);
+  color: var(--cf-text);
+  font-size: 14px;
+}
+
+button {
+  font-family: inherit;
+}
