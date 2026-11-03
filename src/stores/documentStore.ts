@@ -125,6 +125,13 @@ export const useDocumentStore = defineStore("document", {
       this.commit();
       return screen;
     },
+    addItem(item: ScreenItem) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      screen.items.push(item);
+      this.selectedIds = [item.id];
+      this.commit();
+    },
     removeScreen(id: string) {
       const ws = useWorkspaceStore();
       const idx = ws.workspace.screens.findIndex((s) => s.id === id);

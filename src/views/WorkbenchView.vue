@@ -1,19 +1,35 @@
 <script setup lang="ts">
-defineProps<{ id: string }>();
-// 任务14 组装完整工作台
+import { onMounted } from "vue";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useDocumentStore } from "@/stores/documentStore";
+import CanvasStage from "@/workbench/CanvasStage.vue";
+
+const props = defineProps<{ id: string }>();
+const ws = useWorkspaceStore();
+const doc = useDocumentStore();
+
+onMounted(() => {
+  ws.load();
+  if (ws.workspace.screens.length === 0) {
+    doc.addScreen("我的大屏");
+    doc.initHistory();
+    return;
+  }
+  const target = ws.workspace.screens.find((s) => s.id === props.id);
+  doc.currentScreenId = target ? target.id : ws.workspace.screens[0].id;
+  doc.initHistory();
+});
 </script>
 
 <template>
-  <div class="workbench-placeholder">
-    <h1>工作台</h1>
-    <p>当前大屏：{{ id }}</p>
-    <router-link to="/">返回列表</router-link>
+  <div class="workbench">
+    <CanvasStage />
   </div>
 </template>
 
 <style scoped>
-.workbench-placeholder {
-  padding: 48px;
-  text-align: center;
+.workbench {
+  height: 100%;
+  display: flex;
 }
 </style>

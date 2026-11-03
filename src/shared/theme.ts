@@ -1,6 +1,10 @@
+import { ref } from "vue";
+
 export type ThemeMode = "light" | "dark";
 
 const THEME_KEY = "chartforge.theme";
+
+export const themeMode = ref<ThemeMode>("light");
 
 function readStored(): ThemeMode {
   try {
@@ -11,17 +15,15 @@ function readStored(): ThemeMode {
   }
 }
 
-let current: ThemeMode = "light";
-
 function apply(mode: ThemeMode): void {
-  current = mode;
+  themeMode.value = mode;
   const root = document.documentElement;
   root.classList.toggle("dark", mode === "dark");
   root.dataset.theme = mode;
 }
 
 export function getTheme(): ThemeMode {
-  return current;
+  return themeMode.value;
 }
 
 export function setTheme(mode: ThemeMode): void {
@@ -34,7 +36,7 @@ export function setTheme(mode: ThemeMode): void {
 }
 
 export function toggleTheme(): void {
-  setTheme(current === "dark" ? "light" : "dark");
+  setTheme(themeMode.value === "dark" ? "light" : "dark");
 }
 
 export function initTheme(): void {
