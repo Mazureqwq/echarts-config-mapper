@@ -11,6 +11,19 @@ import type { ScreenItem, ChartType } from "@/core/model/types";
 import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
+import Icon from "@/shared/ui/Icon.vue";
+import type { AlignMode } from "@/stores/documentStore";
+
+const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
+  { mode: "left", icon: "align-left", title: "左对齐" },
+  { mode: "centerX", icon: "align-center", title: "水平居中" },
+  { mode: "right", icon: "align-right", title: "右对齐" },
+  { mode: "distributeH", icon: "distribute-h", title: "水平等间距" },
+  { mode: "top", icon: "align-top", title: "顶对齐" },
+  { mode: "centerY", icon: "align-middle", title: "垂直居中" },
+  { mode: "bottom", icon: "align-bottom", title: "底对齐" },
+  { mode: "distributeV", icon: "distribute-v", title: "垂直等间距" },
+];
 
 const doc = useDocumentStore();
 const ui = useUiStore();
@@ -329,6 +342,35 @@ defineExpose({ canvasPoint, DROP_MIME });
         @mousedown.stop="onItemClick($event, item)"
       />
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
+      <div v-if="!ui.previewing" class="canvas-stage__toolbar" @mousedown.stop>
+        <button
+          class="canvas-stage__tool-btn"
+          :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
+          title="吸附开关"
+          @click="ui.setSnapEnabled(!ui.snapEnabled)"
+        >
+          吸附
+        </button>
+        <template v-if="doc.selectedIds.length > 1">
+          <span class="canvas-stage__tool-sep" />
+          <button
+            v-for="t in ALIGN_TOOLS"
+            :key="t.mode"
+            class="canvas-stage__tool-btn"
+            :title="t.title"
+            @click="doc.alignDistribute(t.mode)"
+          >
+            <Icon :name="t.icon" :size="14" />
+          </button>
+          <span class="canvas-stage__tool-sep" />
+          <button class="canvas-stage__tool-btn" title="组合 (Ctrl+G)" @click="doc.addGroup()">
+            <Icon name="group" :size="14" />
+          </button>
+          <button class="canvas-stage__tool-btn" title="取消组合 (Ctrl+Shift+G)" @click="doc.ungroup()">
+            <Icon name="close" :size="14" />
+          </button>
+        </template>
+      </div>
       <template v-if="!ui.previewing">
         <div
           v-for="(g, i) in guides"
@@ -368,5 +410,42 @@ defineExpose({ canvasPoint, DROP_MIME });
   position: absolute;
   background: #f5222d;
   pointer-events: none;
+}
+.canvas-stage__toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--cf-panel);
+  box-shadow: var(--cf-shadow);
+  border: 1px solid var(--cf-border);
+}
+.canvas-stage__tool-btn {
+  border: none;
+  background: transparent;
+  color: var(--cf-text-2);
+  cursor: pointer;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.canvas-stage__tool-btn:hover {
+  background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
+  color: var(--cf-primary);
+}
+.canvas-stage__tool-btn--on {
+  background: color-mix(in srgb, var(--cf-primary) 15%, transparent);
+  color: var(--cf-primary);
+}
+.canvas-stage__tool-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--cf-border);
 }
 </style>

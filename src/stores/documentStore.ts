@@ -330,6 +330,16 @@ export const useDocumentStore = defineStore("document", {
       this.copy();
       this.paste();
     },
+    reorderItem(id: string, toIndex: number) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const idx = screen.items.findIndex((i) => i.id === id);
+      if (idx === -1) return;
+      const clamped = Math.max(0, Math.min(screen.items.length - 1, toIndex));
+      const [it] = screen.items.splice(idx, 1);
+      screen.items.splice(clamped, 0, it);
+      this.commit();
+    },
     bringForward(id: string) {
       const screen = this.currentScreen;
       if (!screen) return;
