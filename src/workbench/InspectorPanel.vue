@@ -8,7 +8,6 @@ import StylePanel from "./panels/StylePanel.vue";
 import ScreenPanel from "./panels/ScreenPanel.vue";
 import ChartConfigPanel from "./panels/ChartConfigPanel.vue";
 import DataTablePanel from "./panels/DataTablePanel.vue";
-import LiveSourcePanel from "./panels/LiveSourcePanel.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import type { AlignMode } from "@/stores/documentStore";
 
@@ -54,7 +53,6 @@ function onFrameChange(patch: Partial<Frame>): void {
       <div class="inspector__body">
         <div class="inspector__section"><ChartConfigPanel :item="focusItem" /></div>
         <div class="inspector__section"><DataTablePanel :item="focusItem" /></div>
-        <div class="inspector__section"><LiveSourcePanel :item="focusItem" /></div>
       </div>
     </template>
 
@@ -117,17 +115,13 @@ function onFrameChange(patch: Partial<Frame>): void {
           <div class="inspector__section">
             <DataTablePanel :item="single" />
           </div>
-          <div class="inspector__section">
-            <div class="inspector__section-title">实时数据</div>
-            <LiveSourcePanel :item="single" />
-          </div>
         </template>
       </div>
     </template>
 
     <!-- 无选中 -->
     <template v-else>
-      <div class="inspector__head">大屏设置</div>
+      <div class="inspector__head">画布设置</div>
       <div class="inspector__body">
         <div class="inspector__section"><ScreenPanel /></div>
       </div>

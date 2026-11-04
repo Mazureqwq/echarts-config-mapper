@@ -17,7 +17,7 @@ const stageWrap = ref<HTMLDivElement | null>(null);
 onMounted(() => {
   ws.load();
   if (ws.workspace.screens.length === 0) {
-    doc.addScreen("我的大屏");
+    doc.addScreen("我的图表");
     doc.initHistory();
     return;
   }

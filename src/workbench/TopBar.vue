@@ -30,7 +30,7 @@ function flash(msg: string, isError = false): void {
 const screen = computed(() => ws.screens.find((s) => s.id === props.screenId) ?? null);
 
 const saveText = computed(() => {
-  if (ws.saveState === "error") return "保存失败：存储空间不足，请导出备份或删除部分大屏后重试";
+  if (ws.saveState === "error") return "保存失败：存储空间不足，请导出备份或删除部分图表后重试";
   return "已自动保存";
 });
 
@@ -65,7 +65,7 @@ function download(name: string, dataUrlOrJson: string, isDataUrl: boolean): void
 
 function exportJsonFile(): void {
   if (!screen.value) return;
-  download(`${screen.value.name || "大屏"}.screen.json`, exportJson(screen.value), false);
+  download(`${screen.value.name || "图表"}.screen.json`, exportJson(screen.value), false);
 }
 
 async function exportPng(): Promise<void> {
@@ -77,7 +77,7 @@ async function exportPng(): Promise<void> {
   exporting.value = true;
   try {
     const dataUrl = await snapshotStagePng(el);
-    download(`${screen.value?.name || "大屏"}@2x.png`, dataUrl, true);
+    download(`${screen.value?.name || "图表"}@2x.png`, dataUrl, true);
     flash("已导出 2 倍 PNG");
   } catch (e) {
     flash(e instanceof Error ? e.message : String(e), true);
@@ -97,7 +97,7 @@ function goPlay(): void {
     <input
       class="topbar__name"
       :value="screen?.name ?? ''"
-      placeholder="大屏名称"
+      placeholder="图表名称"
       @change="onRename"
     />
     <span class="topbar__save" :class="{ 'topbar__save--error': ws.saveState === 'error' }">

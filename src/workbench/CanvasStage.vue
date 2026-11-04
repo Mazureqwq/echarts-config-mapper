@@ -337,6 +337,7 @@ function onDrop(ev: DragEvent): void {
   } catch {
     return;
   }
+  if (payload.kind === "chart" && doc.items.some((i) => i.kind === "chart")) return;
   const pt = canvasPoint(ev);
   let item: ScreenItem;
   if (payload.kind === "chart") {

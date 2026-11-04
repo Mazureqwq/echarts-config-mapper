@@ -1,8 +1,22 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { ChartType, ScreenItem } from "@/core/model/types";
+import { useDocumentStore } from "@/stores/documentStore";
 import Icon from "@/shared/ui/Icon.vue";
 
+defineProps<{ section: "charts" | "materials" }>();
+
+const doc = useDocumentStore();
+
 const DROP_MIME = "application/x-chartforge-item";
+
+const hasChart = computed(() => doc.items.some((i) => i.kind === "chart"));
+
+function pickChart(type: ChartType): void {
+  const existing = doc.items.find((i) => i.kind === "chart");
+  if (existing) doc.changeChartType(existing.id, type);
+  else doc.ensureChart(type);
+}
 
 const CHART_TYPES: Array<{ type: ChartType; label: string }> = [
   { type: "line", label: "折线图" },
@@ -27,33 +41,40 @@ function drag(ev: DragEvent, payload: { kind: ScreenItem["kind"]; chartType?: Ch
 
 <template>
   <div class="elements-panel">
-    <div class="elements-panel__group-title">图表</div>
-    <div class="elements-panel__grid">
-      <div
-        v-for="c in CHART_TYPES"
-        :key="c.type"
-        class="elements-panel__chip"
-        draggable="true"
-        @dragstart="drag($event, { kind: 'chart', chartType: c.type })"
-      >
-        <Icon name="chart" :size="18" />
-        <span>{{ c.label }}</span>
+    <template v-if="section === 'charts'">
+      <div class="elements-panel__group-title">图表</div>
+      <div class="elements-panel__grid">
+        <div
+          v-for="c in CHART_TYPES"
+          :key="c.type"
+          class="elements-panel__chip"
+          draggable="true"
+          @dragstart="drag($event, { kind: 'chart', chartType: c.type })"
+          @click="pickChart(c.type)"
+        >
+          <Icon name="chart" :size="18" />
+          <span>{{ c.label }}</span>
+        </div>
       </div>
-    </div>
-    <div class="elements-panel__group-title">基础元素</div>
-    <div class="elements-panel__grid">
-      <div
-        v-for="b in BASIC_ITEMS"
-        :key="b.kind"
-        class="elements-panel__chip"
-        draggable="true"
-        @dragstart="drag($event, { kind: b.kind })"
-      >
-        <Icon :name="b.icon" :size="18" />
-        <span>{{ b.label }}</span>
+      <div v-if="hasChart" class="elements-panel__hint">画布只能有一个图表，点击类型直接切换</div>
+      <div v-else class="elements-panel__hint">按住拖到画布中放置</div>
+    </template>
+    <template v-else>
+      <div class="elements-panel__group-title">素材</div>
+      <div class="elements-panel__grid">
+        <div
+          v-for="b in BASIC_ITEMS"
+          :key="b.kind"
+          class="elements-panel__chip"
+          draggable="true"
+          @dragstart="drag($event, { kind: b.kind })"
+        >
+          <Icon :name="b.icon" :size="18" />
+          <span>{{ b.label }}</span>
+        </div>
       </div>
-    </div>
-    <div class="elements-panel__hint">按住拖到画布中放置</div>
+      <div class="elements-panel__hint">按住拖到画布中放置</div>
+    </template>
   </div>
 </template>
 

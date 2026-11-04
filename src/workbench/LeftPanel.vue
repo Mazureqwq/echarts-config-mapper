@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import ElementsPanel from "./ElementsPanel.vue";
-import AssetsPanel from "./AssetsPanel.vue";
 import LayersPanel from "./LayersPanel.vue";
 
-const tab = ref<"elements" | "assets" | "layers">("elements");
+const tab = ref<"charts" | "materials" | "layers">("charts");
 
 const TABS = [
-  { key: "elements", label: "元素" },
-  { key: "assets", label: "资产" },
+  { key: "charts", label: "图表类型" },
+  { key: "materials", label: "素材" },
   { key: "layers", label: "图层" },
 ] as const;
 </script>
@@ -27,8 +26,8 @@ const TABS = [
       </button>
     </div>
     <div class="left-panel__body">
-      <ElementsPanel v-if="tab === 'elements'" />
-      <AssetsPanel v-else-if="tab === 'assets'" />
+      <ElementsPanel v-if="tab === 'charts'" section="charts" />
+      <ElementsPanel v-else-if="tab === 'materials'" section="materials" />
       <LayersPanel v-else />
     </div>
   </div>

@@ -4,9 +4,7 @@ import type { ChartItem } from "@/core/model/types";
 import { chartRegistry } from "@/core/chart/registry";
 import { dataToMatrix, matrixToChartData } from "@/core/chart/chartData";
 import { parseTsv } from "@/core/chart/tsv";
-import { createChartAsset } from "@/core/model/schema";
 import { useDocumentStore } from "@/stores/documentStore";
-import { renderChartThumbnail } from "@/workbench/chartThumbnail";
 
 const props = defineProps<{ item: ChartItem }>();
 const doc = useDocumentStore();
@@ -70,16 +68,6 @@ function applyTsv(): void {
   }
 }
 
-function saveAsAsset(): void {
-  const asset = createChartAsset(props.item.name || "未命名图表", JSON.parse(JSON.stringify(props.item.spec)));
-  try {
-    asset.thumbnail = renderChartThumbnail(asset.spec);
-  } catch {
-    asset.thumbnail = "";
-  }
-  doc.upsertAsset(asset);
-  notice.value = "已保存为图表资产";
-}
 </script>
 
 <template>
@@ -114,9 +102,6 @@ function saveAsAsset(): void {
       </div>
     </template>
 
-    <div class="data-table__ops">
-      <button class="data-table__btn data-table__btn--primary" @click="saveAsAsset">保存为资产</button>
-    </div>
     <div v-if="notice" class="data-table__notice">{{ notice }}</div>
   </div>
 </template>

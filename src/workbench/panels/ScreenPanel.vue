@@ -11,6 +11,14 @@ function onName(ev: Event): void {
   doc.setScreenName((ev.target as HTMLInputElement).value);
 }
 
+function onCanvasDim(dim: "width" | "height", ev: Event): void {
+  const raw = Number((ev.target as HTMLInputElement).value);
+  if (!Number.isFinite(raw)) return;
+  const value = Math.min(7680, Math.max(320, Math.round(raw)));
+  if (dim === "width") doc.setCanvas({ width: value });
+  else doc.setCanvas({ height: value });
+}
+
 function onKind(ev: Event): void {
   const kind = (ev.target as HTMLSelectElement).value;
   const cur = screen.value?.canvas.background;
@@ -34,11 +42,27 @@ function patchBg(patch: Partial<Extract<Background, { kind: "color" }>> & Partia
 
 <template>
   <div v-if="screen" class="screen-panel">
-    <label class="screen-panel__row">大屏名称
+    <label class="screen-panel__row">图表名称
       <input :value="screen.name" @change="onName" />
     </label>
     <label class="screen-panel__row">画布尺寸
-      <span class="screen-panel__fixed">{{ screen.canvas.width }} × {{ screen.canvas.height }}</span>
+      <span class="screen-panel__dims">
+        <input
+          type="number"
+          min="320"
+          max="7680"
+          :value="screen.canvas.width"
+          @change="onCanvasDim('width', $event)"
+        />
+        ×
+        <input
+          type="number"
+          min="320"
+          max="7680"
+          :value="screen.canvas.height"
+          @change="onCanvasDim('height', $event)"
+        />
+      </span>
     </label>
     <label class="screen-panel__row">背景类型
       <select :value="screen.canvas.background.kind" @change="onKind">
@@ -105,7 +129,19 @@ function patchBg(patch: Partial<Extract<Background, { kind: "color" }>> & Partia
   padding: 2px;
   height: 28px;
 }
-.screen-panel__fixed {
+.screen-panel__dims {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: var(--cf-text);
+}
+.screen-panel__dims input {
+  width: 68px;
+  padding: 4px 6px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  background: var(--cf-bg);
+  color: var(--cf-text);
+  font-size: 12px;
 }
 </style>
