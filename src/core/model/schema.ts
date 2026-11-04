@@ -19,7 +19,7 @@ import type {
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
 export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#FFFFFF" };
-export const DEFAULT_SCREEN_NAME = "未命名大屏";
+export const DEFAULT_SCREEN_NAME = "未命名图表";
 export const CANVAS_SIZE = { width: 1920, height: 1080 } as const;
 
 const CHART_TYPES: readonly ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar"];
@@ -61,13 +61,13 @@ export function createWorkspace(): Workspace {
   return { version: 1, assets: [], screens: [], settings: { autosave: true } };
 }
 
-export function createScreen(name: string): Screen {
+export function createScreen(name: string, canvas?: { width: number; height: number }): Screen {
   return {
     id: uuid(),
     name,
     canvas: {
-      width: CANVAS_SIZE.width,
-      height: CANVAS_SIZE.height,
+      width: canvas?.width ?? CANVAS_SIZE.width,
+      height: canvas?.height ?? CANVAS_SIZE.height,
       background: { ...DEFAULT_BACKGROUND },
     },
     items: [],
@@ -241,8 +241,14 @@ function normalizeScreen(raw: unknown): Screen | null {
     id: str(raw.id, uuid()),
     name: str(raw.name, DEFAULT_SCREEN_NAME) || DEFAULT_SCREEN_NAME,
     canvas: {
-      width: num(canvasRaw.width, CANVAS_SIZE.width),
-      height: num(canvasRaw.height, CANVAS_SIZE.height),
+      width:
+        typeof canvasRaw.width === "number" && canvasRaw.width >= 320 && canvasRaw.width <= 7680
+          ? canvasRaw.width
+          : CANVAS_SIZE.width,
+      height:
+        typeof canvasRaw.height === "number" && canvasRaw.height >= 320 && canvasRaw.height <= 7680
+          ? canvasRaw.height
+          : CANVAS_SIZE.height,
       background: normalizeBackground(canvasRaw.background),
     },
     items: itemsRaw
@@ -250,6 +256,8 @@ function normalizeScreen(raw: unknown): Screen | null {
       .filter((it): it is ScreenItem => it !== null),
     updatedAt: num(raw.updatedAt, 0),
     ...(typeof raw.thumbnail === "string" ? { thumbnail: raw.thumbnail } : {}),
+    ...(typeof raw.category === "string" ? { category: raw.category } : {}),
+    ...(Array.isArray(raw.tags) ? { tags: raw.tags.filter((t): t is string => typeof t === "string") } : {}),
   };
   return screen;
 }

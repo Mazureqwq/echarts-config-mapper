@@ -210,6 +210,24 @@ describe("stores/documentStore", () => {
     expect(assets).toHaveLength(1);
     expect(assets[0].spec).toEqual(item.spec);
   });
+
+  it("addScreen 自定义画布尺寸并默认命名图表N", () => {
+    const { doc } = seedScreen();
+    const before = useWorkspaceStore().workspace.screens.length;
+    const s = doc.addScreen(undefined, { width: 800, height: 600 });
+    expect(useWorkspaceStore().workspace.screens).toHaveLength(before + 1);
+    expect(s.name).toBe(`图表${before + 1}`);
+    expect(s.canvas.width).toBe(800);
+    expect(s.canvas.height).toBe(600);
+  });
+
+  it("updateScreenMeta 更新名称/分类/标签", () => {
+    const { doc, screen } = seedScreen();
+    doc.updateScreenMeta(screen.id, { name: "销量柱状图", category: "柱状图", tags: ["销售"] });
+    expect(screen.name).toBe("销量柱状图");
+    expect(screen.category).toBe("柱状图");
+    expect(screen.tags).toEqual(["销售"]);
+  });
 });
 
 describe("stores/uiStore", () => {

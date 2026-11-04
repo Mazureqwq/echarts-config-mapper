@@ -90,6 +90,8 @@ export interface Screen {
   items: ScreenItem[];
   updatedAt: number;
   thumbnail?: string;
+  category?: string;
+  tags?: string[];
 }
 
 export interface ChartAsset {

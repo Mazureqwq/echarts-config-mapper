@@ -40,7 +40,7 @@ describe("model/schema 工厂与规范化", () => {
     });
     expect(ws.screens).toHaveLength(1);
     const screen = ws.screens[0];
-    expect(screen.name).toBe("未命名大屏");
+    expect(screen.name).toBe("未命名图表");
     expect(screen.canvas).toEqual({
       width: 1920,
       height: 1080,
@@ -58,5 +58,30 @@ describe("model/schema 工厂与规范化", () => {
     expect(asset.name).toBe("我的图表");
     expect(asset.spec).toEqual(spec);
     expect(typeof asset.createdAt).toBe("number");
+  });
+
+  it("createScreen 支持自定义画布尺寸", () => {
+    const s = createScreen("A", { width: 1280, height: 720 });
+    expect(s.canvas.width).toBe(1280);
+    expect(s.canvas.height).toBe(720);
+  });
+
+  it("normalizeScreen 非法画布尺寸回退 1920×1080", () => {
+    const ws = normalizeWorkspace({ version: 1, screens: [{ id: "a", canvas: { width: -5, height: 0 } }] });
+    expect(ws.screens[0].canvas).toEqual({ width: 1920, height: 1080, background: { kind: "color", color: "#FFFFFF" } });
+  });
+
+  it("normalizeWorkspace 解析 category/tags，缺失时为空", () => {
+    const ws = normalizeWorkspace({
+      version: 1,
+      screens: [
+        { id: "a", category: "柱状图", tags: ["销售", "2024", 1] },
+        { id: "b" },
+      ],
+    });
+    expect(ws.screens[0].category).toBe("柱状图");
+    expect(ws.screens[0].tags).toEqual(["销售", "2024"]);
+    expect(ws.screens[1].category).toBeUndefined();
+    expect(ws.screens[1].tags).toBeUndefined();
   });
 });

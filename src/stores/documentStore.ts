@@ -119,14 +119,23 @@ export const useDocumentStore = defineStore("document", {
       this.saveSnapshot();
       useWorkspaceStore().scheduleSave();
     },
-    addScreen(name?: string) {
+    addScreen(name?: string, canvas?: { width: number; height: number }) {
       const ws = useWorkspaceStore();
-      const screen = createScreen(name ?? `大屏${ws.workspace.screens.length + 1}`);
+      const screen = createScreen(name ?? `图表${ws.workspace.screens.length + 1}`, canvas);
       ws.workspace.screens.push(screen);
       this.currentScreenId = screen.id;
       this.selectedIds = [];
       this.commit();
       return screen;
+    },
+    updateScreenMeta(id: string, meta: { name?: string; category?: string; tags?: string[] }) {
+      const ws = useWorkspaceStore();
+      const screen = ws.workspace.screens.find((s) => s.id === id);
+      if (!screen) return;
+      if (meta.name !== undefined) screen.name = meta.name || screen.name;
+      if (meta.category !== undefined) screen.category = meta.category;
+      if (meta.tags !== undefined) screen.tags = meta.tags;
+      this.commit();
     },
     addItem(item: ScreenItem) {
       const screen = this.currentScreen;
