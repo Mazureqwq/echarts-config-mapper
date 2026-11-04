@@ -13,7 +13,9 @@ const doc = useDocumentStore();
 
 const scale = ref(1);
 const showF11 = ref(false);
+const cursorHidden = ref(false);
 let executor: LiveExecutor | null = null;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 const screen = computed(() => doc.currentScreen);
 
@@ -23,10 +25,22 @@ function fit(): void {
   scale.value = Math.min(window.innerWidth / canvas.width, window.innerHeight / canvas.height);
 }
 
+function exitPlay(): void {
+  router.push(`/workbench/${props.id}`);
+}
+
 function onKey(ev: KeyboardEvent): void {
   if (ev.key === "Escape") {
-    router.push(`/workbench/${props.id}`);
+    exitPlay();
   }
+}
+
+function onMouseMove(): void {
+  cursorHidden.value = false;
+  if (idleTimer !== null) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    cursorHidden.value = true;
+  }, 3000);
 }
 
 onMounted(() => {
@@ -41,6 +55,8 @@ onMounted(() => {
   fit();
   window.addEventListener("resize", fit);
   window.addEventListener("keydown", onKey);
+  window.addEventListener("mousemove", onMouseMove);
+  onMouseMove();
 
   // 实时数据保持工作
   executor = new LiveExecutor();
@@ -75,6 +91,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("resize", fit);
   window.removeEventListener("keydown", onKey);
+  window.removeEventListener("mousemove", onMouseMove);
+  if (idleTimer !== null) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
   executor?.dispose();
   executor = null;
 });
@@ -99,6 +120,13 @@ onBeforeUnmount(() => {
         <ItemView v-for="item in screen.items" :key="item.id" :item="item" />
       </div>
     </div>
+    <button
+      class="play-view__exit"
+      :class="{ 'play-view__exit--hidden': cursorHidden }"
+      @click="exitPlay"
+    >
+      退出演示 (Esc)
+    </button>
     <div v-if="showF11" class="play-view__hint">按 F11 可全屏演示，Esc 退出演示模式</div>
   </div>
 </template>
@@ -130,5 +158,26 @@ onBeforeUnmount(() => {
   padding: 8px 18px;
   border-radius: 999px;
   font-size: 13px;
+}
+.play-view__exit {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+.play-view__exit:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.play-view__exit--hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
