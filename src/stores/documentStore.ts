@@ -1,14 +1,17 @@
 import { defineStore } from "pinia";
 import { markRaw } from "vue";
 import { History, HISTORY_LIMIT } from "@/core/history/history";
-import { createScreen } from "@/core/model/schema";
+import { createItem, createScreen } from "@/core/model/schema";
 import { deepMerge } from "@/core/chart/optionBuilder";
+import { chartRegistry } from "@/core/chart/registry";
 import { rotateFrame } from "@/core/geometry/transform";
 import { matrixToChartData, validateChartData } from "@/core/chart/chartData";
 import { MIN_INTERVAL_SEC } from "@/core/live/liveExecutor";
 import type {
   ChartAsset,
   ChartData,
+  ChartItem,
+  ChartType,
   Frame,
   LiveSource,
   Screen,
@@ -135,6 +138,33 @@ export const useDocumentStore = defineStore("document", {
       if (meta.name !== undefined) screen.name = meta.name || screen.name;
       if (meta.category !== undefined) screen.category = meta.category;
       if (meta.tags !== undefined) screen.tags = meta.tags;
+      this.commit();
+    },
+    ensureChart(type: ChartType): string {
+      const screen = this.currentScreen;
+      if (!screen) return "";
+      const existing = screen.items.find((i) => i.kind === "chart");
+      if (existing) {
+        this.changeChartType(existing.id, type);
+        return existing.id;
+      }
+      const item = createItem(
+        "chart",
+        {
+          x: 24,
+          y: 24,
+          w: Math.max(100, screen.canvas.width - 48),
+          h: Math.max(100, screen.canvas.height - 48),
+        },
+        chartRegistry[type].defaultSpec()
+      ) as ChartItem;
+      this.addItem(item);
+      return item.id;
+    },
+    changeChartType(id: string, type: ChartType): void {
+      const item = this.items.find((i) => i.id === id);
+      if (!item || item.kind !== "chart") return;
+      item.spec = chartRegistry[type].defaultSpec();
       this.commit();
     },
     addItem(item: ScreenItem) {
@@ -330,13 +360,17 @@ export const useDocumentStore = defineStore("document", {
     },
     paste() {
       if (this.clipboard.length === 0) return;
-      const clones = deepClone(this.clipboard).map((it) => ({
-        ...it,
-        id: newId(),
-        frame: { ...it.frame, x: it.frame.x + 10, y: it.frame.y + 10 },
-      }));
       const screen = this.currentScreen;
       if (!screen) return;
+      const hasChart = screen.items.some((i) => i.kind === "chart");
+      const clones = deepClone(this.clipboard)
+        .filter((it) => !hasChart || it.kind !== "chart")
+        .map((it) => ({
+          ...it,
+          id: newId(),
+          frame: { ...it.frame, x: it.frame.x + 10, y: it.frame.y + 10 },
+        }));
+      if (clones.length === 0) return;
       screen.items.push(...clones);
       this.selectedIds = clones.map((it) => it.id);
       this.commit();
@@ -346,7 +380,10 @@ export const useDocumentStore = defineStore("document", {
       if (items.length === 0) return;
       const screen = this.currentScreen;
       if (!screen) return;
-      const clones = deepClone(items).map((it) => ({ ...it, id: newId() }));
+      const hasChart = screen.items.some((i) => i.kind === "chart");
+      const source = hasChart ? items.filter((i) => i.kind !== "chart") : items;
+      if (source.length === 0) return;
+      const clones = deepClone(source).map((it) => ({ ...it, id: newId() }));
       screen.items.push(...clones);
       this.selectedIds = clones.map((it) => it.id);
       this.commit();

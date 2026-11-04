@@ -228,6 +228,44 @@ describe("stores/documentStore", () => {
     expect(screen.category).toBe("柱状图");
     expect(screen.tags).toEqual(["销售"]);
   });
+
+  it("ensureChart 首次添加、再次调用切换类型不产生第二个图表", () => {
+    const { doc, screen } = seedScreen();
+    doc.initHistory();
+    const id1 = doc.ensureChart("line");
+    const chartItems = () => screen.items.filter((i) => i.kind === "chart");
+    expect(chartItems()).toHaveLength(1);
+    const id2 = doc.ensureChart("bar");
+    expect(id2).toBe(id1);
+    expect(chartItems()).toHaveLength(1);
+    expect((chartItems()[0] as ChartItem).spec.type).toBe("bar");
+  });
+
+  it("ensureChart 图表尺寸铺满画布留 24px 边距", () => {
+    const { doc, screen } = seedScreen();
+    screen.canvas.width = 1000;
+    screen.canvas.height = 500;
+    doc.ensureChart("pie");
+    const c = screen.items[0];
+    expect(c.frame).toMatchObject({ x: 24, y: 24, w: 952, h: 452 });
+  });
+
+  it("已有图表时 paste/duplicate 不新增图表项", () => {
+    const { doc, screen } = seedScreen();
+    const chart = createItem("chart") as ChartItem;
+    const text = createItem("text") as ScreenItem;
+    screen.items.push(chart, text);
+    doc.selectedIds = [text.id];
+    doc.copy();
+    doc.paste(); // 剪贴板是 text，正常贴入
+    expect(screen.items).toHaveLength(3);
+    doc.selectedIds = [chart.id];
+    doc.copy();
+    doc.paste(); // 剪贴板是 chart，被拒
+    expect(screen.items).toHaveLength(3);
+    doc.duplicate(); // 选中 chart，被拒
+    expect(screen.items).toHaveLength(3);
+  });
 });
 
 describe("stores/uiStore", () => {
