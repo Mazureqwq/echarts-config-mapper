@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import type { ScreenItem } from "@/core/model/types";
 import { useDocumentStore } from "@/stores/documentStore";
 import Icon from "@/shared/ui/Icon.vue";
+import { compressImageFile } from "@/core/storage/imageCompress";
 
 const props = defineProps<{ item: ScreenItem }>();
 const doc = useDocumentStore();
@@ -24,23 +25,9 @@ async function onPickImage(ev: Event): Promise<void> {
   const input = ev.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-  const dataUrl = await compressImage(file);
+  const dataUrl = await compressImageFile(file);
   setProp("src", dataUrl);
   input.value = "";
-}
-
-async function compressImage(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const maxSide = 2048;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const w = Math.max(1, Math.round(bitmap.width * scale));
-  const h = Math.max(1, Math.round(bitmap.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  ctx?.drawImage(bitmap, 0, 0, w, h);
-  return canvas.toDataURL("image/jpeg", 0.85);
 }
 </script>
 
