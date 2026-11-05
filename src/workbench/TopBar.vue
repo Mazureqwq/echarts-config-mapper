@@ -149,6 +149,7 @@ function goPlay(): void {
 <style scoped>
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
