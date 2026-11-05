@@ -421,6 +421,16 @@ defineExpose({ canvasPoint, DROP_MIME });
             <Icon name="close" :size="14" />
           </button>
         </template>
+        <template v-if="doc.selectedIds.length > 0">
+          <span class="canvas-stage__tool-sep" />
+          <button
+            class="canvas-stage__tool-btn canvas-stage__tool-btn--danger"
+            title="删除选中元素 (Delete)"
+            @click="doc.removeItems([...doc.selectedIds])"
+          >
+            <Icon name="trash" :size="14" /> 删除
+          </button>
+        </template>
       </div>
       <template v-if="!ui.previewing">
         <div
@@ -514,6 +524,10 @@ defineExpose({ canvasPoint, DROP_MIME });
 .canvas-stage__tool-btn:hover {
   background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
   color: var(--cf-primary);
+}
+.canvas-stage__tool-btn--danger:hover {
+  background: color-mix(in srgb, var(--cf-danger) 12%, transparent);
+  color: var(--cf-danger);
 }
 .canvas-stage__tool-btn--on {
   background: color-mix(in srgb, var(--cf-primary) 15%, transparent);
