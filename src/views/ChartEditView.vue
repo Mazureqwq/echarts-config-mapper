@@ -66,7 +66,9 @@ function refreshThumbnail(): void {
   const a = asset.value;
   if (!a) return;
   try {
-    ws.setAssetThumbnail(a.id, renderChartThumbnail(a.spec));
+    const next = renderChartThumbnail(a.spec);
+    // 内容不变就不回写，避免「写回 → updatedAt 变化 → 再生成」的自触发循环
+    if (next && next !== a.thumbnail) ws.setAssetThumbnail(a.id, next);
   } catch {
     /* 缩略图失败不影响编辑 */
   }
