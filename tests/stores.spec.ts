@@ -102,7 +102,8 @@ describe("stores/workspaceStore", () => {
       series: [{ name: "销量", values: [1, 2] }],
     });
     expect(assetA.spec.data).toMatchObject({ kind: "category", categories: ["一月", "二月"] });
-    expect(assetB.spec.data).toMatchObject({ kind: "category", categories: [] });
+    expect(assetB.spec.data).toMatchObject({ kind: "category" });
+    expect((assetB.spec.data as { categories: string[] }).categories.length).toBeGreaterThan(0);
 
     ws.updateAssetType(b, "pie");
     expect(assetB.spec.type).toBe("pie");

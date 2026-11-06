@@ -16,6 +16,7 @@ import type {
   TextSpec,
   Workspace,
 } from "./types";
+import { initialChartData } from "../chart/chartData";
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
 export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#FFFFFF" };
@@ -43,18 +44,9 @@ function str(v: unknown, d: string): string {
   return typeof v === "string" ? v : d;
 }
 
-function emptyDataFor(type: ChartType): ChartData {
-  switch (type) {
-    case "pie":
-    case "map":
-      return { kind: "nameValue", rows: [] };
-    case "scatter":
-      return { kind: "xy", rows: [] };
-    case "radar":
-      return { kind: "radar", indicators: [], series: [] };
-    default:
-      return { kind: "category", categories: [], series: [] };
-  }
+/** 每个新图表都自带初始示例数据，避免打开就是空白图 */
+function initialDataFor(type: ChartType): ChartData {
+  return initialChartData(type);
 }
 
 export function createWorkspace(): Workspace {
@@ -76,7 +68,7 @@ export function createScreen(name: string, canvas?: { width: number; height: num
 }
 
 export function createChartSpec(type: ChartType): ChartSpec {
-  return { type, option: {}, data: emptyDataFor(type) };
+  return { type, option: {}, data: initialDataFor(type) };
 }
 
 export function createChartAsset(name: string, spec: ChartSpec): ChartAsset {
@@ -159,7 +151,7 @@ function normalizeData(raw: unknown, type: ChartType): ChartData {
   if (isRecord(raw) && (DATA_KINDS as readonly string[]).includes(str(raw.kind, ""))) {
     return raw as unknown as ChartData;
   }
-  return emptyDataFor(type);
+  return initialDataFor(type);
 }
 
 function normalizeSpec(raw: unknown): ChartSpec {

@@ -1,5 +1,5 @@
 import type { ChartSpec, ChartType } from "../model/types";
-import { emptyChartData } from "./chartData";
+import { initialChartData } from "./chartData";
 
 export type ControlKind = "text" | "number" | "color" | "select" | "switch";
 
@@ -111,7 +111,7 @@ function descriptor(
     configGroups,
     columns,
     defaultSpec(): ChartSpec {
-      return { type, option: {}, data: emptyChartData(type) };
+      return { type, option: {}, data: initialChartData(type) };
     },
   };
 }

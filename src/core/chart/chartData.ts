@@ -76,18 +76,35 @@ export function dataToMatrix(data: ChartData): Matrix {
   }
 }
 
-export function emptyChartData(type: ChartType): ChartData {
+/**
+ * 每种图表类型的初始示例数据（新建图表、切换类型、数据缺失兜底都用它）。
+ * 地图的 name 必须与 assets/geo/china.json 的省级全称一致，否则不会着色。
+ */
+export function initialChartData(type: ChartType): ChartData {
   switch (type) {
-    case "pie":
     case "map":
       return {
         kind: "nameValue",
         rows: [
-          { name: "北京", value: 120 },
-          { name: "上海", value: 100 },
-          { name: "广州", value: 80 },
-          { name: "深圳", value: 70 },
-          { name: "杭州", value: 60 },
+          { name: "广东省", value: 320 },
+          { name: "江苏省", value: 280 },
+          { name: "浙江省", value: 240 },
+          { name: "山东省", value: 210 },
+          { name: "四川省", value: 180 },
+          { name: "河南省", value: 160 },
+          { name: "北京市", value: 150 },
+          { name: "上海市", value: 140 },
+        ],
+      };
+    case "pie":
+      return {
+        kind: "nameValue",
+        rows: [
+          { name: "直接访问", value: 335 },
+          { name: "自然搜索", value: 310 },
+          { name: "社交媒体", value: 234 },
+          { name: "电子邮件", value: 135 },
+          { name: "联盟广告", value: 148 },
         ],
       };
     case "scatter":
@@ -119,14 +136,17 @@ export function emptyChartData(type: ChartType): ChartData {
     default:
       return {
         kind: "category",
-        categories: ["一月", "二月", "三月", "四月", "五月"],
+        categories: ["一月", "二月", "三月", "四月", "五月", "六月"],
         series: [
-          { name: "销售额", values: [120, 200, 150, 80, 70] },
-          { name: "利润", values: [40, 60, 50, 30, 20] },
+          { name: "销售额", values: [120, 200, 150, 80, 170, 210] },
+          { name: "利润", values: [40, 60, 50, 30, 55, 70] },
         ],
       };
   }
 }
+
+/** @deprecated 语义已明确为「初始示例数据」，新代码请用 initialChartData */
+export const emptyChartData = initialChartData;
 
 export function validateChartData(data: ChartData): boolean {
   switch (data.kind) {

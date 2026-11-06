@@ -7,7 +7,10 @@ import {
   createChartAsset,
   normalizeWorkspace,
 } from "../src/core/model/schema";
-import type { ChartItem } from "../src/core/model/types";
+import type { ChartItem, ChartType } from "../src/core/model/types";
+import { validateChartData } from "../src/core/chart/chartData";
+
+const ALL_TYPES: ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar"];
 
 describe("model/schema 工厂与规范化", () => {
   it("createWorkspace 返回 version:1 空库且默认开启自动保存", () => {
@@ -83,6 +86,42 @@ describe("model/schema 工厂与规范化", () => {
     expect(ws.screens[0].tags).toEqual(["销售", "2024"]);
     expect(ws.screens[1].category).toBeUndefined();
     expect(ws.screens[1].tags).toBeUndefined();
+  });
+
+  it("createChartSpec 对六种类型都给出非空初始示例数据", () => {
+    for (const type of ALL_TYPES) {
+      const spec = createChartSpec(type);
+      expect(spec.type).toBe(type);
+      expect(spec.option).toEqual({});
+      expect(validateChartData(spec.data)).toBe(true);
+      const size =
+        spec.data.kind === "category"
+          ? spec.data.categories.length
+          : spec.data.kind === "radar"
+            ? spec.data.series.length
+            : spec.data.rows.length;
+      expect(size).toBeGreaterThan(0);
+    }
+  });
+
+  it("地图初始数据的省份名与 china.json 的省级全称一致", () => {
+    const spec = createChartSpec("map");
+    expect(spec.data.kind).toBe("nameValue");
+    const names = spec.data.kind === "nameValue" ? spec.data.rows.map((r) => r.name) : [];
+    expect(names).toContain("广东省");
+    expect(names).toContain("北京市");
+    expect(names.every((n) => /(省|市|自治区)$/.test(n))).toBe(true);
+  });
+
+  it("既有 spec 缺失数据时规范化后补上初始示例数据", () => {
+    const ws = normalizeWorkspace({
+      version: 1,
+      screens: [],
+      assets: [{ id: "x", name: "旧的空图", spec: { type: "bar", option: {} } }],
+    });
+    const data = ws.assets[0].spec.data;
+    expect(validateChartData(data)).toBe(true);
+    expect(data.kind === "category" && data.categories.length > 0).toBe(true);
   });
 
   it("normalizeWorkspace 解析资产元信息，缺失或非法时丢弃", () => {
