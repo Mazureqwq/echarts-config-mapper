@@ -13,6 +13,7 @@ import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
 import Icon from "@/shared/ui/Icon.vue";
+import { ASSET_DND_MIME } from "@/shared/dnd";
 import type { AlignMode } from "@/stores/documentStore";
 
 const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
@@ -405,6 +406,18 @@ interface DropPayload {
 }
 
 function onDrop(ev: DragEvent): void {
+  // 图表资产（图表库拖拽源）→ 以落点为中心放置副本
+  const assetId = ev.dataTransfer?.getData(ASSET_DND_MIME);
+  if (assetId) {
+    const pt = canvasPoint(ev);
+    const asset = useWorkspaceStore().assets.find((a) => a.id === assetId);
+    const size = asset?.defaultSize ?? { w: 400, h: 300 };
+    doc.placeAsset(assetId, {
+      x: Math.round(pt.x - size.w / 2),
+      y: Math.round(pt.y - size.h / 2),
+    });
+    return;
+  }
   const raw = ev.dataTransfer?.getData(DROP_MIME);
   if (!raw) return;
   let payload: DropPayload;

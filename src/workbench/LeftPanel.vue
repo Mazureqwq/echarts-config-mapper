@@ -2,11 +2,13 @@
 import { ref } from "vue";
 import ElementsPanel from "./ElementsPanel.vue";
 import LayersPanel from "./LayersPanel.vue";
+import AssetLibraryPanel from "./panels/AssetLibraryPanel.vue";
 
-const tab = ref<"charts" | "materials" | "layers">("charts");
+const tab = ref<"charts" | "assets" | "materials" | "layers">("charts");
 
 const TABS = [
   { key: "charts", label: "图表类型" },
+  { key: "assets", label: "图表库" },
   { key: "materials", label: "素材" },
   { key: "layers", label: "图层" },
 ] as const;
@@ -27,6 +29,7 @@ const TABS = [
     </div>
     <div class="left-panel__body">
       <ElementsPanel v-if="tab === 'charts'" section="charts" />
+      <AssetLibraryPanel v-else-if="tab === 'assets'" />
       <ElementsPanel v-else-if="tab === 'materials'" section="materials" />
       <LayersPanel v-else />
     </div>
@@ -50,7 +53,8 @@ const TABS = [
   background: transparent;
   color: var(--cf-text-2);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
   border-bottom: 2px solid transparent;
 }
 .left-panel__tab--active {
