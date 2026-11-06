@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
-import type { ChartType, Screen } from "@/core/model/types";
+import type { Screen } from "@/core/model/types";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
@@ -12,22 +12,25 @@ const router = useRouter();
 const ws = useWorkspaceStore();
 const doc = useDocumentStore();
 
-const CHART_TYPE_LABELS: { type: ChartType; label: string }[] = [
-  { type: "line", label: "折线图" },
-  { type: "bar", label: "柱状图" },
-  { type: "pie", label: "饼图" },
-  { type: "map", label: "地图" },
-  { type: "scatter", label: "散点图" },
-  { type: "radar", label: "雷达图" },
-];
+const CANVAS_PRESETS = [
+  { value: "1920x1080", label: "16:9 · Full HD（1920 × 1080）", width: 1920, height: 1080 },
+  { value: "2560x1440", label: "16:9 · QHD（2560 × 1440）", width: 2560, height: 1440 },
+  { value: "1920x1200", label: "16:10 · 1920 × 1200", width: 1920, height: 1200 },
+  { value: "1600x1200", label: "4:3 · 1600 × 1200", width: 1600, height: 1200 },
+  { value: "1080x1920", label: "9:16 · 1080 × 1920", width: 1080, height: 1920 },
+  { value: "2560x1080", label: "21:9 · 2560 × 1080", width: 2560, height: 1080 },
+  { value: "custom", label: "自定义尺寸" },
+] as const;
 const CATEGORIES = ["折线图", "柱状图", "饼图", "地图", "散点图", "雷达图"];
 
 const confirmingScreen = ref<Screen | null>(null);
 
 const createOpen = ref(false);
-const createType = ref<ChartType>("line");
+const createPreset = ref("1920x1080");
 const createWidth = ref(1920);
 const createHeight = ref(1080);
+const createAspectLocked = ref(false);
+const createAspectRatio = ref(16 / 9);
 
 const editOpen = ref(false);
 const editTarget = ref<Screen | null>(null);
@@ -84,18 +87,55 @@ function clampDim(v: number, fallback: number): number {
 }
 
 function openCreate(): void {
-  createType.value = "line";
+  createPreset.value = "1920x1080";
   createWidth.value = 1920;
   createHeight.value = 1080;
+  createAspectLocked.value = false;
+  createAspectRatio.value = 16 / 9;
   createOpen.value = true;
 }
 
+function onCreatePresetChange(): void {
+  const preset = CANVAS_PRESETS.find((item) => item.value === createPreset.value);
+  if (!preset || !("width" in preset) || !("height" in preset)) return;
+  createWidth.value = preset.width;
+  createHeight.value = preset.height;
+  createAspectRatio.value = preset.width / preset.height;
+}
+
+function onCreateWidthInput(ev: Event): void {
+  createPreset.value = "custom";
+  const width = Number((ev.target as HTMLInputElement).value);
+  if (!Number.isFinite(width)) return;
+  createWidth.value = width;
+  if (createAspectLocked.value) {
+    createHeight.value = clampDim(width / createAspectRatio.value, 1080);
+  }
+}
+
+function onCreateHeightInput(ev: Event): void {
+  createPreset.value = "custom";
+  const height = Number((ev.target as HTMLInputElement).value);
+  if (!Number.isFinite(height)) return;
+  createHeight.value = height;
+  if (createAspectLocked.value) {
+    createWidth.value = clampDim(height * createAspectRatio.value, 1920);
+  }
+}
+
+function onCreateAspectLockChange(ev: Event): void {
+  createAspectLocked.value = (ev.target as HTMLInputElement).checked;
+  if (createAspectLocked.value) {
+    createAspectRatio.value =
+      clampDim(createWidth.value, 1920) / clampDim(createHeight.value, 1080);
+  }
+}
+
 function confirmCreate(): void {
-  const s = doc.addScreen(`图表${ws.screens.length + 1}`, {
+  const s = doc.addScreen(`大屏${ws.screens.length + 1}`, {
     width: clampDim(createWidth.value, 1920),
     height: clampDim(createHeight.value, 1080),
   });
-  doc.ensureChart(createType.value);
   doc.initHistory();
   createOpen.value = false;
   openWorkbench(s.id);
@@ -146,7 +186,7 @@ function download(name: string, json: string): void {
 }
 
 function exportScreen(screen: Screen): void {
-  download(`${screen.name || "图表"}.screen.json`, exportJson(screen));
+  download(`${screen.name || "大屏"}.screen.json`, exportJson(screen));
 }
 
 function exportWorkspace(): void {
@@ -160,7 +200,7 @@ function exportWorkspace(): void {
       <h1 class="library__logo"><Icon name="chart" :size="20" /> ChartForge 图表工作台</h1>
       <div class="library__actions">
         <button class="library__btn library__btn--primary" @click="openCreate">
-          <Icon name="plus" :size="14" /> 新建图表
+          <Icon name="plus" :size="14" /> 新建大屏
         </button>
         <button class="library__btn" @click="exportWorkspace">
           <Icon name="download" :size="14" /> 导出全部
@@ -191,11 +231,11 @@ function exportWorkspace(): void {
 
       <div v-if="screens.length === 0" class="library__empty">
         <Icon name="chart" :size="42" />
-        <p>还没有图表，点击「新建图表」开始制作</p>
+        <p>还没有大屏，点击「新建大屏」开始制作</p>
       </div>
       <div v-else-if="filteredScreens.length === 0" class="library__empty">
         <Icon name="chart" :size="42" />
-        <p>没有符合筛选条件的图表</p>
+        <p>没有符合筛选条件的大屏</p>
       </div>
       <div v-else class="library__grid">
         <div v-for="screen in filteredScreens" :key="screen.id" class="library__card">
@@ -223,7 +263,7 @@ function exportWorkspace(): void {
 
     <ConfirmDialog
       v-if="confirmingScreen"
-      title="删除图表"
+      title="删除大屏"
       :message="`确定删除「${confirmingScreen.name}」？此操作不可撤销。`"
       confirm-text="删除"
       @confirm="doDelete"
@@ -232,32 +272,50 @@ function exportWorkspace(): void {
 
     <ConfirmDialog
       v-if="createOpen"
-      title="新建图表"
-      message="选择图表类型并设置画布尺寸。"
-      confirm-text="创建并编辑"
+      title="新建大屏"
+      message="先设置固定画布尺寸，创建后可拖入多个图表与素材。"
+      confirm-text="创建空白大屏"
       @confirm="confirmCreate"
       @cancel="createOpen = false"
     >
       <div class="library__form">
-        <div class="library__types">
-          <button
-            v-for="c in CHART_TYPE_LABELS"
-            :key="c.type"
-            class="library__type"
-            :class="{ active: createType === c.type }"
-            @click="createType = c.type"
-          >
-            {{ c.label }}
-          </button>
+        <label class="library__field">
+          尺寸预设
+          <select v-model="createPreset" @change="onCreatePresetChange">
+            <option v-for="preset in CANVAS_PRESETS" :key="preset.value" :value="preset.value">
+              {{ preset.label }}
+            </option>
+          </select>
+        </label>
+        <label class="library__field">
+          宽度（px）
+          <input
+            v-model.number="createWidth"
+            type="number"
+            min="320"
+            max="7680"
+            step="1"
+            @input="onCreateWidthInput"
+          />
+        </label>
+        <label class="library__field">
+          高度（px）
+          <input
+            v-model.number="createHeight"
+            type="number"
+            min="320"
+            max="7680"
+            step="1"
+            @input="onCreateHeightInput"
+          />
+        </label>
+        <label class="library__check">
+          <input type="checkbox" :checked="createAspectLocked" @change="onCreateAspectLockChange" />
+          <span>锁定宽高比</span>
+        </label>
+        <div class="library__form-note">
+          设计画布：{{ clampDim(createWidth, 1920) }} × {{ clampDim(createHeight, 1080) }} px
         </div>
-        <label class="library__field">
-          宽度
-          <input v-model.number="createWidth" type="number" min="320" max="7680" />
-        </label>
-        <label class="library__field">
-          高度
-          <input v-model.number="createHeight" type="number" min="320" max="7680" />
-        </label>
       </div>
     </ConfirmDialog>
 
@@ -473,26 +531,6 @@ function exportWorkspace(): void {
   gap: 12px;
   margin-bottom: 8px;
 }
-.library__types {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.library__type {
-  padding: 6px 12px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  font-size: 13px;
-}
-.library__type.active {
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  border-color: var(--cf-primary);
-  color: var(--cf-primary);
-  font-weight: 600;
-}
 .library__field {
   display: flex;
   align-items: center;
@@ -510,5 +548,21 @@ function exportWorkspace(): void {
   background: var(--cf-bg);
   color: var(--cf-text);
   font-size: 13px;
+}
+.library__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cf-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.library__check input {
+  accent-color: var(--cf-primary);
+}
+.library__form-note {
+  color: var(--cf-text-2);
+  font-size: 12px;
+  text-align: right;
 }
 </style>
