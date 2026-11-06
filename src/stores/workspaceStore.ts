@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { createWorkspace, createChartAsset, createChartSpec } from "@/core/model/schema";
 import { setPath } from "@/core/model/path";
-import type { ChartAsset, ChartData, ChartType, Workspace } from "@/core/model/types";
+import type { ChartAsset, ChartData, ChartSpec, ChartType, Workspace } from "@/core/model/types";
 import {
   loadWorkspace,
   saveWorkspace,
@@ -107,6 +107,22 @@ export const useWorkspaceStore = defineStore("workspace", {
       if (!asset) return;
       asset.spec = createChartSpec(type);
       asset.category = asset.category || "";
+      asset.updatedAt = Date.now();
+      this.save();
+    },
+    /** 图表库缩略图（由图表编辑页防抖生成） */
+    setAssetThumbnail(id: string, thumbnail: string): void {
+      const asset = this.assetById(id);
+      if (!asset) return;
+      asset.thumbnail = thumbnail;
+      asset.updatedAt = Date.now();
+      this.save();
+    },
+    /** 撤销/重做时整体回写 spec */
+    replaceAssetSpec(id: string, spec: ChartSpec): void {
+      const asset = this.assetById(id);
+      if (!asset) return;
+      asset.spec = JSON.parse(JSON.stringify(spec)) as ChartSpec;
       asset.updatedAt = Date.now();
       this.save();
     },

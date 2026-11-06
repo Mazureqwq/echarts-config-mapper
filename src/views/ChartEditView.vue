@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, markRaw, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { buildOption } from "@/core/chart/optionBuilder";
-import type { ChartData, ChartItem, ChartType } from "@/core/model/types";
+import { History } from "@/core/history/history";
+import type { ChartData, ChartItem, ChartSpec, ChartType } from "@/core/model/types";
+import { renderChartThumbnail } from "@/workbench/chartThumbnail";
 import ChartConfigPanel from "@/workbench/panels/ChartConfigPanel.vue";
 import DataTablePanel from "@/workbench/panels/DataTablePanel.vue";
 import EChartsView from "@/workbench/EChartsView.vue";
@@ -26,9 +28,93 @@ const CHART_TYPE_LABELS: Array<{ type: ChartType; label: string }> = [
 const renderError = ref("");
 const pendingType = ref<ChartType | null>(null);
 
+const history = markRaw(
+  new History<ChartSpec>({ limit: 80, clone: (v) => JSON.parse(JSON.stringify(v)) as ChartSpec })
+);
+const canUndo = ref(false);
+const canRedo = ref(false);
+
+function syncHistoryFlags(): void {
+  canUndo.value = history.canUndo;
+  canRedo.value = history.canRedo;
+}
+
+/** 记录一次可撤销的改动 */
+function snapshot(): void {
+  const a = asset.value;
+  if (!a) return;
+  history.push(a.spec);
+  syncHistoryFlags();
+}
+
+function undo(): void {
+  const prev = history.undo();
+  if (prev) ws.replaceAssetSpec(props.id, prev);
+  syncHistoryFlags();
+}
+
+function redo(): void {
+  const next = history.redo();
+  if (next) ws.replaceAssetSpec(props.id, next);
+  syncHistoryFlags();
+}
+
+// ---- 缩略图：改动后防抖回写图表库 ----
+let thumbTimer: ReturnType<typeof setTimeout> | null = null;
+
+function refreshThumbnail(): void {
+  const a = asset.value;
+  if (!a) return;
+  try {
+    ws.setAssetThumbnail(a.id, renderChartThumbnail(a.spec));
+  } catch {
+    /* 缩略图失败不影响编辑 */
+  }
+}
+
+function scheduleThumbnail(): void {
+  if (thumbTimer !== null) clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => {
+    thumbTimer = null;
+    refreshThumbnail();
+  }, 800);
+}
+
+function onKeyDown(ev: KeyboardEvent): void {
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  if (!ctrl) return;
+  const key = ev.key.toLowerCase();
+  if (key === "z" && !ev.shiftKey) {
+    ev.preventDefault();
+    undo();
+  } else if (key === "y" || (key === "z" && ev.shiftKey)) {
+    ev.preventDefault();
+    redo();
+  }
+}
+
 onMounted(() => {
   ws.load();
+  const a = asset.value;
+  if (a) {
+    history.clear();
+    history.push(a.spec);
+    syncHistoryFlags();
+    if (!a.thumbnail) refreshThumbnail();
+  }
+  window.addEventListener("keydown", onKeyDown);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeyDown);
+  if (thumbTimer !== null) clearTimeout(thumbTimer);
+});
+
+// 任何改动（updatedAt 变化）都会触发缩略图防抖刷新
+watch(
+  () => asset.value?.updatedAt,
+  () => scheduleThumbnail()
+);
 
 const asset = computed(() => ws.assets.find((a) => a.id === props.id) ?? null);
 
@@ -86,16 +172,21 @@ function onTypeChange(ev: Event): void {
 }
 
 function confirmType(): void {
-  if (pendingType.value) ws.updateAssetType(props.id, pendingType.value);
+  if (pendingType.value) {
+    ws.updateAssetType(props.id, pendingType.value);
+    snapshot();
+  }
   pendingType.value = null;
 }
 
 function onPath(path: string, value: unknown): void {
   ws.applyAssetConfig(props.id, path, value);
+  snapshot();
 }
 
 function onData(data: ChartData): void {
   ws.updateAssetData(props.id, data);
+  snapshot();
 }
 
 function goBack(): void {
@@ -139,6 +230,24 @@ function goScreens(): void {
           :value="asset?.defaultSize?.h ?? 400"
           @change="onSize('h', $event)"
         />
+      </span>
+      <span class="chart-edit__history">
+        <button
+          class="chart-edit__icon-btn"
+          :disabled="!canUndo"
+          title="撤销 (Ctrl+Z)"
+          @click="undo"
+        >
+          <Icon name="undo" :size="15" />
+        </button>
+        <button
+          class="chart-edit__icon-btn"
+          :disabled="!canRedo"
+          title="重做 (Ctrl+Y)"
+          @click="redo"
+        >
+          <Icon name="redo" :size="15" />
+        </button>
       </span>
       <span class="chart-edit__saved">已自动保存</span>
       <div class="chart-edit__actions">
@@ -241,6 +350,30 @@ function goScreens(): void {
   background: var(--cf-bg);
   color: var(--cf-text);
   font-size: 12px;
+}
+.chart-edit__history {
+  display: inline-flex;
+  gap: 4px;
+}
+.chart-edit__icon-btn {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cf-text-2);
+  cursor: pointer;
+}
+.chart-edit__icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.chart-edit__icon-btn:not(:disabled):hover {
+  color: var(--cf-primary);
+  border-color: var(--cf-primary);
 }
 .chart-edit__saved {
   font-size: 12px;

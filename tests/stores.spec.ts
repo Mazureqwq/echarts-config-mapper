@@ -115,6 +115,23 @@ describe("stores/workspaceStore", () => {
     expect(assetB.defaultSize).toEqual({ w: 600, h: 400 });
   });
 
+  it("setAssetThumbnail 写入缩略图；replaceAssetSpec 整体回写（撤销用）", () => {
+    const ws = useWorkspaceStore();
+    ws.load();
+    const id = ws.createAsset("line", "C", { w: 600, h: 400 });
+    const asset = ws.assetById(id)!;
+
+    ws.setAssetThumbnail(id, "data:image/jpeg;base64,abc");
+    expect(asset.thumbnail).toBe("data:image/jpeg;base64,abc");
+
+    const before = JSON.parse(JSON.stringify(asset.spec));
+    ws.applyAssetConfig(id, "title.text", "改过的标题");
+    expect((asset.spec.option as Record<string, unknown>).title).toEqual({ text: "改过的标题" });
+
+    ws.replaceAssetSpec(id, before);
+    expect(asset.spec).toEqual(before);
+  });
+
   it("资产编辑后的图表拖入大屏得到最新副本", () => {
     const { doc, ws, screen } = seedScreen();
     const assetId = ws.createAsset("line", "趋势", { w: 500, h: 300 });

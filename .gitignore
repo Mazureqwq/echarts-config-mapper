@@ -25,3 +25,6 @@ dist-ssr
 
 # Superpowers SDD ledger
 .superpowers/
+
+# 运行时导出的单图/大屏 JSON（不纳入版本库）
+src/assets/screens/
