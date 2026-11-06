@@ -8,6 +8,7 @@ import {
   exportJson,
   importJson,
 } from "@/core/storage/workspaceRepo";
+import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 
 export const SAVE_DEBOUNCE_MS = 500;
 
@@ -111,11 +112,12 @@ export const useWorkspaceStore = defineStore("workspace", {
       this.save();
     },
     /** 图表库缩略图（由图表编辑页防抖生成） */
-    setAssetThumbnail(id: string, thumbnail: string): void {
+    setAssetThumbnail(id: string, thumbnail: string, version: number = THUMBNAIL_VERSION): void {
       const asset = this.assetById(id);
       if (!asset) return;
       asset.thumbnail = thumbnail;
-      asset.updatedAt = Date.now();
+      asset.thumbnailVersion = version;
+      // 刻意不动 updatedAt：缩略图是派生产物，改它不应触发「内容已变更」相关的监听（否则会自触发重算）
       this.save();
     },
     /** 撤销/重做时整体回写 spec */

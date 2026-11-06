@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { THUMBNAIL_VERSION } from "../src/core/storage/thumbnail";
 import { createPinia, setActivePinia } from "pinia";
 import { useWorkspaceStore } from "../src/stores/workspaceStore";
 import { useDocumentStore } from "../src/stores/documentStore";
@@ -121,8 +122,12 @@ describe("stores/workspaceStore", () => {
     const id = ws.createAsset("line", "C", { w: 600, h: 400 });
     const asset = ws.assetById(id)!;
 
+    const beforeThumb = asset.updatedAt;
     ws.setAssetThumbnail(id, "data:image/jpeg;base64,abc");
     expect(asset.thumbnail).toBe("data:image/jpeg;base64,abc");
+    // 缩略图是派生产物：记录算法版本，但不改 updatedAt（否则会自触发重算）
+    expect(asset.thumbnailVersion).toBe(THUMBNAIL_VERSION);
+    expect(asset.updatedAt).toBe(beforeThumb);
 
     const before = JSON.parse(JSON.stringify(asset.spec));
     ws.applyAssetConfig(id, "title.text", "改过的标题");

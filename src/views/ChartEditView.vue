@@ -6,6 +6,7 @@ import { buildOption } from "@/core/chart/optionBuilder";
 import { History } from "@/core/history/history";
 import type { ChartData, ChartItem, ChartSpec, ChartType } from "@/core/model/types";
 import { renderChartThumbnail } from "@/workbench/chartThumbnail";
+import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import ChartConfigPanel from "@/workbench/panels/ChartConfigPanel.vue";
 import DataTablePanel from "@/workbench/panels/DataTablePanel.vue";
 import EChartsView from "@/workbench/EChartsView.vue";
@@ -70,8 +71,9 @@ function refreshThumbnail(): void {
   if (!a) return;
   try {
     const next = renderChartThumbnail(a.spec);
-    // 内容不变就不回写，避免「写回 → updatedAt 变化 → 再生成」的自触发循环
-    if (next && next !== a.thumbnail) ws.setAssetThumbnail(a.id, next);
+    // 内容与版本都没变就不回写，避免「写回 → 再生成」的自触发循环
+    const stale = a.thumbnailVersion !== THUMBNAIL_VERSION;
+    if (next && (stale || next !== a.thumbnail)) ws.setAssetThumbnail(a.id, next);
   } catch {
     /* 缩略图失败不影响编辑 */
   }
@@ -105,7 +107,7 @@ onMounted(() => {
     history.clear();
     history.push(a.spec);
     syncHistoryFlags();
-    if (!a.thumbnail) refreshThumbnail();
+    if (!a.thumbnail || a.thumbnailVersion !== THUMBNAIL_VERSION) refreshThumbnail();
   }
   window.addEventListener("keydown", onKeyDown);
 });

@@ -13,6 +13,16 @@ import { validateChartData } from "../src/core/chart/chartData";
 const ALL_TYPES: ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar"];
 
 describe("model/schema 工厂与规范化", () => {
+  it("规范化保留 thumbnailVersion（旧数据没有该字段也不报错）", () => {
+    const raw = JSON.parse(JSON.stringify(createWorkspace())) as Record<string, unknown>;
+    const a = { ...JSON.parse(JSON.stringify(createChartAsset("A", createChartSpec("bar")))), thumbnailVersion: 2 };
+    const b = JSON.parse(JSON.stringify(createChartAsset("B", createChartSpec("pie"))));
+    (raw.assets as unknown[]).push(a, b);
+    const ws = normalizeWorkspace(raw);
+    expect(ws.assets[0].thumbnailVersion).toBe(2);
+    expect(ws.assets[1].thumbnailVersion).toBeUndefined();
+  });
+
   it("createWorkspace 返回 version:1 空库且默认开启自动保存", () => {
     const ws = createWorkspace();
     expect(ws.version).toBe(1);

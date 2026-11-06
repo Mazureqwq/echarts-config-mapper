@@ -36,6 +36,13 @@ describe("storage/thumbnail", () => {
     expect(calls[0]).toEqual({ w: 85, h: 256, dw: 85, dh: 256 });
   });
 
+  it("可自定义最长边（图表卡片用 384 换清晰度）", () => {
+    const calls: Array<{ w: number; h: number; dw: number; dh: number }> = [];
+    const source = { width: 1280, height: 720 } as unknown as HTMLCanvasElement;
+    makeThumbnail(source, fakeFactory(calls), 384);
+    expect(calls[0]).toEqual({ w: 384, h: 216, dw: 384, dh: 216 });
+  });
+
   it("图片源使用 naturalWidth/Height", () => {
     const calls: Array<{ w: number; h: number; dw: number; dh: number }> = [];
     const source = { naturalWidth: 512, naturalHeight: 512 } as unknown as HTMLImageElement;

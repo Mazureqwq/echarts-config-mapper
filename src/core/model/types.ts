@@ -98,6 +98,8 @@ export interface ChartAsset {
   id: string;
   name: string;
   thumbnail: string;
+  /** 缩略图算法版本（见 core/storage/thumbnail 的 THUMBNAIL_VERSION），用于自动重算旧图 */
+  thumbnailVersion?: number;
   spec: ChartSpec;
   /** 检索元信息：分类（图表类型或业务分类） */
   category?: string;

@@ -5,6 +5,8 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import type { ChartAsset, ChartType } from "@/core/model/types";
 import { ASSET_DND_MIME } from "@/shared/dnd";
+import { renderChartThumbnail } from "@/workbench/chartThumbnail";
+import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
@@ -39,8 +41,33 @@ const createType = ref<ChartType>("line");
 const createWidth = ref(640);
 const createHeight = ref(400);
 
+/**
+ * 旧缩略图一次性重算：缩略图算法升级后，历史卡片的图可能和图表对不上。
+ * 逐个渲染（每个之间让出一帧），失败就跳过，绝不影响列表本身。
+ */
+function migrateThumbnails(): void {
+  const stale = ws.assets.filter((a) => a.thumbnailVersion !== THUMBNAIL_VERSION);
+  if (!stale.length) return;
+  let i = 0;
+  const step = (): void => {
+    const asset = stale[i++];
+    if (!asset) return;
+    try {
+      const next = renderChartThumbnail(asset.spec);
+      if (next && (asset.thumbnailVersion !== THUMBNAIL_VERSION || next !== asset.thumbnail)) {
+        ws.setAssetThumbnail(asset.id, next);
+      }
+    } catch {
+      /* 单张渲染失败就保持原图 */
+    }
+    setTimeout(step, 30);
+  };
+  setTimeout(step, 60);
+}
+
 onMounted(() => {
   ws.load();
+  migrateThumbnails();
 });
 
 const assets = computed<ChartAsset[]>(() => ws.assets);

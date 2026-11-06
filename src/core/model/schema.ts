@@ -270,6 +270,7 @@ function normalizeAsset(raw: unknown): ChartAsset | null {
     id: str(raw.id, uuid()),
     name: str(raw.name, "未命名图表"),
     thumbnail: str(raw.thumbnail, ""),
+    ...(typeof raw.thumbnailVersion === "number" ? { thumbnailVersion: raw.thumbnailVersion } : {}),
     spec: normalizeSpec(raw.spec),
     ...(typeof raw.category === "string" ? { category: raw.category } : {}),
     ...(Array.isArray(raw.tags)
