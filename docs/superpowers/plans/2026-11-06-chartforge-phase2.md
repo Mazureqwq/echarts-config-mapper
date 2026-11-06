@@ -10,6 +10,19 @@
 
 **Spec:** `docs/图表工作台-第二阶段方案.md`
 
+## 进度（随实施更新）
+
+| 任务 | 状态 | 备注 |
+|---|---|---|
+| T1 资产元信息与规范化 | 已完成（`639dacf`） | `category/tags/defaultSize` 可选字段 + 规范化兜底 + 单测 |
+| T2 保存为资产 / 放置副本 | 已完成（`da552bc`） | `saveChartAsAsset`、`placeAsset`、`renameWithSuffix`、`duplicateAsset/updateAssetMeta/removeAsset` |
+| T3 图表资产库页 `/charts` | 待做 | |
+| T4 左栏图表库 tab 与拖入副本 | 待做 | 数据层已就绪，仅需 UI 与拖放接线 |
+| T5 图表聚焦编辑与类型切换 | 待做 | `changeChartType` 已在 store 中可用 |
+| T6 对齐与等距分布 | 已在基线实现 | `documentStore.alignDistribute` + `CanvasStage/InspectorPanel` 工具条，待走查补测 |
+| T7 视图快捷键与保存入口 | 待做 | 缩放/平移基线已有 |
+| T8 质量门与文档同步 | 进行中 | 当前 89 用例通过、typecheck 0 error |
+
 ## Global Constraints
 
 - 不新增依赖；图片压缩继续用 `src/core/storage/imageCompress.ts`。
@@ -60,7 +73,7 @@
 - `ChartAsset { ...; category?: string; tags?: string[]; defaultSize?: { w: number; h: number } }`
 - `normalizeWorkspace` 对 `assets[].category/tags/defaultSize` 兜底（缺失 → `undefined`；`tags` 过滤非字符串）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
   ```ts
   it("normalizeWorkspace 解析资产元信息，缺失时为空", () => {
     const ws = normalizeWorkspace({
@@ -77,10 +90,10 @@
     expect(ws.assets[1].tags).toBeUndefined();
   });
   ```
-- [ ] **Step 2: 跑测试确认失败** — Run `run_tests`(`tests/core-model.spec.ts`) → Expected: FAIL（字段未定义）
-- [ ] **Step 3: 实现** — `types.ts` 增三个可选字段；`schema.ts` 在 `normalizeAsset` 中按既有 `normalizeScreen` 同风格兜底（`defaultSize` 需 `w/h ≥ 1` 且为有限数，否则丢弃）
-- [ ] **Step 4: 跑测试通过** — Run `run_tests` → Expected: 全 PASS
-- [ ] **Step 5: Commit** — `git add src/core/model tests/core-model.spec.ts; git commit -m "feat: 图表资产元信息（分类/标签/默认尺寸）与规范化"`
+- [x] **Step 2: 跑测试确认失败** — Run `run_tests`(`tests/core-model.spec.ts`) → Expected: FAIL（字段未定义）
+- [x] **Step 3: 实现** — `types.ts` 增三个可选字段；`schema.ts` 在 `normalizeAsset` 中按既有 `normalizeScreen` 同风格兜底（`defaultSize` 需 `w/h ≥ 1` 且为有限数，否则丢弃）
+- [x] **Step 4: 跑测试通过** — Run `run_tests` → Expected: 全 PASS
+- [x] **Step 5: Commit** — `git add src/core/model tests/core-model.spec.ts; git commit -m "feat: 图表资产元信息（分类/标签/默认尺寸）与规范化"`
 
 ---
 
@@ -94,7 +107,7 @@
 - `renameWithSuffix(base: string, existing: string[]): string`（`X` → `X 副本2` → `X 副本3`）
 - `workspaceStore.duplicateAsset(id)` / `updateAssetMeta(id, meta)` / `removeAsset(id)`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
   ```ts
   it("saveChartAsAsset 保存当前图表为资产且之后互不影响", () => {
     const { doc, screen } = seedScreen();
@@ -123,10 +136,10 @@
     }
   });
   ```
-- [ ] **Step 2: 跑测试确认失败** — Expected: FAIL（方法不存在）
-- [ ] **Step 3: 实现** — 深拷贝用现有 `deepClone`；`placeAsset` 复用 `addItem`（自带 clamp 与选中）；命名用 `renameWithSuffix`
-- [ ] **Step 4: 跑测试通过** + `pnpm typecheck`
-- [ ] **Step 5: Commit** — `git commit -m "feat: 图表保存为资产与资产放置为副本"`
+- [x] **Step 2: 跑测试确认失败** — Expected: FAIL（方法不存在）
+- [x] **Step 3: 实现** — 深拷贝用现有 `deepClone`；`placeAsset` 复用 `addItem`（自带 clamp 与选中）；命名用 `renameWithSuffix`
+- [x] **Step 4: 跑测试通过** + `pnpm typecheck`
+- [x] **Step 5: Commit** — `git commit -m "feat: 图表保存为资产与资产放置为副本"`
 
 ---
 
