@@ -383,6 +383,51 @@ describe("stores/documentStore", () => {
     expect(source.spec.type).toBe("line");
   });
 
+  it("alignDistribute 左对齐以最左元素为准、右对齐以最右元素为准", () => {
+    const { doc, screen } = seedScreen();
+    const a = createItem("shape", { x: 100, y: 100, w: 200, h: 100 });
+    const b = createItem("shape", { x: 500, y: 300, w: 100, h: 100 });
+    screen.items.push(a, b);
+    doc.selectedIds = [a.id, b.id];
+
+    doc.alignDistribute("left");
+    expect(a.frame.x).toBe(100);
+    expect(b.frame.x).toBe(100);
+
+    // 左对齐后：a 右边缘 300、b 右边缘 200 → 右对齐以 300 为准
+    doc.alignDistribute("right");
+    expect(a.frame.x).toBe(100);
+    expect(b.frame.x).toBe(200);
+  });
+
+  it("alignDistribute 水平等间距保持两端不动", () => {
+    const { doc, screen } = seedScreen();
+    const a = createItem("shape", { x: 0, y: 0, w: 100, h: 100 });
+    const b = createItem("shape", { x: 300, y: 0, w: 100, h: 100 });
+    const c = createItem("shape", { x: 900, y: 0, w: 100, h: 100 });
+    screen.items.push(a, b, c);
+    doc.selectedIds = [a.id, b.id, c.id];
+
+    // 区间 0–1000、元素宽度合计 300 → 间隙 (1000-300)/2 = 350
+    doc.alignDistribute("distributeH");
+    expect(a.frame.x).toBe(0);
+    expect(b.frame.x).toBe(450);
+    expect(c.frame.x).toBe(900);
+  });
+
+  it("alignDistribute 忽略锁定元素", () => {
+    const { doc, screen } = seedScreen();
+    const a = createItem("shape", { x: 100, y: 100, w: 100, h: 100 });
+    const b = createItem("shape", { x: 500, y: 100, w: 100, h: 100 });
+    b.locked = true;
+    screen.items.push(a, b);
+    doc.selectedIds = [a.id, b.id];
+
+    doc.alignDistribute("left");
+    expect(a.frame.x).toBe(100);
+    expect(b.frame.x).toBe(500);
+  });
+
 });
 
 describe("stores/uiStore", () => {
