@@ -5,6 +5,7 @@ import { useWorkspaceStore } from "../src/stores/workspaceStore";
 import { useDocumentStore } from "../src/stores/documentStore";
 import { useUiStore } from "../src/stores/uiStore";
 import { createScreen, createItem, createChartSpec } from "../src/core/model/schema";
+import { PLACEHOLDER_PREFIX } from "../src/core/model/templates";
 import type { ChartItem, ScreenItem } from "../src/core/model/types";
 
 function memStorage() {
@@ -465,6 +466,23 @@ describe("stores/documentStore", () => {
     const source = useWorkspaceStore().workspace.assets.find((x) => x.id === assetId)!;
     (placed[0] as ChartItem).spec.type = "pie";
     expect(source.spec.type).toBe("line");
+  });
+
+  it("applyTemplate 铺占位框；图表落进去后占位框自动清掉", () => {
+    const { doc, screen } = seedScreen();
+    doc.applyTemplate([
+      { x: 24, y: 24, w: 400, h: 300 },
+      { x: 500, y: 24, w: 400, h: 300 },
+    ]);
+    const holders = () => screen.items.filter((i) => i.name.startsWith(PLACEHOLDER_PREFIX));
+    expect(holders()).toHaveLength(2);
+
+    const assetId = useWorkspaceStore().createAsset("line", "趋势");
+    doc.placeAsset(assetId, { x: 30, y: 30, w: 380, h: 280 });
+
+    // 只有被压住的那一块占位消失
+    expect(holders()).toHaveLength(1);
+    expect(holders()[0].frame.x).toBe(500);
   });
 
   it("placeAsset 记录来源图表 id（大屏里可回溯、可跳回源图表）", () => {

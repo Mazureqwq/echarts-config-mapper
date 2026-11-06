@@ -7,6 +7,7 @@ import { exportJson } from "@/core/storage/workspaceRepo";
 import type { Screen } from "@/core/model/types";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import { clampInterval, DEFAULT_INTERVAL_SEC } from "@/core/play/playlist";
+import { SCREEN_TEMPLATES, templateSlots } from "@/core/model/templates";
 import Icon from "@/shared/ui/Icon.vue";
 
 const router = useRouter();
@@ -122,7 +123,10 @@ function clampDim(v: number, fallback: number): number {
   return Math.min(7680, Math.max(320, Math.round(v)));
 }
 
+const createTemplate = ref("blank");
+
 function openCreate(): void {
+  createTemplate.value = "blank";
   createPreset.value = "1920x1080";
   createWidth.value = 1920;
   createHeight.value = 1080;
@@ -173,6 +177,8 @@ function confirmCreate(): void {
     height: clampDim(createHeight.value, 1080),
   });
   doc.initHistory();
+  const slots = templateSlots(createTemplate.value, s.canvas);
+  if (slots.length) doc.applyTemplate(slots);
   createOpen.value = false;
   openWorkbench(s.id);
 }
@@ -411,6 +417,24 @@ function exportWorkspace(): void {
           <input type="checkbox" :checked="createAspectLocked" @change="onCreateAspectLockChange" />
           <span>锁定宽高比</span>
         </label>
+        <div class="library__tpl">
+          <div class="library__tpl-title">布局模板</div>
+          <div class="library__tpl-grid">
+            <button
+              v-for="tpl in SCREEN_TEMPLATES"
+              :key="tpl.id"
+              class="library__tpl-card"
+              :class="{ active: createTemplate === tpl.id }"
+              @click="createTemplate = tpl.id"
+            >
+              <span class="library__tpl-name">{{ tpl.name }}</span>
+              <span class="library__tpl-desc">{{ tpl.description }}</span>
+            </button>
+          </div>
+          <div class="library__form-note">
+            非空白模板会先在画布上铺好占位框；把图表拖到占位框上，占位框自动消失。
+          </div>
+        </div>
         <div class="library__form-note">
           设计画布：{{ clampDim(createWidth, 1920) }} × {{ clampDim(createHeight, 1080) }} px
         </div>
@@ -708,6 +732,43 @@ function exportWorkspace(): void {
   font-size: 11px;
   color: var(--cf-text-2);
   line-height: 1.5;
+}
+.library__tpl {
+  display: grid;
+  gap: 6px;
+}
+.library__tpl-title {
+  font-size: 12px;
+  color: var(--cf-text-2);
+}
+.library__tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.library__tpl-card {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cf-text);
+  cursor: pointer;
+}
+.library__tpl-card.active {
+  border-color: var(--cf-primary);
+  background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
+}
+.library__tpl-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+.library__tpl-desc {
+  font-size: 11px;
+  color: var(--cf-text-2);
+  line-height: 1.4;
 }
 .library__form {
   display: flex;

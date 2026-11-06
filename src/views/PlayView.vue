@@ -10,6 +10,7 @@ import {
   parseIdList,
   DEFAULT_INTERVAL_SEC,
 } from "@/core/play/playlist";
+import { isPlaceholder } from "@/core/model/templates";
 import ItemView from "@/workbench/ItemView.vue";
 
 const props = defineProps<{ id: string }>();
@@ -34,6 +35,9 @@ const intervalSec = ref(DEFAULT_INTERVAL_SEC);
 const multi = computed(() => playlistIds.value.length > 1);
 
 const screen = computed(() => doc.currentScreen);
+
+/** 演示时不显示模板占位框（它们只是编辑期的辅助线） */
+const visibleItems = computed(() => (screen.value?.items ?? []).filter((i) => !isPlaceholder(i)));
 
 /** 切屏：换屏 + 重建实时数据 + 重新适配缩放 */
 function switchTo(id: string, index: number): void {
@@ -197,7 +201,7 @@ onBeforeUnmount(() => {
                 : `url(${screen.canvas.background.src}) center/cover no-repeat`,
         }"
       >
-        <ItemView v-for="item in screen.items" :key="item.id" :item="item" />
+        <ItemView v-for="item in visibleItems" :key="item.id" :item="item" />
       </div>
     </div>
     <div class="play-view__controls" :class="{ 'play-view__controls--hidden': cursorHidden }">

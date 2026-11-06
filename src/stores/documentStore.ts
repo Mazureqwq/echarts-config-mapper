@@ -16,9 +16,11 @@ import type {
   LiveSource,
   Screen,
   ScreenItem,
+  ShapeItem,
   Workspace,
 } from "@/core/model/types";
 import { setPath } from "@/core/model/path";
+import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
 
@@ -167,16 +169,43 @@ export const useDocumentStore = defineStore("document", {
       this.addItem(item);
       return item.id;
     },
+    /** 图表落位时清掉被压住的模板占位框 */
+    clearPlaceholdersUnder(item: ScreenItem): void {
+      const screen = this.currentScreen;
+      if (!screen || item.kind !== "chart") return;
+      const hit = placeholdersToClear(screen.items, item.frame);
+      if (!hit.length) return;
+      const ids = new Set(hit.map((h) => h.id));
+      screen.items = screen.items.filter((i) => !ids.has(i.id));
+    },
     changeChartType(id: string, type: ChartType): void {
       const item = this.items.find((i) => i.id === id);
       if (!item || item.kind !== "chart") return;
       item.spec = chartRegistry[type].defaultSpec();
       this.commit();
     },
+    /** 按模板槽位铺一批占位框（拖入图表后会自动清掉） */
+    applyTemplate(slots: Array<{ x: number; y: number; w: number; h: number }>) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      slots.forEach((slot, i) => {
+        const holder = createItem("shape", { ...slot }) as ShapeItem;
+        holder.name = `${PLACEHOLDER_PREFIX} ${i + 1}`;
+        holder.shape = "rect";
+        holder.fill = "rgba(127, 140, 255, 0.06)";
+        holder.stroke = "rgba(127, 140, 255, 0.45)";
+        holder.strokeWidth = 1;
+        holder.radius = 8;
+        screen.items.push(holder);
+      });
+      this.commit();
+    },
     addItem(item: ScreenItem) {
       const screen = this.currentScreen;
       if (!screen) return;
       Object.assign(item.frame, clampFrameToCanvas(item.frame, screen.canvas.width, screen.canvas.height));
+      // 图表落到模板占位框上时，顺手把占位框清掉
+      this.clearPlaceholdersUnder(item);
       screen.items.push(item);
       this.selectedIds = [item.id];
       this.commit();
