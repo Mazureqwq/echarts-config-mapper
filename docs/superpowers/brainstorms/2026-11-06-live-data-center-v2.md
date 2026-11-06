@@ -252,3 +252,26 @@ export function buildChartData(payload, type, source): { ok, data } | { ok: fals
 - `src/core/live/pipeline.ts`（过滤 9 种 op / 选列 / 排序 / 取前 N / 字段映射 / long→wide 透视）与面板「加工」Tab。
 - 调试台每步行数堆叠（24 → 过滤 12 → 取前 10）。
 
+
+---
+
+## 12. V2 实施记录（2026-11-06，已落地）
+
+### 代码
+- `src/core/live/pipeline.ts`：纯函数加工链。
+  - `toRows`：数组（对象行 / 二维表首行表头）、常见封套（`data` / `list` / `rows` / `items` / `result` / `records`）、标量 → 统一成对象行；单个对象且无封套时直接给「请用 dataPath 取到数组」的人话错误。
+  - `applyFilter`：9 种运算符（`eq/ne/gt/gte/lt/lte/contains/in/notEmpty`），能转数字就按数值比，否则按字符串；多条为 AND；缺字段直接淘汰。
+  - `applySelect` 保序投影、`applySort` 数值优先且缺失值沉底的稳定排序、`applyLimit`。
+  - `pivotBySeries`：long → wide，缺失组合补 0（多系列等长，不会断线）。
+  - `runPipeline` 返回 `counts{raw,filtered,selected,sorted,limited}`，调试台据此展示每一步行数。
+  - `buildChartData(raw, source, type)`：加工链 + 字段映射 + 复用 `payload.toChartData` 归一。
+- `documentStore.applyLiveUpdate` 改走 `buildChartData`，实时刷新与加工设置同一条链路。
+- `probe.toProbeRows` 复用 `pipeline.toRows`，调试台看到的行结构与图表吃到的一致。
+- `LiveSourcePanel` 新增「加工」Tab：行过滤（字段/运算符/值 + 增删）、列选择（字段 chip 切换）、排序与取前 N、字段映射（分类/数值/系列），带加工预览表格与每一步行数；「清空加工」可一键还原。
+- `WorkbenchView` 的数据源指纹纳入 filter/select/sort/limit/map，改加工设置会立即重建执行器。
+
+### 测试
+`tests/pipeline.spec.ts`（13 例：行桥接、9 种过滤运算符、选列/排序/取前 N、透视、全链路行数、字段映射与自动推断）。全量 194 passed。
+
+### 与设计的差异
+- 设计里「加工后预览」在调试台只画占位；V2 直接做成「加工」Tab 的实时预览（同一份 `runPipeline`），没有返工。

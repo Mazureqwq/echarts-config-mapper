@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-import type { ChartItem, LiveSource } from "@/core/model/types";
+import type { ChartItem, LiveFilterOp, LiveSource } from "@/core/model/types";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { LIVE_MIN_INTERVAL_SEC, LIVE_MAX_INTERVAL_SEC } from "@/core/live/liveSource";
 import { resolveDataPath } from "@/core/live/dataPath";
 import { probeSource, inferFields } from "@/core/live/probe";
 import type { ProbeResult } from "@/core/live/probe";
+import { buildChartData, runPipeline } from "@/core/live/pipeline";
+import type { Row } from "@/core/live/pipeline";
 import {
   DEFAULT_TIMEOUT_MS,
   MAX_TIMEOUT_MS,
@@ -27,10 +29,22 @@ const defaultInterval = computed(() => api.value?.defaultIntervalSec ?? 30);
 
 type TabKey = "connect" | "debug" | "pipeline";
 const tab = ref<TabKey>("connect");
-const TABS: Array<{ key: TabKey; label: string; soon?: boolean }> = [
+const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "connect", label: "连接" },
   { key: "debug", label: "调试台" },
-  { key: "pipeline", label: "加工", soon: true },
+  { key: "pipeline", label: "加工" },
+];
+
+const FILTER_OPS: Array<{ value: LiveFilterOp; label: string }> = [
+  { value: "eq", label: "等于" },
+  { value: "ne", label: "不等于" },
+  { value: "gt", label: "大于" },
+  { value: "gte", label: "大于等于" },
+  { value: "lt", label: "小于" },
+  { value: "lte", label: "小于等于" },
+  { value: "contains", label: "包含" },
+  { value: "in", label: "属于（逗号分隔）" },
+  { value: "notEmpty", label: "非空" },
 ];
 
 const enabled = ref(Boolean(props.item.spec.source));
@@ -45,13 +59,23 @@ const dataPath = ref("");
 const headersText = ref("");
 const queryText = ref("");
 
+// ---- 加工 ----
+const filters = ref<Array<{ field: string; op: LiveFilterOp; value: string }>>([]);
+const selectFields = ref<string[]>([]);
+const sortField = ref("");
+const sortDesc = ref(false);
+const limit = ref(0);
+const mapCategory = ref("");
+const mapValue = ref("");
+const mapSeries = ref("");
+
 const notice = ref("");
 
 function syncFromItem(): void {
   const src = props.item.spec.source;
   enabled.value = Boolean(src);
   useAbsolute.value = Boolean(src?.url) && !src?.path;
-  path.value = src?.path ?? (src?.url ? "" : "");
+  path.value = src?.path ?? "";
   absoluteUrl.value = src?.url ?? "";
   method.value = src?.method === "POST" ? "POST" : "GET";
   body.value = src?.body ?? "";
@@ -60,6 +84,14 @@ function syncFromItem(): void {
   dataPath.value = src?.dataPath ?? "";
   headersText.value = formatPairs(src?.headers);
   queryText.value = formatPairs(src?.query);
+  filters.value = (src?.filter ?? []).map((f) => ({ ...f }));
+  selectFields.value = [...(src?.select ?? [])];
+  sortField.value = src?.sort?.field ?? "";
+  sortDesc.value = src?.sort?.desc === true;
+  limit.value = src?.limit ?? 0;
+  mapCategory.value = src?.map?.category ?? "";
+  mapValue.value = src?.map?.value ?? "";
+  mapSeries.value = src?.map?.seriesField ?? "";
   notice.value = "";
   probe.value = null;
   snapshotNotice.value = "";
@@ -68,14 +100,14 @@ function syncFromItem(): void {
 
 watch(() => props.item.id, syncFromItem, { immediate: true });
 
-/** 当前表单拼出来的数据源（探活与保存共用同一份，避免「测的通但存的不对」） */
+/** 连接页的表单 → 数据源（探活与保存共用同一份，避免「测的通但存的不对」） */
 const draft = computed<LiveSource | null>(() => {
   const url = useAbsolute.value ? absoluteUrl.value.trim() : "";
   const p = useAbsolute.value ? "" : path.value.trim();
   if (!url && !p) return null;
   const headers = parsePairs(headersText.value);
   const query = parsePairs(queryText.value);
-  const src: LiveSource = {
+  return {
     url,
     intervalSec: Math.min(
       LIVE_MAX_INTERVAL_SEC,
@@ -89,7 +121,29 @@ const draft = computed<LiveSource | null>(() => {
     ...(Object.keys(headers).length ? { headers } : {}),
     ...(Object.keys(query).length ? { query } : {}),
   };
-  return src;
+});
+
+/** 连接配置 + 加工配置的完整数据源 */
+const fullSource = computed<LiveSource | undefined>(() => {
+  const base = draft.value;
+  if (!base) return undefined;
+  const cleanFilters = filters.value.filter((f) => f.field.trim() !== "");
+  return {
+    ...base,
+    ...(cleanFilters.length ? { filter: cleanFilters } : {}),
+    ...(selectFields.value.length ? { select: selectFields.value } : {}),
+    ...(sortField.value.trim() ? { sort: { field: sortField.value.trim(), ...(sortDesc.value ? { desc: true } : {}) } } : {}),
+    ...(limit.value > 0 ? { limit: Math.min(5000, Math.round(limit.value)) } : {}),
+    ...(mapCategory.value || mapValue.value || mapSeries.value
+      ? {
+          map: {
+            ...(mapCategory.value ? { category: mapCategory.value } : {}),
+            ...(mapValue.value ? { value: mapValue.value } : {}),
+            ...(mapSeries.value ? { seriesField: mapSeries.value } : {}),
+          },
+        }
+      : {}),
+  };
 });
 
 /** 相对路径最终请求的真实地址 */
@@ -98,9 +152,7 @@ const finalUrl = computed(() => {
   return joinUrl(api.value?.baseUrl, path.value.trim());
 });
 
-const needsBaseUrl = computed(
-  () => !useAbsolute.value && !path.value.trim().startsWith("http") && !api.value?.baseUrl
-);
+const needsBaseUrl = computed(() => !useAbsolute.value && !api.value?.baseUrl);
 
 /** 最近一次拉取状态（由 LiveExecutor 回写） */
 const status = computed(() => doc.liveStatus[props.item.id]);
@@ -119,7 +171,7 @@ const probe = ref<ProbeResult | null>(null);
 const reveal = ref(false);
 const snapshotNotice = ref("");
 
-/** dataPath 命中后的数据（调试台展示与「填充图表」都用它） */
+/** dataPath 命中后的数据（调试台与加工预览共用） */
 const picked = computed(() => {
   if (!probe.value?.ok) return { ok: false as const, value: undefined };
   const value = resolveDataPath(probe.value.raw, dataPath.value.trim() || undefined);
@@ -128,9 +180,33 @@ const picked = computed(() => {
 
 const pickedInfo = computed(() => {
   if (!probe.value?.ok) return null;
-  if (!picked.value.ok) return { fields: [] as string[], rows: 0, invalid: true };
+  if (!picked.value.ok) return { fields: [] as string[], rows: [] as Row[], invalid: true };
   const { fields, rows } = inferFields(picked.value.value);
-  return { fields, rows: rows.length, invalid: false };
+  return { fields, rows, invalid: false };
+});
+
+/** 可选的字段清单：优先用调试台拿到的真实字段 */
+const fields = computed(() => pickedInfo.value?.fields ?? []);
+
+const processed = computed(() => {
+  if (!picked.value.ok) return null;
+  return runPipeline(picked.value.value, fullSource.value);
+});
+
+const chartPreview = computed(() => {
+  if (!picked.value.ok) return null;
+  return buildChartData(picked.value.value, fullSource.value, props.item.spec.type);
+});
+
+const steps = computed(() => {
+  const c = processed.value?.counts;
+  if (!c) return "";
+  const parts = [`原始 ${c.raw} 行`];
+  if (c.filtered !== c.raw) parts.push(`过滤后 ${c.filtered} 行`);
+  if (c.sorted !== c.selected) parts.push(`选列后 ${c.selected} 行`);
+  if (c.limited !== c.sorted) parts.push(`取前 ${c.limited} 行`);
+  else if (c.filtered === c.raw) parts.push("未加工");
+  return parts.join(" → ");
 });
 
 async function runProbe(): Promise<void> {
@@ -153,8 +229,35 @@ function fillFromProbe(): void {
     updatedAt: Date.now(),
   });
   snapshotNotice.value = ok
-    ? "已用这份数据填充图表（本次为快照，之后仍按保存的数据源自动刷新）"
-    : "这份数据无法映射成当前图表类型的格式，试试调整取值路径";
+    ? "已用这份数据填充图表（快照；保存数据源后仍会按配置自动刷新）"
+    : "这份数据无法映射成当前图表类型的格式，试试调整取值路径或加工设置";
+}
+
+// ---- 加工 ----
+function addFilter(): void {
+  filters.value.push({ field: fields.value[0] ?? "", op: "eq", value: "" });
+}
+
+function removeFilter(index: number): void {
+  filters.value.splice(index, 1);
+}
+
+function toggleSelect(field: string): void {
+  const i = selectFields.value.indexOf(field);
+  if (i === -1) selectFields.value.push(field);
+  else selectFields.value.splice(i, 1);
+}
+
+function clearProcessing(): void {
+  filters.value = [];
+  selectFields.value = [];
+  sortField.value = "";
+  sortDesc.value = false;
+  limit.value = 0;
+  mapCategory.value = "";
+  mapValue.value = "";
+  mapSeries.value = "";
+  notice.value = "已清空加工设置（记得点保存）";
 }
 
 // ---- 保存 ----
@@ -164,14 +267,13 @@ function save(): void {
     notice.value = "已关闭实时数据";
     return;
   }
-  const src = draft.value;
+  const src = fullSource.value;
   if (!src) {
     notice.value = "请填写相对路径或完整地址";
     return;
   }
   doc.setLiveSource(props.item.id, src);
   notice.value = `已保存，每 ${src.intervalSec} 秒拉取一次`;
-  if (tab.value !== "connect") tab.value = "connect";
 }
 
 function useDefaultInterval(): void {
@@ -187,11 +289,9 @@ function useDefaultInterval(): void {
         :key="t.key"
         class="live__tab"
         :class="{ active: tab === t.key }"
-        :disabled="Boolean(t.soon)"
-        :title="t.soon ? '数据加工将在下一版开放' : ''"
         @click="tab = t.key"
       >
-        {{ t.label }}<span v-if="t.soon" class="live__soon">待上线</span>
+        {{ t.label }}
       </button>
     </div>
 
@@ -225,7 +325,7 @@ function useDefaultInterval(): void {
           <RouterLink class="live__inline-link" to="/settings">配置公共接口 →</RouterLink>
         </div>
         <div v-if="needsBaseUrl" class="live__warn">
-          还没配公共接口地址，相对路径会请求当前站点。到「接口设置」里填一次 baseUrl 即可。
+          没配公共接口地址，相对路径会请求当前站点。到「接口设置」填一次 baseUrl 即可。
         </div>
 
         <div class="live__row">
@@ -310,10 +410,10 @@ function useDefaultInterval(): void {
           </div>
           <template v-else>
             <div class="live__debug-meta">
-              共 {{ pickedInfo?.rows ?? 0 }} 行 · {{ pickedInfo?.fields.length ?? 0 }} 个字段
+              共 {{ pickedInfo?.rows.length ?? 0 }} 行 · {{ fields.length }} 个字段
             </div>
             <div class="live__fields">
-              <span v-for="f in pickedInfo?.fields" :key="f" class="live__field">{{ f }}</span>
+              <span v-for="f in fields" :key="f" class="live__field">{{ f }}</span>
             </div>
           </template>
         </div>
@@ -339,11 +439,130 @@ function useDefaultInterval(): void {
       </template>
     </div>
 
-    <div
-      v-if="statusText"
-      class="live__status"
-      :class="{ 'live__status--bad': status?.stale }"
-    >
+    <!-- 加工 -->
+    <div v-else class="live__pane">
+      <div v-if="!picked.ok" class="live__hint">
+        先在「调试台」发一次请求，这里才能列出字段并实时预览加工结果。
+      </div>
+
+      <template v-else>
+        <div class="live__debug-block">
+          <div class="live__debug-title">行过滤（多条为「并且」）</div>
+          <div v-for="(f, i) in filters" :key="i" class="live__filter">
+            <select v-model="f.field" class="live__select live__select--field">
+              <option value="">字段</option>
+              <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
+            </select>
+            <select v-model="f.op" class="live__select live__select--op">
+              <option v-for="op in FILTER_OPS" :key="op.value" :value="op.value">{{ op.label }}</option>
+            </select>
+            <input
+              v-if="f.op !== 'notEmpty'"
+              v-model="f.value"
+              class="live__input"
+              placeholder="值"
+              :disabled="!f.field"
+            />
+            <button class="live__icon-btn" title="删除条件" @click="removeFilter(i)">×</button>
+          </div>
+          <button class="live__link" @click="addFilter">＋ 添加条件</button>
+        </div>
+
+        <div class="live__debug-block">
+          <div class="live__debug-title">列选择（不选=保留全部）</div>
+          <div class="live__fields">
+            <button
+              v-for="name in fields"
+              :key="name"
+              class="live__field live__field--btn"
+              :class="{ 'is-on': selectFields.includes(name) }"
+              @click="toggleSelect(name)"
+            >
+              {{ name }}
+            </button>
+          </div>
+        </div>
+
+        <div class="live__debug-block">
+          <div class="live__debug-title">排序与取前 N</div>
+          <div class="live__row">
+            <span>排序字段</span>
+            <div class="live__inline">
+              <select v-model="sortField" class="live__select">
+                <option value="">不排序</option>
+                <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
+              </select>
+              <select v-model="sortDesc" class="live__select live__select--op" :disabled="!sortField">
+                <option :value="false">升序</option>
+                <option :value="true">降序</option>
+              </select>
+            </div>
+          </div>
+          <div class="live__row">
+            <span>取前 N 行（0 = 不限）</span>
+            <input v-model.number="limit" type="number" min="0" max="5000" class="live__input live__input--num" />
+          </div>
+        </div>
+
+        <div class="live__debug-block">
+          <div class="live__debug-title">字段映射（留空 = 按第一行自动推断）</div>
+          <div class="live__row">
+            <span>分类列</span>
+            <select v-model="mapCategory" class="live__select">
+              <option value="">自动</option>
+              <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
+            </select>
+          </div>
+          <div class="live__row">
+            <span>数值列</span>
+            <select v-model="mapValue" class="live__select">
+              <option value="">自动</option>
+              <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
+            </select>
+          </div>
+          <div class="live__row">
+            <span>系列字段（长表转宽表）</span>
+            <select v-model="mapSeries" class="live__select">
+              <option value="">无</option>
+              <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="live__debug-block">
+          <div class="live__debug-title">加工预览</div>
+          <div class="live__debug-meta">{{ steps }}</div>
+          <div v-if="processed && !processed.ok" class="live__warn">{{ processed.message }}</div>
+          <template v-else>
+            <div v-if="chartPreview && !chartPreview.ok" class="live__warn">
+              能取到行，但映射不成当前图表（{{ chartPreview.message }}）
+            </div>
+            <table v-if="processed?.ok" class="live__table">
+              <thead>
+                <tr>
+                  <th v-for="key in Object.keys(processed.rows[0] ?? {})" :key="key">{{ key }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in processed.rows.slice(0, 5)" :key="i">
+                  <td v-for="key in Object.keys(processed.rows[0] ?? {})" :key="key">
+                    {{ row[key] === null || row[key] === undefined ? "" : String(row[key]) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </div>
+
+        <div class="live__ops">
+          <button class="live__btn live__btn--primary" @click="save">保存加工设置</button>
+          <button class="live__btn" @click="clearProcessing">清空加工</button>
+        </div>
+        <div v-if="notice" class="live__notice">{{ notice }}</div>
+      </template>
+    </div>
+
+    <div v-if="statusText" class="live__status" :class="{ 'live__status--bad': status?.stale }">
       {{ statusText }}
     </div>
   </div>
@@ -377,18 +596,6 @@ function useDefaultInterval(): void {
   color: var(--cf-text);
   box-shadow: var(--cf-shadow);
 }
-.live__tab:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.live__soon {
-  margin-left: 3px;
-  font-size: 9px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--cf-primary) 16%, transparent);
-  color: var(--cf-primary);
-}
 .live__pane {
   display: flex;
   flex-direction: column;
@@ -411,6 +618,47 @@ function useDefaultInterval(): void {
   background: var(--cf-bg);
   color: var(--cf-text);
   font-size: 12px;
+}
+.live__inline {
+  display: flex;
+  gap: 4px;
+}
+.live__inline .live__select {
+  width: 100px;
+}
+.live__select--field {
+  width: 100px;
+}
+.live__select--op {
+  width: 84px;
+}
+.live__input {
+  width: 90px;
+  padding: 4px 6px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  background: var(--cf-bg);
+  color: var(--cf-text);
+  font-size: 12px;
+}
+.live__input--num {
+  width: 70px;
+}
+.live__filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.live__icon-btn {
+  width: 20px;
+  height: 22px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cf-text-2);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
 }
 .live__textarea {
   width: 100%;
@@ -541,6 +789,15 @@ function useDefaultInterval(): void {
   color: var(--cf-primary);
   font-size: 10.5px;
 }
+.live__field--btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.live__field--btn.is-on {
+  border-color: var(--cf-primary);
+  opacity: 1;
+}
 .live__json {
   max-height: 220px;
   overflow: auto;
@@ -556,6 +813,26 @@ function useDefaultInterval(): void {
 .live__json--masked {
   color: var(--cf-text-2);
   white-space: normal;
+}
+.live__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+.live__table th,
+.live__table td {
+  padding: 3px 5px;
+  border: 1px solid var(--cf-border);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+.live__table th {
+  background: var(--cf-bg);
+  color: var(--cf-text-2);
+  font-weight: 500;
 }
 .live__status {
   color: var(--cf-text-2);

@@ -5,7 +5,7 @@ import { DEFAULT_FRAME, createItem, createScreen } from "@/core/model/schema";
 import { deepMerge } from "@/core/chart/optionBuilder";
 import { chartRegistry } from "@/core/chart/registry";
 import { rotateFrame } from "@/core/geometry/transform";
-import { toChartData } from "@/core/live/payload";
+import { buildChartData } from "@/core/live/pipeline";
 import { MIN_INTERVAL_SEC } from "@/core/live/liveExecutor";
 import type {
   ChartAsset,
@@ -303,7 +303,8 @@ export const useDocumentStore = defineStore("document", {
         this.liveStatus[id] = { ...status };
         return false;
       }
-      const result = toChartData(raw, item.spec.type);
+      // 原始载荷 → 行过滤/选列/排序/取前 N/字段映射 → ChartData
+      const result = buildChartData(raw, item.spec.source, item.spec.type);
       if (!result.ok) {
         // 给用户看人话，原始载荷留给控制台排查
         console.warn("[live] 载荷无法映射:", result.message, raw);

@@ -34,6 +34,11 @@ const liveSignature = computed(() =>
         timeoutMs: s?.timeoutMs ?? 0,
         intervalSec: s?.intervalSec ?? 0,
         dataPath: s?.dataPath ?? "",
+        filter: s?.filter ?? null,
+        select: s?.select ?? null,
+        sort: s?.sort ?? null,
+        limit: s?.limit ?? 0,
+        map: s?.map ?? null,
         api: ws.settings.api ?? null,
       });
       return `${i.id}:${key}`;

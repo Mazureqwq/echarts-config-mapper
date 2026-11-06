@@ -1,4 +1,5 @@
 import { buildRequest, clampTimeout } from "./apiSettings";
+import { toRows } from "./pipeline";
 import type { ApiSettings, LiveSource } from "@/core/model/types";
 
 export type Row = Record<string, unknown>;
@@ -53,30 +54,8 @@ export function inferFields(raw: unknown): { fields: string[]; rows: Row[] } {
   return { fields, rows };
 }
 
-/** 把任意响应结构摊成行数组（与 DataHub 的 dataPath 语义保持一致：这里只看最外层） */
-export function toProbeRows(raw: unknown): Row[] {
-  if (Array.isArray(raw)) {
-    return raw.map((item) =>
-      item && typeof item === "object" && !Array.isArray(item) ? (item as Row) : { value: item }
-    );
-  }
-  if (raw && typeof raw === "object") {
-    const obj = raw as Row;
-    // 常见封装：{ data: [...] } / { data: { list: [...] } } / { rows: [...] }
-    for (const key of ["data", "list", "rows", "items", "result", "records"]) {
-      const v = obj[key];
-      if (Array.isArray(v)) return toProbeRows(v);
-      if (v && typeof v === "object") {
-        const inner = toProbeRows(v);
-        // 只有真的在包装体里找到数组时才继续下钻，避免把单条对象误展开
-        if (inner.length && !(inner.length === 1 && inner[0] === (v as Row))) return inner;
-        if (Array.isArray((v as Row)[Object.keys(v as Row)[0]])) return toProbeRows(v);
-      }
-    }
-    return [obj];
-  }
-  return raw === undefined || raw === null ? [] : [{ value: raw }];
-}
+/** 行摊平规则与加工链共用 `pipeline.toRows`，避免调试台看到的结构和图表吃到的不一致 */
+export const toProbeRows = toRows;
 
 /**
  * 调试台：真正打一次请求，拿到状态码、耗时和响应体。
