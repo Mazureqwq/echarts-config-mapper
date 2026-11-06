@@ -1,4 +1,6 @@
-import { resolveDataPath } from "./dataPath";
+import { DataHub, dataHub } from "./dataHub";
+import type { DataHubOptions } from "./dataHub";
+import { LIVE_MIN_INTERVAL_SEC } from "./liveSource";
 
 export interface LiveUpdate {
   id: string;
@@ -8,45 +10,29 @@ export interface LiveUpdate {
   updatedAt: number;
 }
 
-export interface LiveExecutorOptions {
-  fetchImpl?: (url: string) => Promise<unknown>;
-  setIntervalImpl?: (fn: () => void, ms: number) => unknown;
-  clearIntervalImpl?: (handle: unknown) => void;
-  now?: () => number;
-}
+export type LiveExecutorOptions = DataHubOptions;
 
-export const MIN_INTERVAL_SEC = 5;
+/** 轮询间隔下限（唯一定义在 liveSource，这里只为兼容旧引用保留别名） */
+export const MIN_INTERVAL_SEC = LIVE_MIN_INTERVAL_SEC;
 
-interface Entry {
-  id: string;
-  url: string;
-  dataPath?: string;
-  onData: (update: LiveUpdate) => void;
-  lastData?: unknown;
-  hasData: boolean;
-  timer: unknown;
-}
+let instanceSeq = 0;
 
+/**
+ * 图表级别的实时数据门面，真正的调度在 `DataHub`：
+ * - 不传 options → 用应用级单例（工作台 / 演示 / 轮播重建共享同一份请求）
+ * - 传 options（测试）→ 自己持有一个独立的 Hub
+ * 订阅 key 带实例前缀，避免不同页面同 id 互相顶掉。
+ */
 export class LiveExecutor {
-  private readonly fetchImpl: (url: string) => Promise<unknown>;
-  private readonly setIntervalImpl: (fn: () => void, ms: number) => unknown;
-  private readonly clearIntervalImpl: (handle: unknown) => void;
-  private readonly now: () => number;
-  private readonly entries = new Map<string, Entry>();
+  private readonly hub: DataHub;
+  private readonly ownHub: boolean;
+  private readonly prefix: string;
+  private readonly keys = new Map<string, string>();
 
   constructor(options?: LiveExecutorOptions) {
-    this.fetchImpl =
-      options?.fetchImpl ??
-      (async (url: string) => {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      });
-    this.setIntervalImpl =
-      options?.setIntervalImpl ?? ((fn, ms) => setInterval(fn, ms));
-    this.clearIntervalImpl =
-      options?.clearIntervalImpl ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
-    this.now = options?.now ?? (() => Date.now());
+    this.ownHub = options !== undefined;
+    this.hub = options !== undefined ? new DataHub(options) : dataHub;
+    this.prefix = `live${++instanceSeq}`;
   }
 
   register(
@@ -55,61 +41,38 @@ export class LiveExecutor {
     onData: (update: LiveUpdate) => void
   ): void {
     this.unregister(id);
-    const ms = Math.max(MIN_INTERVAL_SEC, source.intervalSec) * 1000;
-    const entry: Entry = {
-      id,
+    const key = `${this.prefix}::${id}`;
+    this.keys.set(id, key);
+    this.hub.subscribe({
+      key,
       url: source.url,
+      intervalSec: source.intervalSec,
       dataPath: source.dataPath,
-      onData,
-      hasData: false,
-      timer: undefined,
-    };
-    entry.timer = this.setIntervalImpl(() => {
-      void this.fetchOne(entry);
-    }, ms);
-    this.entries.set(id, entry);
+      onUpdate: (u) =>
+        onData({
+          id,
+          data: u.data,
+          stale: u.stale,
+          ...(u.error === undefined ? {} : { error: u.error }),
+          updatedAt: u.updatedAt,
+        }),
+    });
   }
 
   unregister(id: string): void {
-    const entry = this.entries.get(id);
-    if (!entry) return;
-    if (entry.timer !== undefined) {
-      this.clearIntervalImpl(entry.timer);
-    }
-    this.entries.delete(id);
+    const key = this.keys.get(id);
+    if (!key) return;
+    this.hub.unsubscribe(key);
+    this.keys.delete(id);
   }
 
-  async tick(): Promise<void> {
-    await Promise.all([...this.entries.values()].map((entry) => this.fetchOne(entry)));
+  /** 立刻拉一轮（不等定时器） */
+  tick(): Promise<void> {
+    return this.hub.tickAll();
   }
 
   dispose(): void {
-    for (const id of [...this.entries.keys()]) {
-      this.unregister(id);
-    }
-  }
-
-  private async fetchOne(entry: Entry): Promise<void> {
-    try {
-      const raw = await this.fetchImpl(entry.url);
-      const data = resolveDataPath(raw, entry.dataPath);
-      entry.lastData = data;
-      entry.hasData = true;
-      entry.onData({
-        id: entry.id,
-        data,
-        stale: false,
-        updatedAt: this.now(),
-      });
-    } catch (e) {
-      entry.onData({
-        id: entry.id,
-        data: entry.hasData ? entry.lastData : undefined,
-        stale: true,
-        error: e instanceof Error ? e.message : String(e),
-        updatedAt: this.now(),
-      });
-    }
+    for (const id of [...this.keys.keys()]) this.unregister(id);
+    if (this.ownHub) this.hub.dispose();
   }
 }
-

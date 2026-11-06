@@ -5,7 +5,7 @@ import { DEFAULT_FRAME, createItem, createScreen } from "@/core/model/schema";
 import { deepMerge } from "@/core/chart/optionBuilder";
 import { chartRegistry } from "@/core/chart/registry";
 import { rotateFrame } from "@/core/geometry/transform";
-import { matrixToChartData, validateChartData } from "@/core/chart/chartData";
+import { toChartData } from "@/core/live/payload";
 import { MIN_INTERVAL_SEC } from "@/core/live/liveExecutor";
 import type {
   ChartAsset,
@@ -100,17 +100,6 @@ function restoreWorkspace(target: Workspace, source: Workspace): void {
     }
   }
   target.screens = result;
-}
-
-function isChartDataLike(raw: unknown): raw is ChartData {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    "kind" in raw &&
-    ["category", "nameValue", "xy", "radar"].includes(
-      (raw as { kind: unknown }).kind as string
-    )
-  );
 }
 
 export const useDocumentStore = defineStore("document", {
@@ -314,29 +303,16 @@ export const useDocumentStore = defineStore("document", {
         this.liveStatus[id] = { ...status };
         return false;
       }
-      try {
-        let data: ChartData;
-        if (Array.isArray(raw)) {
-          data = matrixToChartData(raw as string[][], item.spec.type);
-        } else if (isChartDataLike(raw)) {
-          data = raw;
-        } else {
-          throw new Error("无法识别的数据格式");
-        }
-        if (!validateChartData(data)) {
-          throw new Error("数据形状不合法");
-        }
-        item.spec.data = deepClone(data);
-        this.liveStatus[id] = { ...status };
-        return true;
-      } catch (e) {
-        this.liveStatus[id] = {
-          ...status,
-          stale: true,
-          error: e instanceof Error ? e.message : String(e),
-        };
+      const result = toChartData(raw, item.spec.type);
+      if (!result.ok) {
+        // 给用户看人话，原始载荷留给控制台排查
+        console.warn("[live] 载荷无法映射:", result.message, raw);
+        this.liveStatus[id] = { ...status, stale: true, error: result.message };
         return false;
       }
+      item.spec.data = deepClone(result.data);
+      this.liveStatus[id] = { ...status };
+      return true;
     },
     addGroup() {
       const items = this.items.filter((i) => this.selectedIds.includes(i.id));

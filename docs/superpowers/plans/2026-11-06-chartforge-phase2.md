@@ -21,6 +21,7 @@
 | T5 图表聚焦编辑与类型切换 | 已完成（`825d85f`） | 聚焦编辑基线已有（双击 + Esc）；补类型下拉（二次确认）与「保存到图表库」（含缩略图） |
 | T6 对齐与等距分布 | 已完成（`a5633da`） | 基线已有 `alignDistribute` + 工具条；补 3 个单测（左/右对齐、等距、忽略锁定） |
 | T7 视图快捷键与保存入口 | 已完成（`ab137d6`、`851919b`） | `Ctrl+0/1/±` 缩放快捷键；顶栏「保存到大屏库」生成缩略图；快捷键说明同步 |
+| T17 实时数据进阶 M1 | 已完成 | `core/live/payload.ts`（二维表/对象数组/纯数值/ChartData 四形态归一）；`dataPath` 支持 `a.b`、`rows[0].v`、`rows[*].v`；新增 `core/live/dataHub.ts`（合并/单飞/退避/隐藏暂停/统计）+ 10 例；`LiveExecutor` 改为门面；`applyLiveUpdate` 改用归一器并输出人话错误 |
 | T16 第三阶段 · 实时数据收口 | 已完成 | 挂载 `LiveSourcePanel`（原本是死代码）+ 测试连接/状态显示；`core/live/liveSource.ts` 校验与探测 + 7 例单测；工作台启动轮询并按数据源指纹重挂 |
 | T15 第三阶段 · 大屏模板 | 已完成 | `core/model/templates.ts`（5 套模板槽位纯函数 + 重叠比 + 占位识别）+ 9 例单测；`documentStore.applyTemplate` / `clearPlaceholdersUnder`；新建大屏对话框可选模板；演示模式隐藏占位框 |
 | T14 第三阶段 · 轮播演示 | 已完成 | `core/play/playlist.ts`（间隔 clamp / 播放列表解析 / 循环切换 / 暂停 / dispose）+ 7 例单测；PlayView 支持 `?list=&interval=`、切屏重建实时数据、←/→/空格、进度圆点；大屏库「轮播演示」选屏对话框 |

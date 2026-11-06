@@ -101,10 +101,11 @@ function save(): void {
       </label>
       <label class="live-panel__row">
         <span>取值路径 dataPath</span>
-        <input v-model="dataPath" placeholder="result.rows（可空）" />
+        <input v-model="dataPath" placeholder="result.rows  或  result.rows[*].value" />
       </label>
       <div class="live-panel__hint">
-        返回“二维数组”或“对象数组”（如 [{"月份":"一月","销量":10}]）即可直接映射成图表数据。
+        载荷支持：二维表（首行表头）、对象数组（如 <code>[{"月份":"一月","销量":10}]</code>）、纯数值数组。
+        路径支持 <code>a.b</code>、<code>rows[0].value</code>、<code>rows[*].value</code>（通配会拍平成数组）。
       </div>
       <div class="live-panel__ops">
         <button class="live-panel__test" :disabled="probing" @click="test">
@@ -159,8 +160,15 @@ function save(): void {
 .live-panel__hint {
   font-size: 11px;
   color: var(--cf-text-2);
-  line-height: 1.5;
+  line-height: 1.6;
   opacity: 0.85;
+}
+.live-panel__hint code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--cf-bg);
 }
 .live-panel__ops {
   display: flex;
