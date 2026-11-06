@@ -12,6 +12,7 @@ const PATHS: Record<string, string> = {
   redo: "M15 10h5V5m0 5a8 8 0 1 0-2 6",
   play: "M8 5v14l11-7z",
   download: "M12 4v10m0 0 4-4m-4 4-4-4M5 19h14",
+  package: "M12 3 4 7.5v9L12 21l8-4.5v-9L12 3zM4 7.5 12 12l8-4.5M12 12v9",
   upload: "M12 14V4m0 0 4 4m-4-4-4 4M5 19h14",
   image: "M4 5h16v14H4zM8 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4 16l5-5 4 4 2-2 5 5",
   text: "M6 6h12M12 6v12M9 18h6",

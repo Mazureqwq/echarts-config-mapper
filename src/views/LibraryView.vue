@@ -6,6 +6,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import type { Screen } from "@/core/model/types";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
+import ExportPackageDialog from "@/shared/ui/ExportPackageDialog.vue";
 import { clampInterval, DEFAULT_INTERVAL_SEC } from "@/core/play/playlist";
 import { SCREEN_TEMPLATES, templateSlots } from "@/core/model/templates";
 import Icon from "@/shared/ui/Icon.vue";
@@ -231,6 +232,13 @@ function download(name: string, json: string): void {
   URL.revokeObjectURL(a.href);
 }
 
+/** 导出可交付产物（zip 包 / 单文件 HTML） */
+const exportTarget = ref<Screen | null>(null);
+
+function openExportPackage(screen: Screen): void {
+  exportTarget.value = screen;
+}
+
 function exportScreen(screen: Screen): void {
   download(`${screen.name || "大屏"}.screen.json`, exportJson(screen));
 }
@@ -328,7 +336,10 @@ function exportWorkspace(): void {
             <button title="编辑信息" @click="openEdit(screen)"><Icon name="settings" :size="13" /></button>
             <button title="演示" @click="openPlay(screen.id)"><Icon name="play" :size="13" /></button>
             <button title="复制" @click="duplicate(screen.id)"><Icon name="copy" :size="13" /></button>
-            <button title="导出" @click="exportScreen(screen)"><Icon name="download" :size="13" /></button>
+            <button title="导出可交付产物（可直接打开 / 部署）" @click="openExportPackage(screen)">
+              <Icon name="package" :size="13" />
+            </button>
+            <button title="导出 JSON" @click="exportScreen(screen)"><Icon name="download" :size="13" /></button>
             <button title="删除" class="library__danger" @click="askDelete(screen)"><Icon name="trash" :size="13" /></button>
           </div>
         </div>
@@ -472,6 +483,12 @@ function exportWorkspace(): void {
         </label>
       </div>
     </ConfirmDialog>
+
+    <ExportPackageDialog
+      v-if="exportTarget"
+      :screen="exportTarget"
+      @close="exportTarget = null"
+    />
   </div>
 </template>
 
