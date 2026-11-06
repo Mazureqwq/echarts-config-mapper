@@ -84,4 +84,30 @@ describe("model/schema 工厂与规范化", () => {
     expect(ws.screens[1].category).toBeUndefined();
     expect(ws.screens[1].tags).toBeUndefined();
   });
+
+  it("normalizeWorkspace 解析资产元信息，缺失或非法时丢弃", () => {
+    const ws = normalizeWorkspace({
+      version: 1,
+      screens: [],
+      assets: [
+        {
+          id: "a",
+          name: "销售趋势",
+          spec: { type: "line" },
+          category: "折线图",
+          tags: ["销售", 1],
+          defaultSize: { w: 800, h: 400 },
+        },
+        { id: "b", name: "无元信息", spec: { type: "bar" } },
+        { id: "c", name: "非法尺寸", spec: { type: "pie" }, defaultSize: { w: 0, h: -3 } },
+      ],
+    });
+    expect(ws.assets[0].category).toBe("折线图");
+    expect(ws.assets[0].tags).toEqual(["销售"]);
+    expect(ws.assets[0].defaultSize).toEqual({ w: 800, h: 400 });
+    expect(ws.assets[1].category).toBeUndefined();
+    expect(ws.assets[1].tags).toBeUndefined();
+    expect(ws.assets[1].defaultSize).toBeUndefined();
+    expect(ws.assets[2].defaultSize).toBeUndefined();
+  });
 });

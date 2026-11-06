@@ -262,13 +262,28 @@ function normalizeScreen(raw: unknown): Screen | null {
   return screen;
 }
 
+function normalizeAssetSize(raw: unknown): { w: number; h: number } | undefined {
+  if (!isRecord(raw)) return undefined;
+  const w = raw.w;
+  const h = raw.h;
+  if (typeof w !== "number" || typeof h !== "number") return undefined;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) return undefined;
+  return { w, h };
+}
+
 function normalizeAsset(raw: unknown): ChartAsset | null {
   if (!isRecord(raw)) return null;
+  const defaultSize = normalizeAssetSize(raw.defaultSize);
   return {
     id: str(raw.id, uuid()),
     name: str(raw.name, "未命名图表"),
     thumbnail: str(raw.thumbnail, ""),
     spec: normalizeSpec(raw.spec),
+    ...(typeof raw.category === "string" ? { category: raw.category } : {}),
+    ...(Array.isArray(raw.tags)
+      ? { tags: raw.tags.filter((t): t is string => typeof t === "string") }
+      : {}),
+    ...(defaultSize ? { defaultSize } : {}),
     createdAt: num(raw.createdAt, 0),
     updatedAt: num(raw.updatedAt, 0),
   };

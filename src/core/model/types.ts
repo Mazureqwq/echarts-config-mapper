@@ -99,6 +99,12 @@ export interface ChartAsset {
   name: string;
   thumbnail: string;
   spec: ChartSpec;
+  /** 检索元信息：分类（图表类型或业务分类） */
+  category?: string;
+  /** 检索元信息：标签 */
+  tags?: string[];
+  /** 拖入大屏时的初始尺寸（缺省用 DEFAULT_FRAME） */
+  defaultSize?: { w: number; h: number };
   createdAt: number;
   updatedAt: number;
 }
