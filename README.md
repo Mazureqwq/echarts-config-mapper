@@ -50,7 +50,9 @@
 
 ## 技术栈
 
-Vue 3.5 · TypeScript 5.9 · Vite 8 · Pinia 3 · Element Plus · ECharts 6 · Vitest 3
+Vue 3.5 · TypeScript 5.9 · Vite 8 · Pinia 3 · ECharts 6 · Vitest 3
+
+UI 全部是自写的轻量组件（`src/shared/ui`），没有引入组件库；ECharts 按需注册且拆成独立 chunk，首屏只加载应用代码，图表引擎在进入编辑器/图表库时异步补齐。
 
 ## 快速开始
 
@@ -104,3 +106,4 @@ src/
 - **缩略图是旧的 / 和图表对不上**：缩略图算法有版本号，打开图表库会自动重算过期缩略图；也可以在编辑页改动一下让它在 800ms 后重生成。
 - **安装报 `ERR_PNPM_IGNORED_BUILDS`**：仓库里的 `pnpm-workspace.yaml` 已配好 `allowBuilds`，直接 `pnpm install` 即可。
 - **`src/assets/screens/`**：运行时导出的 JSON 产物，已在 `.gitignore` 中忽略。
+- **体积**：构建产物 `echarts`（约 647 KB）/ `vue-vendor`（约 96 KB）各自独立 chunk，`index` 首屏仅约 5 KB；gzip 后全站约 320 KB。main.ts 不再全局注册 ECharts，`/charts` 的缩略图迁移用动态 `import()`，列表先出、图表后到。

@@ -5,7 +5,6 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import type { ChartAsset, ChartType } from "@/core/model/types";
 import { ASSET_DND_MIME } from "@/shared/dnd";
-import { renderChartThumbnail } from "@/workbench/chartThumbnail";
 import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
@@ -99,10 +98,12 @@ function migrateThumbnails(): void {
   const stale = ws.assets.filter((a) => a.thumbnailVersion !== THUMBNAIL_VERSION);
   if (!stale.length) return;
   let i = 0;
-  const step = (): void => {
+  const step = async (): Promise<void> => {
     const asset = stale[i++];
     if (!asset) return;
     try {
+      // 动态加载 ECharts（它是最重的依赖）：先让列表画出来，再补缩略图
+      const { renderChartThumbnail } = await import("@/workbench/chartThumbnail");
       const next = renderChartThumbnail(asset.spec);
       if (next && (asset.thumbnailVersion !== THUMBNAIL_VERSION || next !== asset.thumbnail)) {
         ws.setAssetThumbnail(asset.id, next);
@@ -110,9 +111,9 @@ function migrateThumbnails(): void {
     } catch {
       /* 单张渲染失败就保持原图 */
     }
-    setTimeout(step, 30);
+    setTimeout(() => void step(), 30);
   };
-  setTimeout(step, 60);
+  setTimeout(() => void step(), 60);
 }
 
 onMounted(() => {
