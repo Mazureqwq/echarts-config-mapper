@@ -6,6 +6,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import type { Screen } from "@/core/model/types";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
+import { clampInterval, DEFAULT_INTERVAL_SEC } from "@/core/play/playlist";
 import Icon from "@/shared/ui/Icon.vue";
 
 const router = useRouter();
@@ -83,6 +84,37 @@ function openPlay(id: string): void {
 
 function openCharts(): void {
   router.push("/charts");
+}
+
+// ---- 轮播演示 ----
+const playlistOpen = ref(false);
+const playlistPick = ref<string[]>([]);
+const playlistInterval = ref(DEFAULT_INTERVAL_SEC);
+
+function openPlaylist(): void {
+  playlistPick.value = ws.workspace.screens.map((s) => s.id);
+  playlistInterval.value = DEFAULT_INTERVAL_SEC;
+  playlistOpen.value = true;
+}
+
+function togglePlaylistPick(id: string): void {
+  playlistPick.value = playlistPick.value.includes(id)
+    ? playlistPick.value.filter((x) => x !== id)
+    : [...playlistPick.value, id];
+}
+
+/** 按大屏库当前顺序取选中的 id，保证轮播顺序稳定 */
+function orderedPick(): string[] {
+  const picked = new Set(playlistPick.value);
+  return ws.workspace.screens.filter((s) => picked.has(s.id)).map((s) => s.id);
+}
+
+function startPlaylist(): void {
+  const ids = orderedPick();
+  if (!ids.length) return;
+  const interval = clampInterval(playlistInterval.value);
+  playlistOpen.value = false;
+  router.push(`/play/${ids[0]}?list=${ids.join(",")}&interval=${interval}`);
 }
 
 function clampDim(v: number, fallback: number): number {
@@ -210,6 +242,9 @@ function exportWorkspace(): void {
         <button class="library__btn library__btn--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建大屏
         </button>
+        <button v-if="screens.length > 1" class="library__btn" @click="openPlaylist">
+          <Icon name="chart" :size="14" /> 轮播演示
+        </button>
         <button class="library__btn" @click="exportWorkspace">
           <Icon name="download" :size="14" /> 导出全部
         </button>
@@ -288,6 +323,41 @@ function exportWorkspace(): void {
         </div>
       </div>
     </main>
+
+    <ConfirmDialog
+      v-if="playlistOpen"
+      title="轮播演示"
+      message="选中要循环播放的大屏，按设定间隔自动切换（最少 2 块）。"
+      :confirm-text="`开始演示（${orderedPick().length} 块）`"
+      @confirm="startPlaylist"
+      @cancel="playlistOpen = false"
+    >
+      <div class="library__form">
+        <div class="library__play-list">
+          <label
+            v-for="s in screens"
+            :key="s.id"
+            class="library__play-row"
+            :class="{ active: playlistPick.includes(s.id) }"
+          >
+            <input
+              type="checkbox"
+              :checked="playlistPick.includes(s.id)"
+              @change="togglePlaylistPick(s.id)"
+            />
+            <span class="library__play-name">{{ s.name }}</span>
+            <span class="library__play-meta">{{ s.canvas.width }} × {{ s.canvas.height }}</span>
+          </label>
+        </div>
+        <label class="library__field">
+          切换间隔（秒）
+          <input v-model.number="playlistInterval" type="number" min="3" max="600" step="1" />
+        </label>
+        <div class="library__play-note">
+          演示中可用 ← / → 手动切屏，空格暂停/继续，Esc 返回工作台。
+        </div>
+      </div>
+    </ConfirmDialog>
 
     <ConfirmDialog
       v-if="confirmingScreen"
@@ -603,6 +673,41 @@ function exportWorkspace(): void {
 }
 .library__danger:hover {
   color: var(--cf-danger) !important;
+}
+.library__play-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.library__play-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.library__play-row.active {
+  border-color: var(--cf-primary);
+  background: color-mix(in srgb, var(--cf-primary) 8%, transparent);
+}
+.library__play-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library__play-meta {
+  color: var(--cf-text-2);
+  font-size: 11px;
+}
+.library__play-note {
+  font-size: 11px;
+  color: var(--cf-text-2);
+  line-height: 1.5;
 }
 .library__form {
   display: flex;
