@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import CanvasStage from "@/workbench/CanvasStage.vue";
@@ -8,11 +8,48 @@ import InspectorPanel from "@/workbench/InspectorPanel.vue";
 import TopBar from "@/workbench/TopBar.vue";
 import ShortcutsHelp from "@/workbench/ShortcutsHelp.vue";
 import { snapshotStage } from "@/workbench/stageThumbnail";
+import { LiveExecutor } from "@/core/live/liveExecutor";
 
 const props = defineProps<{ id: string }>();
 const ws = useWorkspaceStore();
 const doc = useDocumentStore();
 const stageWrap = ref<HTMLDivElement | null>(null);
+
+// ---- 实时数据：编辑期也保持拉取，否则配置完看不到效果 ----
+let executor: LiveExecutor | null = null;
+
+/** 数据源配置指纹：增删图表、改地址/间隔时才重新挂载 */
+const liveSignature = computed(() =>
+  doc.items
+    .filter((i) => i.kind === "chart" && i.spec.source)
+    .map((i) => {
+      const s = i.kind === "chart" ? i.spec.source : undefined;
+      return `${i.id}:${s?.url ?? ""}:${s?.intervalSec ?? 0}:${s?.dataPath ?? ""}`;
+    })
+    .join("|")
+);
+
+function syncLive(): void {
+  executor?.dispose();
+  executor = null;
+  const live = doc.items.filter((i) => i.kind === "chart" && i.spec.source);
+  if (!live.length) return;
+  executor = new LiveExecutor();
+  for (const item of live) {
+    if (item.kind !== "chart" || !item.spec.source) continue;
+    executor.register(item.id, item.spec.source, (u) => {
+      void doc.applyLiveUpdate(u.id, u.data, {
+        stale: u.stale,
+        error: u.error,
+        updatedAt: u.updatedAt,
+      });
+    });
+  }
+  void executor.tick();
+}
+
+watch(liveSignature, syncLive);
+watch(() => doc.currentScreenId, syncLive);
 
 onMounted(() => {
   ws.load();
@@ -24,6 +61,7 @@ onMounted(() => {
   const target = ws.workspace.screens.find((s) => s.id === props.id);
   doc.currentScreenId = target ? target.id : ws.workspace.screens[0].id;
   doc.initHistory();
+  syncLive();
 });
 
 async function refreshThumbnail(): Promise<void> {
@@ -38,6 +76,8 @@ async function refreshThumbnail(): Promise<void> {
 }
 
 onBeforeUnmount(() => {
+  executor?.dispose();
+  executor = null;
   void refreshThumbnail();
 });
 </script>

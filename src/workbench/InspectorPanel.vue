@@ -12,6 +12,7 @@ import StylePanel from "./panels/StylePanel.vue";
 import ScreenPanel from "./panels/ScreenPanel.vue";
 import ChartConfigPanel from "./panels/ChartConfigPanel.vue";
 import DataTablePanel from "./panels/DataTablePanel.vue";
+import LiveSourcePanel from "./panels/LiveSourcePanel.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import type { AlignMode } from "@/stores/documentStore";
 
@@ -185,6 +186,10 @@ function confirmSaveAsset(): void {
         <div class="inspector__section">
           <DataTablePanel :item="focusItem" @change-data="(data) => onChartData(focusItem!.id, data)" />
         </div>
+        <div class="inspector__section">
+          <div class="inspector__section-title">实时数据</div>
+          <LiveSourcePanel :item="focusItem" />
+        </div>
       </div>
     </template>
 
@@ -275,6 +280,10 @@ function confirmSaveAsset(): void {
           </div>
           <div class="inspector__section">
             <DataTablePanel :item="single" @change-data="(data) => onChartData(single!.id, data)" />
+          </div>
+          <div class="inspector__section">
+            <div class="inspector__section-title">实时数据</div>
+            <LiveSourcePanel :item="single" />
           </div>
         </template>
       </div>
