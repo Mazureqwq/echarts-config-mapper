@@ -16,9 +16,9 @@
 |---|---|---|
 | T1 资产元信息与规范化 | 已完成（`639dacf`） | `category/tags/defaultSize` 可选字段 + 规范化兜底 + 单测 |
 | T2 保存为资产 / 放置副本 | 已完成（`da552bc`） | `saveChartAsAsset`、`placeAsset`、`renameWithSuffix`、`duplicateAsset/updateAssetMeta/removeAsset` |
-| T3 图表资产库页 `/charts` | 待做 | |
-| T4 左栏图表库 tab 与拖入副本 | 待做 | 数据层已就绪，仅需 UI 与拖放接线 |
-| T5 图表聚焦编辑与类型切换 | 待做 | `changeChartType` 已在 store 中可用 |
+| T3 图表资产库页 `/charts` | 已完成（`14b2c53`） | 检索/编辑信息/复制/导出/删除 + 拖拽源；大屏库顶部加导航 |
+| T4 左栏图表库 tab 与拖入副本 | 已完成（`65cecb4`） | `AssetLibraryPanel` + `ASSET_DND_MIME` → `doc.placeAsset` |
+| T5 图表聚焦编辑与类型切换 | 已完成（`825d85f`） | 聚焦编辑基线已有（双击 + Esc）；补类型下拉（二次确认）与「保存到图表库」（含缩略图） |
 | T6 对齐与等距分布 | 已在基线实现 | `documentStore.alignDistribute` + `CanvasStage/InspectorPanel` 工具条，待走查补测 |
 | T7 视图快捷键与保存入口 | 待做 | 缩放/平移基线已有 |
 | T8 质量门与文档同步 | 进行中 | 当前 89 用例通过、typecheck 0 error |
@@ -149,14 +149,14 @@
 
 **Interfaces:** 消费 T1/T2 的 `workspaceStore.duplicateAsset/updateAssetMeta/removeAsset`、`exportJson`；产出路由 `charts`。
 
-- [ ] **Step 1: 实现**
+- [x] **Step 1: 实现**
   - 卡片网格：缩略图（无则显示图表类型名）、名称、类型、分类/标签 chips。
   - 工具栏：「搜索」（名称/标签包含匹配，大小写不敏感）、「分类」select（全部 + 6 类 + 未分类）、标签 chips 筛选。
   - 卡片操作：编辑信息（名称/分类/标签）、复制、导出 JSON、删除（`ConfirmDialog` 确认）。
   - 空态：「还没有图表资产，先在某个大屏里做一张图再保存到图表库」。
   - 拖拽源：卡片 `draggable`，`dragover` 时设置 `dataTransfer.setData("application/x-chartforge-asset", asset.id)`。
-- [ ] **Step 2: 验证** — `pnpm typecheck` + `pnpm build`；手动：搜索、筛选、复制、改名、删除均生效；`/charts` 直达刷新不 404（hash 路由）。
-- [ ] **Step 3: Commit** — `git commit -m "feat: 图表资产库页面（/charts）——检索、编辑信息、复制、删除、拖拽源"`
+- [x] **Step 2: 验证** — `pnpm typecheck` + `pnpm build`；手动：搜索、筛选、复制、改名、删除均生效；`/charts` 直达刷新不 404（hash 路由）。
+- [x] **Step 3: Commit** — `git commit -m "feat: 图表资产库页面（/charts）——检索、编辑信息、复制、删除、拖拽源"`
 
 ---
 
@@ -166,12 +166,12 @@
 
 **Interfaces:** 消费 `doc.placeAsset(assetId, frame)`；`DROP_MIME_ASSET = "application/x-chartforge-asset"`。
 
-- [ ] **Step 1: 实现**
+- [x] **Step 1: 实现**
   - `LeftPanel` TABS 增 `{ key: "assets", label: "图表库" }`，顺序：图表类型 / 图表库 / 素材 / 图层。
   - `AssetLibraryPanel`：搜索框 + 分类/标签筛选 + 紧凑列表（缩略图 48×48 + 名称 + 类型），`dragstart` 写 `DROP_MIME_ASSET`，双击 = 居中放置。
   - `CanvasStage.onDrop`：识别 `DROP_MIME_ASSET` → 以落点为中心换算 frame → `doc.placeAsset(id, frame)`；拖拽中显示半透明预览（沿用现有预览层）。
-- [ ] **Step 2: 验证** — 手动：拖入 3 个资产分别落位正确、落点靠边被 clamp、撤销可回退；`pnpm typecheck` + `pnpm build`。
-- [ ] **Step 3: Commit** — `git commit -m "feat: 左栏图表库 tab 与拖入大屏生成图表副本"`
+- [x] **Step 2: 验证** — 手动：拖入 3 个资产分别落位正确、落点靠边被 clamp、撤销可回退；`pnpm typecheck` + `pnpm build`。
+- [x] **Step 3: Commit** — `git commit -m "feat: 左栏图表库 tab 与拖入大屏生成图表副本"`
 
 ---
 
@@ -181,12 +181,12 @@
 
 **Interfaces:** 消费 `doc.changeChartType(id, type)`（已存在、当前无调用方）、`ui.focusItemId`（新增 UI 状态）。
 
-- [ ] **Step 1: 实现**
+- [x] **Step 1: 实现**
   - `uiStore` 增 `focusItemId: string | null` 与 `setFocusItem(id)`。
   - 双击图表项 → `setFocusItem(id)`：该图表 z-index 提升、其余元素 `opacity: .35` 且 `pointer-events: none`；点击空白或 `Esc` 清空。
   - Inspector 图表头部增类型下拉（6 类），`change` 时 `doc.changeChartType(id, type)` 并保留 `frame`；有二次确认（会重置参数与数据）。
-- [ ] **Step 2: 验证** — 手动：聚焦后右栏只显示该图表参数；切类型后尺寸不变、数据重置；Esc 退出后选中态保留；`pnpm typecheck` + `pnpm build`。
-- [ ] **Step 3: Commit** — `git commit -m "feat: 图表聚焦编辑与图表类型切换"`
+- [x] **Step 2: 验证** — 手动：聚焦后右栏只显示该图表参数；切类型后尺寸不变、数据重置；Esc 退出后选中态保留；`pnpm typecheck` + `pnpm build`。
+- [x] **Step 3: Commit** — `git commit -m "feat: 图表聚焦编辑与图表类型切换"`
 
 ---
 
