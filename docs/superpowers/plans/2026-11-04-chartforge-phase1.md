@@ -1,6 +1,6 @@
 # ChartForge 第一阶段补齐与对齐 · Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task (本环境无子代理，由主会话按任务顺序执行)。Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task (本环境无子代理，由主会话按任务顺序执行)。Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 按《图表工作台·第一阶段方案》把现有 ChartForge 代码补齐到第一阶段验收标准：画布尺寸可自定义、每画布单图表（UI 约束）、图表库（新建/搜索/分类/标签/演示/复制/导出/删除）、演示模式退出按钮、图片压缩核心化、隐藏导入与实时数据入口，并最小修订方案文档后全量提交。
 
@@ -71,7 +71,7 @@
   - `addScreen(name?: string, canvas?: { width: number; height: number }): Screen`（缺省名 ``图表${screens.length+1}``）
   - `updateScreenMeta(id: string, meta: { name?: string; category?: string; tags?: string[] }): void`
 
-- [ ] **Step 1: 写失败测试**（追加到 `tests/core-model.spec.ts` 与 `tests/stores.spec.ts`）
+- [x] **Step 1: 写失败测试**（追加到 `tests/core-model.spec.ts` 与 `tests/stores.spec.ts`）
 
 ```ts
 // core-model.spec.ts 追加:
@@ -117,12 +117,12 @@ it("updateScreenMeta 更新名称/分类/标签", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: 桥 `run_tests`（`pnpm test`）
 Expected: FAIL——`createScreen 支持自定义画布尺寸` 等 5 个用例报错（`category` 未定义 / 断言不匹配）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
   - `types.ts`：`Screen` 增 `category?: string; tags?: string[];`
   - `schema.ts`：`DEFAULT_SCREEN_NAME` 改 `"未命名图表"`；`createScreen(name, canvas?)` 尺寸取 `{ width: canvas?.width ?? CANVAS_SIZE.width, height: canvas?.height ?? CANVAS_SIZE.height }`；`normalizeScreen` 增：
     ```ts
@@ -135,12 +135,12 @@ Expected: FAIL——`createScreen 支持自定义画布尺寸` 等 5 个用例�
   - `documentStore.ts`：`addScreen(name?, canvas?)` 传 canvas 给 `createScreen`，缺省名 `` `图表${ws.workspace.screens.length + 1}` ``；新增 `updateScreenMeta(id, meta)`：name 走 `setScreenName` 逻辑、category/tags 直接赋值，最后 `commit()`。
   - 修正既有失败断言：`core-model.spec.ts` 中「未命名大屏」断言改为「未命名图表」。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `run_tests` + 桥终端 `pnpm typecheck`（`cd E:\project\github-project\echarts-project` 处执行）
 Expected: 全部 PASS、typecheck 0 错误。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/model/types.ts src/core/model/schema.ts src/stores/documentStore.ts tests/core-model.spec.ts tests/stores.spec.ts
@@ -162,7 +162,7 @@ git commit -m "feat: 画布尺寸可定制与图表元信息（分类/标签）"
   - `changeChartType(id: string, type: ChartType): void`——`item.spec = chartRegistry[type].defaultSpec()`（保留 id/name/frame），`commit()`。
   - `paste()`/`duplicate()` 行为变更：若当前屏已有 `kind==="chart"` 项，则克隆列表过滤掉 chart 项（空列表则直接 return）。
 
-- [ ] **Step 1: 写失败测试**（追加 `tests/stores.spec.ts`）
+- [x] **Step 1: 写失败测试**（追加 `tests/stores.spec.ts`）
 
 ```ts
 it("ensureChart 首次添加、再次调用切换类型不产生第二个图表", () => {
@@ -202,19 +202,19 @@ it("已有图表时 paste/duplicate 不新增图表项", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `run_tests`
 Expected: FAIL——`doc.ensureChart is not a function`。
 
-- [ ] **Step 3: 实现**（documentStore.ts 内，按 Interfaces 签名；`changeChartType`/`ensureChart` 内部复用 `addItem`/`commit` 既有动作）
+- [x] **Step 3: 实现**（documentStore.ts 内，按 Interfaces 签名；`changeChartType`/`ensureChart` 内部复用 `addItem`/`commit` 既有动作）
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `run_tests` + `pnpm typecheck`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/stores/documentStore.ts tests/stores.spec.ts
@@ -239,7 +239,7 @@ git commit -m "feat: 单图约束核心——ensureChart 类型切换与复制�
   - `export function encodeJpeg(source: { width: number; height: number } | HTMLImageElement | HTMLCanvasElement, opts?: EncodeOptions): string`——按 targetSize 绘制一次，按 `[0.85, 0.7, 0.55, 0.4]` 质量阶梯 `toDataURL("image/jpeg", q)`，返回首个 ≤ maxBytes 的结果，否则返回最后一级（保证收敛）。
   - `export async function compressImageFile(file: File, opts?: EncodeOptions): Promise<string>`——`createImageBitmap(file)` → `encodeJpeg(bitmap, opts)`（UI 薄封装）。
 
-- [ ] **Step 1: 写失败测试**（新建 `tests/core-image-compress.spec.ts`）
+- [x] **Step 1: 写失败测试**（新建 `tests/core-image-compress.spec.ts`）
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
@@ -299,21 +299,21 @@ describe("storage/imageCompress", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `run_tests`
 Expected: FAIL——模块不存在。
 
-- [ ] **Step 3: 实现**（按 Interfaces；encodeJpeg 内 `const { width, height } = "naturalWidth" in source ? { width: source.naturalWidth, height: source.naturalHeight } : source;`）
+- [x] **Step 3: 实现**（按 Interfaces；encodeJpeg 内 `const { width, height } = "naturalWidth" in source ? { width: source.naturalWidth, height: source.naturalHeight } : source;`）
 
-- [ ] **Step 4: 改 StylePanel.vue**：删内联 `compressImage`，改 `import { compressImageFile } from "@/core/storage/imageCompress";` 并在 `onPickImage` 中调用。
+- [x] **Step 4: 改 StylePanel.vue**：删内联 `compressImage`，改 `import { compressImageFile } from "@/core/storage/imageCompress";` 并在 `onPickImage` 中调用。
 
-- [ ] **Step 5: 跑测试确认通过**
+- [x] **Step 5: 跑测试确认通过**
 
 Run: `run_tests` + `pnpm typecheck`
 Expected: 全部 PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/core/storage/imageCompress.ts src/workbench/panels/StylePanel.vue tests/core-image-compress.spec.ts
@@ -339,13 +339,13 @@ git commit -m "feat: 图片压缩核心化（长边2048、JPEG≤2MB、质量阶
   - 「编辑信息」对话框：名称、分类 select（未分类+6 类）、标签文本（中文逗号/空格分隔，去空）。
   - 空态文案：「还没有图表，点击「新建图表」开始制作」。
 
-- [ ] **Step 1: 实现**（单文件改写；样式沿用既有 `.library__*` 类，新增筛选栏与对话框样式）
-- [ ] **Step 2: 验证**
+- [x] **Step 1: 实现**（单文件改写；样式沿用既有 `.library__*` 类，新增筛选栏与对话框样式）
+- [x] **Step 2: 验证**
 
 Run: `pnpm typecheck` + `pnpm build`
 然后手动走查（桥浏览器或本地 dev）：新建图表（选类型+尺寸→进入编辑且画布内已有对应类型图表）；搜索「销售」命中带该标签的卡片；分类筛选；复制生成「X 副本」；编辑信息保存后卡片显示 chips；演示进入全屏；导出下载 JSON；删除需确认；无导入按钮。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/views/LibraryView.vue
@@ -371,13 +371,13 @@ git commit -m "feat: 图表库页面——新建图表、搜索分类标签、�
   - `ScreenPanel.vue`: 「画布尺寸」固定文本改为两个 number 输入（min 320 max 7680）→ `doc.setCanvas({ width, height })`；「大屏名称」→「图表名称」。
   - `WorkbenchView.vue`: 空库默认 `doc.addScreen("我的图表")`。
 
-- [ ] **Step 1: 实现**（逐文件小改）
-- [ ] **Step 2: 验证**
+- [x] **Step 1: 实现**（逐文件小改）
+- [x] **Step 2: 验证**
 
 Run: `pnpm typecheck` + `pnpm build`
 手动走查：左栏三 tab 正常；画布已有图表时拖第二个图表无效、点击类型 chip 切换类型且不新增；复制粘贴图表不产生双图（T2 已保）；右侧检查器无「实时数据」；数据面板无「保存为资产」；画布尺寸可改且舞台立即生效；顶部占位文案正确。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/workbench/LeftPanel.vue src/workbench/ElementsPanel.vue src/workbench/CanvasStage.vue src/workbench/InspectorPanel.vue src/workbench/panels/DataTablePanel.vue src/workbench/TopBar.vue src/workbench/panels/ScreenPanel.vue src/views/WorkbenchView.vue
@@ -395,19 +395,19 @@ git commit -m "feat: 编辑页对齐——单图约束 UI、面板文案、隐�
 - Consumes: `router.push(\`/workbench/${props.id}\`)`（现有 Esc 逻辑）
 - Produces: 无。
 
-- [ ] **Step 1: 实现**
+- [x] **Step 1: 实现**
   - 增 `const cursorHidden = ref(false);` 与 `let idleTimer: ReturnType<typeof setTimeout> | null = null;`
   - `onMouseMove()`：`cursorHidden=false`，重置 3s 定时器置 `cursorHidden=true`；onMounted 挂 `window.addEventListener("mousemove", onMouseMove)`，首次 3s 后隐藏。
   - 模板增右上角浮动按钮 `.play-view__exit`（`cursorHidden` 时加 `--hidden` 类，CSS `opacity:0; pointer-events:none; transition: opacity .3s`）文案「退出演示 (Esc)」，点击 `router.push(\`/workbench/${props.id}\`)`。
   - onBeforeUnmount 清理 `mousemove` 监听与定时器。
   - 保留 F11 提示与既有 fit 逻辑（等比缩放、居中、黑底已实现，不改）。
 
-- [ ] **Step 2: 验证**
+- [x] **Step 2: 验证**
 
 Run: `pnpm typecheck` + `pnpm build`
 手动走查：打开演示→黑底居中等比缩放；Esc 退出；右上角按钮点击退出；鼠标闲置 3s 按钮淡出、移动鼠标重现；退出后编辑状态保留。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/views/PlayView.vue
@@ -421,14 +421,14 @@ git commit -m "feat: 演示模式右上角退出按钮（鼠标闲置隐藏）"
 **Files:**
 - Modify: `docs/图表工作台-第一阶段方案.md`
 
-- [ ] **Step 1:** 桥 `read_file` 拿当前 version（作 expected_version）。
-- [ ] **Step 2:** `edit_file`（三处）
+- [x] **Step 1:** 桥 `read_file` 拿当前 version（作 expected_version）。
+- [x] **Step 2:** `edit_file`（三处）
   1. §2.2 `- **导入导出**：后置。` → `- **导入**：后置（单图 JSON / 工作区 JSON 导出保留）。`
   2. §5.3 图表库操作行 → `| 图表库操作 | 卡片：打开编辑、演示、复制、导出（JSON）、编辑信息（名称/分类/标签）、删除（需确认） |`
   3. §7「待细化（建议）」块整体替换为：`**已确认定稿：** 退出方式：Esc 键或点击屏幕右上角浮动退出按钮（鼠标闲置约 3 秒自动隐藏）；画布等比缩放适配屏幕并居中，比例不一致时周围留黑边；不设播放控制。`
   4. §10 待跟进：1/2/3 项标注「已闭环（第一阶段实施完成）」；保留 4/5。
-- [ ] **Step 3:** `git diff docs/图表工作台-第一阶段方案.md` 核对仅上述变更。
-- [ ] **Step 4: Commit（随 T8 一起提交）**
+- [x] **Step 3:** `git diff docs/图表工作台-第一阶段方案.md` 核对仅上述变更。
+- [x] **Step 4: Commit（随 T8 一起提交）**
 
 ---
 
@@ -437,20 +437,20 @@ git commit -m "feat: 演示模式右上角退出按钮（鼠标闲置隐藏）"
 **Files:**
 - 无代码变更；涉及 `docs/superpowers/plans/*.md`（4 个已删，本计划新增）、`docs/图表工作台-第一阶段方案.md`。
 
-- [ ] **Step 1: 质量门**
+- [x] **Step 1: 质量门**
 
 Run: `pnpm typecheck` → Expected: 0 error
 Run: `run_tests`（`pnpm test`） → Expected: 全 PASS
 Run: `pnpm build` → Expected: 构建成功产出 dist
 
-- [ ] **Step 2: 提交（当前分支 feature/major-update；不含 `src/assets/screens/`）**
+- [x] **Step 2: 提交（当前分支 feature/major-update；不含 `src/assets/screens/`）**
 
 ```bash
 git add docs
 git commit -m "docs: 第一阶段方案作为唯一规格并清除旧 plans/specs"
 ```
 
-- [ ] **Step 3:** 桥 `finalize_changes`（一次）→ 输出中文执行总结（含验收对照表）。
+- [x] **Step 3:** 桥 `finalize_changes`（一次）→ 输出中文执行总结（含验收对照表）。
 
 ---
 
