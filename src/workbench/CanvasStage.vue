@@ -374,6 +374,18 @@ function onKeyDown(ev: KeyboardEvent): void {
     const dx = ev.key === "ArrowLeft" ? -step : ev.key === "ArrowRight" ? step : 0;
     const dy = ev.key === "ArrowUp" ? -step : ev.key === "ArrowDown" ? step : 0;
     doc.moveBy([...doc.selectedIds], dx, dy);
+  } else if (ctrl && ev.key === "0") {
+    ev.preventDefault();
+    fitToWindow();
+  } else if (ctrl && ev.key === "1") {
+    ev.preventDefault();
+    zoomAtStageCenter(100);
+  } else if (ctrl && (ev.key === "=" || ev.key === "+")) {
+    ev.preventDefault();
+    zoomBy(10);
+  } else if (ctrl && ev.key === "-") {
+    ev.preventDefault();
+    zoomBy(-10);
   } else if (ev.key === "?") {
     ui.setHelpVisible(!ui.helpVisible);
   } else if (ev.key === "Escape") {
