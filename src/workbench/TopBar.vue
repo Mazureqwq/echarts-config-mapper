@@ -5,7 +5,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUiStore } from "@/stores/uiStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
-import { snapshotStagePng } from "@/workbench/stageThumbnail";
+import { snapshotStage, snapshotStagePng } from "@/workbench/stageThumbnail";
 import Icon from "@/shared/ui/Icon.vue";
 
 const props = defineProps<{ screenId: string }>();
@@ -38,10 +38,19 @@ function onRename(ev: Event): void {
   doc.setScreenName((ev.target as HTMLInputElement).value);
 }
 
-function manualSave(): void {
+async function manualSave(): Promise<void> {
+  const el = document.querySelector(".canvas-stage__canvas") as HTMLElement | null;
   try {
+    if (el && screen.value) {
+      try {
+        screen.value.thumbnail = await snapshotStage(el);
+      } catch {
+        /* 缩略图生成失败不阻塞保存 */
+      }
+    }
     ws.save();
     emit("saved");
+    flash("已保存到大屏库");
   } catch {
     /* saveState 已置 error */
   }
@@ -127,8 +136,8 @@ function goPlay(): void {
     </div>
 
     <div class="topbar__right">
-      <button class="topbar__btn" title="保存并刷新缩略图" @click="manualSave">
-        <Icon name="check" :size="15" /> 保存
+      <button class="topbar__btn" title="保存并刷新缩略图（大屏库卡片预览）" @click="manualSave">
+        <Icon name="check" :size="15" /> 保存到大屏库
       </button>
       <button class="topbar__btn" title="导出 JSON" @click="exportJsonFile">
         <Icon name="download" :size="15" /> JSON
