@@ -334,6 +334,55 @@ describe("stores/documentStore", () => {
     expect(item.frame).toMatchObject({ x: 1500, y: 900, w: 300, h: 150 });
   });
 
+  it("saveChartAsAsset 保存图表为资产且之后互不影响", () => {
+    const { doc, screen } = seedScreen();
+    const chartId = doc.addChart("line");
+    const assetId = doc.saveChartAsAsset(chartId, {
+      name: "销售趋势",
+      category: "折线图",
+      tags: ["销售"],
+    });
+
+    expect(assetId).toBeTruthy();
+    const asset = useWorkspaceStore().workspace.assets.find((a) => a.id === assetId)!;
+    expect(asset.name).toBe("销售趋势");
+    expect(asset.category).toBe("折线图");
+    expect(asset.tags).toEqual(["销售"]);
+    expect(asset.defaultSize).toEqual({ w: 400, h: 300 });
+
+    const chart = screen.items.find((i) => i.id === chartId) as ChartItem;
+    expect(asset.spec).not.toBe(chart.spec);
+    chart.spec.type = "bar";
+    expect(asset.spec.type).toBe("line");
+  });
+
+  it("placeAsset 生成副本、重名追加副本序号并落在画布内", () => {
+    const { doc, screen } = seedScreen();
+    const chartId = doc.addChart("line");
+    const assetId = doc.saveChartAsAsset(chartId, { name: "销量" })!;
+
+    const a = doc.placeAsset(assetId);
+    const b = doc.placeAsset(assetId, { x: 1800, y: 1000 });
+    const placed = screen.items.filter((i) => i.id === a || i.id === b);
+
+    expect(a).toBeTruthy();
+    expect(b).toBeTruthy();
+    expect(a).not.toBe(b);
+    expect(placed).toHaveLength(2);
+    expect(placed.map((i) => i.name)).toEqual(["销量", "销量 副本2"]);
+    for (const item of placed) {
+      expect(item.kind).toBe("chart");
+      expect(item.frame.x).toBeGreaterThanOrEqual(0);
+      expect(item.frame.y).toBeGreaterThanOrEqual(0);
+      expect(item.frame.x + item.frame.w).toBeLessThanOrEqual(screen.canvas.width);
+      expect(item.frame.y + item.frame.h).toBeLessThanOrEqual(screen.canvas.height);
+    }
+
+    const source = useWorkspaceStore().workspace.assets.find((x) => x.id === assetId)!;
+    (placed[0] as ChartItem).spec.type = "pie";
+    expect(source.spec.type).toBe("line");
+  });
+
 });
 
 describe("stores/uiStore", () => {

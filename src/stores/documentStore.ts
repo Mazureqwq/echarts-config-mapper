@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { markRaw } from "vue";
 import { History, HISTORY_LIMIT } from "@/core/history/history";
-import { createItem, createScreen } from "@/core/model/schema";
+import { DEFAULT_FRAME, createItem, createScreen } from "@/core/model/schema";
 import { deepMerge } from "@/core/chart/optionBuilder";
 import { chartRegistry } from "@/core/chart/registry";
 import { rotateFrame } from "@/core/geometry/transform";
@@ -48,6 +48,16 @@ function newId(): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+/** 重名时追加「副本N」序号：X → X 副本2 → X 副本3 */
+function renameWithSuffix(base: string, existing: string[]): string {
+  const name = base.trim() || "图表";
+  const taken = new Set(existing);
+  if (!taken.has(name)) return name;
+  let index = 2;
+  while (taken.has(`${name} 副本${index}`)) index += 1;
+  return `${name} 副本${index}`;
 }
 
 function clampFrameToCanvas(frame: Frame, width: number, height: number): Frame {
@@ -458,19 +468,51 @@ export const useDocumentStore = defineStore("document", {
       this.commit();
     },
     saveAsAsset(id: string) {
-      const item = this.items.find((i) => i.id === id);
-      if (!item || item.kind !== "chart") return;
+      this.saveChartAsAsset(id, {});
+    },
+    /** 把大屏里的图表项保存为图表资产（深拷贝副本，返回资产 id） */
+    saveChartAsAsset(
+      itemId: string,
+      meta: { name?: string; category?: string; tags?: string[]; thumbnail?: string }
+    ): string | null {
+      const item = this.items.find((i) => i.id === itemId);
+      if (!item || item.kind !== "chart") return null;
       const ws = useWorkspaceStore();
       const now = Date.now();
-      ws.workspace.assets.push({
+      const asset: ChartAsset = {
         id: newId(),
-        name: item.name || "未命名图表",
-        thumbnail: "",
+        name: meta.name?.trim() || item.name || "未命名图表",
+        thumbnail: meta.thumbnail ?? "",
         spec: deepClone(item.spec),
+        ...(meta.category !== undefined ? { category: meta.category } : {}),
+        ...(meta.tags !== undefined ? { tags: [...meta.tags] } : {}),
+        defaultSize: { w: item.frame.w, h: item.frame.h },
         createdAt: now,
         updatedAt: now,
-      });
+      };
+      ws.workspace.assets.push(asset);
       this.commit();
+      return asset.id;
+    },
+    /** 把图表资产放置到大屏中，生成独立副本（新 id + 深拷贝 spec） */
+    placeAsset(assetId: string, frame?: Partial<Frame>): string {
+      const ws = useWorkspaceStore();
+      const asset = ws.workspace.assets.find((a) => a.id === assetId);
+      const screen = this.currentScreen;
+      if (!asset || !screen) return "";
+      const size = frame?.w !== undefined && frame?.h !== undefined
+        ? { w: frame.w, h: frame.h }
+        : asset.defaultSize ?? { w: DEFAULT_FRAME.w, h: DEFAULT_FRAME.h };
+      const item = createItem("chart", { ...size, ...frame }, deepClone(asset.spec)) as ChartItem;
+      item.name = renameWithSuffix(asset.name, screen.items.map((i) => i.name));
+      if (frame?.x === undefined) {
+        item.frame.x = Math.round((screen.canvas.width - item.frame.w) / 2);
+      }
+      if (frame?.y === undefined) {
+        item.frame.y = Math.round((screen.canvas.height - item.frame.h) / 2);
+      }
+      this.addItem(item);
+      return item.id;
     },
     upsertAsset(asset: ChartAsset) {
       const ws = useWorkspaceStore();
