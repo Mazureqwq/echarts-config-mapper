@@ -467,6 +467,30 @@ describe("stores/documentStore", () => {
     expect(source.spec.type).toBe("line");
   });
 
+  it("placeAsset 记录来源图表 id（大屏里可回溯、可跳回源图表）", () => {
+    const { doc, screen } = seedScreen();
+    const assetId = useWorkspaceStore().createAsset("bar", "渠道分布");
+    const itemId = doc.placeAsset(assetId);
+    const item = screen.items.find((i) => i.id === itemId) as ChartItem;
+    expect(item.sourceAssetId).toBe(assetId);
+  });
+
+  it("批量删除 / 批量改分类：只影响选中的图表", () => {
+    const ws = useWorkspaceStore();
+    ws.load();
+    const a = ws.createAsset("line", "A");
+    const b = ws.createAsset("bar", "B");
+    const c = ws.createAsset("pie", "C");
+
+    ws.setAssetsCategory([a, c], "经营看板");
+    expect(ws.assetById(a)!.category).toBe("经营看板");
+    expect(ws.assetById(b)!.category).toBeUndefined();
+    expect(ws.assetById(c)!.category).toBe("经营看板");
+
+    ws.removeAssets([a, c, "不存在的 id"]);
+    expect(ws.assets.map((x) => x.id)).toEqual([b]);
+  });
+
   it("alignDistribute 左对齐以最左元素为准、右对齐以最右元素为准", () => {
     const { doc, screen } = seedScreen();
     const a = createItem("shape", { x: 100, y: 100, w: 200, h: 100 });

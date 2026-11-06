@@ -239,7 +239,27 @@ function exportWorkspace(): void {
 
       <div v-if="screens.length === 0" class="library__empty">
         <Icon name="chart" :size="42" />
-        <p>还没有大屏，点击「新建大屏」开始制作</p>
+        <p class="library__empty-title">还没有大屏。大屏是「拼装容器」，需要先在图表库里准备好图表：</p>
+        <ol class="library__steps">
+          <li>
+            <strong>第 1 步 · 去图表库做图表</strong>
+            {{ ws.assets.length > 0 ? `已有 ${ws.assets.length} 张图表可用，可以直接拼装。` : "新建图表并调好类型、参数和数据。" }}
+          </li>
+          <li>
+            <strong>第 2 步 · 新建大屏并拖入图表</strong>
+            在大屏画布里把左侧「图表库」的卡片拖到画布上组装、排版。
+          </li>
+        </ol>
+        <div class="library__empty-ops">
+          <button
+            v-if="ws.assets.length === 0"
+            class="library__btn library__btn--primary"
+            @click="openCharts"
+          >
+            去图表库
+          </button>
+          <button class="library__btn" @click="openCreate">新建大屏</button>
+        </div>
       </div>
       <div v-else-if="filteredScreens.length === 0" class="library__empty">
         <Icon name="chart" :size="42" />
@@ -473,6 +493,38 @@ function exportWorkspace(): void {
 }
 .library__empty p {
   margin-top: 12px;
+}
+.library__empty-title {
+  font-size: 14px;
+  color: var(--cf-text);
+}
+.library__steps {
+  list-style: none;
+  margin: 0 auto 20px;
+  padding: 0;
+  max-width: 520px;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+.library__steps li {
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.library__steps strong {
+  display: block;
+  color: var(--cf-text);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.library__empty-ops {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
 }
 .library__grid {
   display: grid;

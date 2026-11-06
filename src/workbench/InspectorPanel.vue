@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUiStore } from "@/stores/uiStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import type { ChartData, ChartItem, ChartType, Frame, ScreenItem } from "@/core/model/types";
 import { renderChartThumbnail } from "./chartThumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
@@ -15,12 +17,29 @@ import type { AlignMode } from "@/stores/documentStore";
 
 const doc = useDocumentStore();
 const ui = useUiStore();
+const ws = useWorkspaceStore();
+const router = useRouter();
+
+/** 大屏图表是图表库资产的独立副本，这里只做「来源」回溯 */
+function sourceAsset(item: ChartItem): { id: string; name: string } | null {
+  if (!item.sourceAssetId) return null;
+  const a = ws.assetById(item.sourceAssetId);
+  return a ? { id: a.id, name: a.name } : null;
+}
+
+function openSource(item: ChartItem): void {
+  const a = sourceAsset(item);
+  if (a) router.push(`/charts/${a.id}`);
+}
 
 const selected = computed<ScreenItem[]>(() =>
   doc.items.filter((i) => doc.selectedIds.includes(i.id))
 );
 const single = computed<ScreenItem | null>(() =>
   selected.value.length === 1 ? selected.value[0] : null
+);
+const singleChart = computed<ChartItem | null>(() =>
+  single.value && single.value.kind === "chart" ? single.value : null
 );
 const focusItem = computed<ChartItem | null>(() => {
   if (!ui.editingId) return null;
@@ -131,6 +150,13 @@ function confirmSaveAsset(): void {
         <button class="inspector__back" @click="ui.setEditing(null)">返回（Esc）</button>
       </div>
       <div class="inspector__body">
+        <div v-if="focusItem.sourceAssetId" class="inspector__source">
+          <template v-if="sourceAsset(focusItem)">
+            <span class="inspector__source-label">来源：{{ sourceAsset(focusItem)!.name }}</span>
+            <button class="inspector__source-btn" @click="openSource(focusItem)">打开源图表</button>
+          </template>
+          <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
+        </div>
         <div class="inspector__section">
           <div class="inspector__section-title">图表</div>
           <div class="inspector__row">
@@ -205,7 +231,14 @@ function confirmSaveAsset(): void {
         </button>
       </div>
       <div class="inspector__body">
-        <div class="inspector__section">
+        <div v-if="singleChart && singleChart.sourceAssetId" class="inspector__source">
+          <template v-if="sourceAsset(singleChart)">
+            <span class="inspector__source-label">来源：{{ sourceAsset(singleChart)!.name }}</span>
+            <button class="inspector__source-btn" @click="openSource(singleChart)">打开源图表</button>
+          </template>
+          <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
+        </div>
+              <div class="inspector__section">
           <div class="inspector__section-title">位置尺寸</div>
           <FramePanel :frame="single.frame" @change="onFrameChange" />
         </div>
@@ -298,6 +331,37 @@ function confirmSaveAsset(): void {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+.inspector__source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--cf-border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--cf-text-2);
+}
+.inspector__source-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+.inspector__source-btn {
+  border: none;
+  background: transparent;
+  color: var(--cf-primary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.inspector__source-missing {
+  color: var(--cf-text-2);
+  opacity: 0.8;
 }
 .inspector__head {
   display: flex;

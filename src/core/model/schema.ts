@@ -193,7 +193,12 @@ function normalizeItem(raw: unknown): ScreenItem | null {
   };
   switch (kind) {
     case "chart":
-      return { ...base, kind: "chart", spec: normalizeSpec(raw.spec) } satisfies ChartItem;
+      return {
+        ...base,
+        kind: "chart",
+        spec: normalizeSpec(raw.spec),
+        ...(typeof raw.sourceAssetId === "string" ? { sourceAssetId: raw.sourceAssetId } : {}),
+      } satisfies ChartItem;
     case "text":
       return {
         ...base,

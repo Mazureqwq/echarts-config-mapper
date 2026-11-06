@@ -35,6 +35,56 @@ const editTagsText = ref("");
 
 const confirming = ref<ChartAsset | null>(null);
 
+// ---- 批量操作 ----
+const selectedIds = ref<string[]>([]);
+const selectedSet = computed(() => new Set(selectedIds.value));
+const selectedCount = computed(() => selectedIds.value.length);
+const batchCategory = ref("");
+const batchDeleteOpen = ref(false);
+
+function isSelected(id: string): boolean {
+  return selectedSet.value.has(id);
+}
+
+function toggleSelect(id: string): void {
+  selectedIds.value = isSelected(id)
+    ? selectedIds.value.filter((x) => x !== id)
+    : [...selectedIds.value, id];
+}
+
+function clearSelection(): void {
+  selectedIds.value = [];
+  batchCategory.value = "";
+}
+
+const allFilteredSelected = computed(
+  () =>
+    filteredAssets.value.length > 0 &&
+    filteredAssets.value.every((a) => selectedSet.value.has(a.id))
+);
+
+function toggleSelectAll(): void {
+  selectedIds.value = allFilteredSelected.value ? [] : filteredAssets.value.map((a) => a.id);
+}
+
+/** 选中项被删除后可能残留在选择集里，同步剔除 */
+function pruneSelection(): void {
+  const alive = new Set(ws.assets.map((a) => a.id));
+  selectedIds.value = selectedIds.value.filter((id) => alive.has(id));
+}
+
+function applyBatchCategory(): void {
+  if (!selectedIds.value.length) return;
+  ws.setAssetsCategory(selectedIds.value, batchCategory.value);
+  batchCategory.value = "";
+}
+
+function confirmBatchDelete(): void {
+  ws.removeAssets(selectedIds.value);
+  batchDeleteOpen.value = false;
+  clearSelection();
+}
+
 const createOpen = ref(false);
 const createName = ref("");
 const createType = ref<ChartType>("line");
@@ -155,6 +205,7 @@ function askDelete(asset: ChartAsset): void {
 function doDelete(): void {
   if (confirming.value) ws.removeAsset(confirming.value.id);
   confirming.value = null;
+  pruneSelection();
 }
 
 function download(name: string, json: string): void {
@@ -199,6 +250,14 @@ function goScreens(): void {
 
     <main class="charts__body">
       <div v-if="assets.length > 0" class="charts__filters">
+        <label class="charts__check" title="全选当前筛选结果">
+          <input
+            type="checkbox"
+            :checked="allFilteredSelected"
+            @change="toggleSelectAll"
+          />
+          <span>全选</span>
+        </label>
         <input v-model="search" class="charts__search" type="search" placeholder="搜索名称或标签" />
         <select v-model="categoryFilter" class="charts__select">
           <option value="">全部分类</option>
@@ -218,12 +277,39 @@ function goScreens(): void {
         </div>
       </div>
 
+      <div v-if="selectedCount > 0" class="charts__batch">
+        <span class="charts__batch-count">已选 {{ selectedCount }} 项</span>
+        <label class="charts__batch-field">
+          分类
+          <select v-model="batchCategory" class="charts__select">
+            <option value="">未分类</option>
+            <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
+        <button class="charts__btn" @click="applyBatchCategory">应用分类</button>
+        <button class="charts__btn charts__btn--danger" @click="batchDeleteOpen = true">批量删除</button>
+        <button class="charts__btn charts__btn--ghost" @click="clearSelection">取消选择</button>
+      </div>
+
       <div v-if="assets.length === 0" class="charts__empty">
         <Icon name="chart" :size="42" />
-        <p>还没有图表，点击「新建图表」开始制作</p>
-        <button class="charts__btn charts__btn--primary" @click="openCreate">
-          <Icon name="plus" :size="14" /> 新建图表
-        </button>
+        <p class="charts__empty-title">图表库还是空的。流程是「先做图表，再拼大屏」：</p>
+        <ol class="charts__steps">
+          <li>
+            <strong>第 1 步 · 新建图表</strong>
+            选类型、改参数、填数据，保存后这里会生成带缩略图的卡片。
+          </li>
+          <li>
+            <strong>第 2 步 · 拼进大屏</strong>
+            打开「大屏库」新建大屏，把卡片拖到画布上组装。
+          </li>
+        </ol>
+        <div class="charts__empty-ops">
+          <button class="charts__btn charts__btn--primary" @click="openCreate">
+            <Icon name="plus" :size="14" /> 新建第一张图表
+          </button>
+          <button class="charts__btn" @click="goScreens">去大屏库看看</button>
+        </div>
       </div>
       <div v-else-if="filteredAssets.length === 0" class="charts__empty">
         <Icon name="chart" :size="42" />
@@ -237,6 +323,13 @@ function goScreens(): void {
           draggable="true"
           @dragstart="onDragStart($event, asset)"
         >
+          <label class="charts__pick" title="选择" @click.stop>
+            <input
+              type="checkbox"
+              :checked="isSelected(asset.id)"
+              @change="toggleSelect(asset.id)"
+            />
+          </label>
           <div class="charts__thumb" title="点击编辑图表" @click="openEditor(asset)">
             <img v-if="asset.thumbnail" :src="asset.thumbnail" alt="" />
             <div v-else class="charts__thumb-empty">
@@ -266,6 +359,15 @@ function goScreens(): void {
         </div>
       </div>
     </main>
+
+    <ConfirmDialog
+      v-if="batchDeleteOpen"
+      title="批量删除图表"
+      :message="`确定删除选中的 ${selectedCount} 张图表？大屏中已放置的图表是独立副本，不受影响。`"
+      confirm-text="删除"
+      @confirm="confirmBatchDelete"
+      @cancel="batchDeleteOpen = false"
+    />
 
     <ConfirmDialog
       v-if="confirming"
@@ -447,12 +549,106 @@ function goScreens(): void {
 .charts__empty p {
   margin: 12px 0 16px;
 }
+.charts__empty-title {
+  font-size: 14px;
+  color: var(--cf-text);
+}
+.charts__steps {
+  list-style: none;
+  margin: 0 auto 20px;
+  padding: 0;
+  max-width: 520px;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+.charts__steps li {
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.charts__steps strong {
+  display: block;
+  color: var(--cf-text);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.charts__empty-ops {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.charts__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cf-text-2);
+  cursor: pointer;
+  user-select: none;
+}
+.charts__batch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--cf-primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cf-primary) 8%, transparent);
+  font-size: 12px;
+}
+.charts__batch-count {
+  font-weight: 600;
+  color: var(--cf-primary);
+}
+.charts__batch-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cf-text-2);
+}
+.charts__btn--danger {
+  border-color: var(--cf-danger);
+  color: var(--cf-danger);
+}
+.charts__btn--danger:hover {
+  background: color-mix(in srgb, var(--cf-danger) 12%, transparent);
+}
+.charts__btn--ghost {
+  background: transparent;
+  color: var(--cf-text-2);
+}
+.charts__pick {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cf-panel) 85%, transparent);
+  border: 1px solid var(--cf-border);
+  cursor: pointer;
+}
+.charts__pick input {
+  margin: 0;
+  cursor: pointer;
+}
 .charts__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 16px;
 }
 .charts__card {
+  position: relative;
   background: var(--cf-panel);
   border: 1px solid var(--cf-border);
   border-radius: 10px;

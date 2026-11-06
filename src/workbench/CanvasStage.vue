@@ -8,7 +8,7 @@ import { boxSelect } from "@/core/geometry/hit";
 import { snapDelta } from "@/core/geometry/snap";
 import type { SnapCandidate, SnapGuide } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
-import type { ScreenItem, ChartType } from "@/core/model/types";
+import type { ChartItem, ScreenItem, ChartType } from "@/core/model/types";
 import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
@@ -443,15 +443,21 @@ function onDrop(ev: DragEvent): void {
   if (payload.kind === "chart") {
     const type = payload.chartType ?? "line";
     let spec = chartRegistry[type].defaultSpec();
+    let sourceAssetId: string | undefined;
     if (payload.assetId) {
       const asset = useWorkspaceStore().assets.find((a) => a.id === payload.assetId);
-      if (asset) spec = JSON.parse(JSON.stringify(asset.spec));
+      if (asset) {
+        spec = JSON.parse(JSON.stringify(asset.spec));
+        sourceAssetId = asset.id;
+      }
     }
-    item = createItem(
+    const created = createItem(
       "chart",
       { x: Math.round(pt.x - 200), y: Math.round(pt.y - 150) },
       spec
-    );
+    ) as ChartItem;
+    if (sourceAssetId) created.sourceAssetId = sourceAssetId;
+    item = created;
   } else if (payload.kind === "text") {
     item = createItem("text", { x: Math.round(pt.x - 80), y: Math.round(pt.y - 16) });
   } else if (payload.kind === "image") {

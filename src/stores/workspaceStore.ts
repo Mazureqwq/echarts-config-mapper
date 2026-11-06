@@ -164,6 +164,27 @@ export const useWorkspaceStore = defineStore("workspace", {
       this.workspace.assets.splice(idx, 1);
       this.save();
     },
+    /** 批量删除（大屏里的副本不受影响） */
+    removeAssets(ids: string[]) {
+      const set = new Set(ids);
+      const before = this.workspace.assets.length;
+      this.workspace.assets = this.workspace.assets.filter((a) => !set.has(a.id));
+      if (this.workspace.assets.length !== before) this.save();
+    },
+    /** 批量改分类（传空串表示清空为未分类） */
+    setAssetsCategory(ids: string[], category: string) {
+      const set = new Set(ids);
+      const value = category.trim();
+      let touched = false;
+      for (const asset of this.workspace.assets) {
+        if (!set.has(asset.id)) continue;
+        if (value) asset.category = value;
+        else delete asset.category;
+        asset.updatedAt = Date.now();
+        touched = true;
+      }
+      if (touched) this.save();
+    },
     exportAll(): string {
       return exportJson(this.workspace);
     },

@@ -1,40 +1,66 @@
-# ChartForge · ECharts 配置编辑器
+# ChartForge · 图表库 + 大屏工作台
 
-一个用 Vue 3 + ECharts 做的可视化配置工具：左边选图表类型，右边调参数，中间实时看效果，调好后一键复制 `option` JSON 直接用到项目里。
+一个用 Vue 3 + ECharts 做的可视化工作台，主流程分两步：**先在图表库里做好图表，再把图表拖进大屏拼装**。
 
-不用再翻 ECharts 文档手写配置，也不用在代码里反复改数字看效果。
+图表库是图表的正式产地：新建、选类型、调参数、填数据、看预览都在这里完成，保存后得到一张带缩略图、可搜索、可分类的卡片。
+大屏是拼装容器：新建一块画布，把图表库的卡片拖上去，调位置、尺寸、层级，最后全屏演示或导出。
 
-![界面预览](./preview.png)
+## 主流程
+
+```
+图表库 /charts  ──拖拽──▶  大屏 /workbench/:id  ──▶  演示 /play/:id
+   │                            │
+   └── 点击卡片 /charts/:id     └── 大屏库 /screens 管理所有大屏
+       （编辑类型/参数/数据）
+```
+
+1. **做图表**：`/charts` 点「新建图表」，选 6 种类型之一，进入 `/charts/:id` 编辑页
+2. **拼大屏**：`/screens` 新建大屏（内置 1080p / 2K / 竖屏等预设）→ 进入工作台 → 从左侧图表库把卡片拖到画布
+3. **演示 / 交付**：`/play/:id` 全屏演示，或导出图片 / JSON
+
+> 大屏里的图表是图表库资产的**独立副本**（深拷贝 spec），改大屏里的图表不会影响图表库，删图表资产也不会让已上屏的图表消失；
+> 选中图表时右侧会显示「来源：xxx」，可一键跳回源图表。想把大屏里的图表回收进库，用「另存为图表资产」。
 
 ## 功能
 
-- 支持 6 种图表：折线图、柱状图、饼图、地图、散点图、雷达图
-- 属性面板按 `title / legend / tooltip / grid / xAxis / yAxis / series` 分组，带中文说明和取值限制
-- 数据用表格编辑，不用拼字符串（饼图填名称+数值，散点填 X/Y，雷达按指标展开）
-- 自带 JSON 编辑器，和预览双向同步，写错了只标红不会生效
-- 预览尺寸可选 16:9 / 方形 / 长条或自定义宽高
-- 预览背景支持深色 / 浅色 / 网格，切浅色会自动把文字和轴线换成深色，方便放进文档
-- 支持撤销重做（Ctrl+Z）、各图表类型独立保存、刷新不丢编辑
-- 导出：复制 JSON、下载 JSON 文件、导出 2 倍分辨率 PNG
+### 图表库
+- 6 种图表：折线图、柱状图、饼图、地图（中国省级）、散点图、雷达图
+- 新建即自带示例数据，打开就能看到图，不用先填表
+- 卡片缩略图由真实 ECharts 渲染（关闭动画取终态、白底、16:9），改动后防抖自动更新
+- 搜索 / 按分类筛选 / 标签筛选，批量改分类、批量删除
+- 编辑信息（名称、分类、标签）、复制、导出单个图表 JSON
+
+### 图表编辑页（`/charts/:id`）
+- 参数面板按 `title / legend / tooltip / grid / xAxis / yAxis / series` 分组，带中文说明
+- 数据表格编辑（饼图填名称+数值，散点填 X/Y，雷达按指标展开），支持 TSV 粘贴
+- 撤销 / 重做：`Ctrl+Z` / `Ctrl+Y`（或 `Ctrl+Shift+Z`），顶栏也有按钮
+- 切换图表类型会重置参数与数据（有二次确认）
+- 设置拖入大屏时的默认尺寸
+
+### 大屏工作台
+- 1920×1080 / 2560×1440 / 1920×1200 / 1600×1200 / 1080×1920 等画布预设，可自定义背景
+- 图表、文本、图片、形状四类元素，支持拖拽、缩放、旋转、对齐、分布、组合、锁定、隐藏、层级调整
+- 吸附辅助线与网格
+- 大屏缩略图、命名、分类、标签、复制、导出 JSON
+- 演示模式全屏播放
+
+### 数据与存储
+- 全部数据存在浏览器 `localStorage`（key `chartforge.workspace.v1`），刷新不丢，自动保存
+- 整库导入 / 导出 JSON；旧版本数据会自动规范化补齐，不会打不开
 
 ## 技术栈
 
-Vue 3.5 · TypeScript · Vite 8 · ECharts 6 · Pinia · Element Plus · Vitest
+Vue 3.5 · TypeScript 5.9 · Vite 8 · Pinia 3 · Element Plus · ECharts 6 · Vitest 3
 
 ## 快速开始
 
-需要 Node.js ≥ 20 和 pnpm 11。
+需要 Node.js ≥ 20 和 pnpm。
 
 ```bash
 pnpm install
-pnpm dev        # http://localhost:5174
-```
-
-其他命令：
-
-```bash
+pnpm dev        # 开发服务器
 pnpm build      # 生产构建，输出到 dist/
-pnpm preview    # 本地预览构建产物
+pnpm preview    # 预览构建产物
 pnpm typecheck  # 类型检查
 pnpm test       # 单元测试
 ```
@@ -43,27 +69,38 @@ pnpm test       # 单元测试
 
 ```
 src/
-├─ components/
-│  ├─ editor/        # 顶栏、图表库、预览画布、右侧面板
-│  │  └─ panels/     # 属性 / 数据 / JSON 三个面板
-│  ├─ chart/         # ECharts 实例封装
-│  └─ ui/            # 图标
-├─ config/           # 默认配置、属性 schema、ECharts 按需注册
-├─ stores/           # 全局状态（当前图表、配置、历史）
-├─ utils/            # 路径读写、历史栈、明暗配色、导出
-└─ assets/geo/       # 中国地图数据
+├─ views/                 # 页面：图表库、图表编辑、大屏库、工作台、演示
+├─ workbench/             # 工作台组件（画布、图层面板、属性面板、缩略图渲染）
+│  └─ panels/             # 右侧属性面板：图表配置 / 数据表 / 位置尺寸 / 样式 / 画布
+├─ core/
+│  ├─ model/              # 数据模型、规范化、路径读写
+│  ├─ chart/              # ECharts option 构建、示例数据、按需注册
+│  ├─ geometry/           # 吸附、命中测试、坐标变换
+│  ├─ history/            # 撤销重做栈
+│  ├─ storage/            # localStorage 持久化、缩略图
+│  └─ live/               # 实时数据源（轮询）
+├─ stores/                # Pinia：workspace（图表库/大屏库）、document（当前大屏）、ui
+├─ shared/                # 拖拽常量、主题、通用 UI
+└─ assets/geo/            # 中国地图数据
 ```
 
 ## 快捷键
 
-| 操作 | 快捷键 |
-| --- | --- |
-| 复制当前配置 | `Ctrl + C` |
-| 撤销 / 重做 | `Ctrl + Z` / `Ctrl + Shift + Z` |
-| 切换图表类型 | `1` – `6` |
+| 场景 | 操作 | 快捷键 |
+| --- | --- | --- |
+| 图表编辑 | 撤销 / 重做 | `Ctrl + Z` / `Ctrl + Y`（或 `Ctrl + Shift + Z`） |
+| 工作台 | 撤销 / 重做 | `Ctrl + Z` / `Ctrl + Shift + Z` |
+| 工作台 | 复制 / 粘贴 / 删除 | `Ctrl + C` / `Ctrl + V` / `Delete`（`Ctrl + D` 原位复制） |
+| 工作台 | 组合 / 取消组合 | `Ctrl + G` / `Ctrl + Shift + G` |
+| 工作台 | 移动 1px / 10px | `方向键` / `Shift + 方向键` |
+| 工作台 | 画布缩放 / 适应窗口 | `滚轮` / `Ctrl + 0`、`Ctrl + 1` |
+| 工作台 | 平移画布 | `空格 + 拖拽` 或 `鼠标中键拖拽` |
+| 工作台 | 退出聚焦编辑 / 取消选择 | `Esc` |
+| 工作台 | 快捷键帮助 | `?` |
 
 ## 几点说明
 
-- **安装报 `ERR_PNPM_IGNORED_BUILDS`**：pnpm 11 需要显式放行依赖安装脚本，仓库里的 `pnpm-workspace.yaml` 已经配好了 `allowBuilds: esbuild: true`，直接 `pnpm install` 即可。
-- **地图不着色**：`china.json` 里的区域名带后缀（`广东省`、`北京市`），数据里的 `name` 要和它完全一致。
-- **复制没反应**：Clipboard API 只在 `https` 或 `localhost` 下可用，内网 `http` 访问时请用「下载 JSON」。
+- **地图不着色**：`china.json` 里的区域名带后缀（`广东省`、`北京市`），数据里的 `name` 要和它完全一致，示例数据已按此填写。
+- **缩略图是旧的 / 和图表对不上**：缩略图算法有版本号，打开图表库会自动重算过期缩略图；也可以在编辑页改动一下让它在 800ms 后重生成。
+- **安装报 `ERR_PNPM_IGNORED_BUILDS`**：仓库里的 `pnpm-workspace.yaml` 已配好 `allowBuilds`，直接 `pnpm install` 即可。
+- **`src/assets/screens/`**：运行时导出的 JSON 产物，已在 `.gitignore` 中忽略。

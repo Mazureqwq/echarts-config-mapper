@@ -493,6 +493,7 @@ export const useDocumentStore = defineStore("document", {
         : asset.defaultSize ?? { w: DEFAULT_FRAME.w, h: DEFAULT_FRAME.h };
       const item = createItem("chart", { ...size, ...frame }, deepClone(asset.spec)) as ChartItem;
       item.name = renameWithSuffix(asset.name, screen.items.map((i) => i.name));
+      item.sourceAssetId = asset.id;
       if (frame?.x === undefined) {
         item.frame.x = Math.round((screen.canvas.width - item.frame.w) / 2);
       }
