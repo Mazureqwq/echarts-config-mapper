@@ -13,7 +13,7 @@ interface Harness {
 }
 
 function harness(
-  fetchImpl: (url: string) => Promise<unknown>,
+  fetchImpl: (req: { url: string }, timeoutMs: number) => Promise<unknown>,
   opts: { isHidden?: () => boolean } = {}
 ): Harness {
   const captured: number[] = [];
@@ -22,9 +22,9 @@ function harness(
   let calls = 0;
   const updates: Array<{ key: string; update: HubUpdate }> = [];
   const hub = new DataHub({
-    fetchImpl: (url) => {
+    fetchImpl: (req, timeoutMs) => {
       calls += 1;
-      return fetchImpl(url);
+      return fetchImpl(req, timeoutMs);
     },
     setIntervalImpl: (fn, ms) => {
       captured.push(ms);

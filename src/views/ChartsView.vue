@@ -232,6 +232,10 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
 function goScreens(): void {
   router.push("/screens");
 }
+
+function goSettings(): void {
+  router.push("/settings");
+}
 </script>
 
 <template>
@@ -241,6 +245,7 @@ function goScreens(): void {
       <nav class="charts__nav">
         <button class="charts__nav-btn" @click="goScreens">大屏库</button>
         <button class="charts__nav-btn active">图表库</button>
+        <button class="charts__nav-btn" @click="goSettings">接口设置</button>
       </nav>
       <div class="charts__actions">
         <button class="charts__btn charts__btn--primary" @click="openCreate">

@@ -1,5 +1,7 @@
 import { resolveDataPath } from "./dataPath";
 import { LIVE_MIN_INTERVAL_SEC } from "./liveSource";
+import { feedKey, DEFAULT_TIMEOUT_MS } from "./apiSettings";
+import type { HttpRequest } from "./apiSettings";
 
 /** 失败退避上限：5 分钟 */
 export const MAX_BACKOFF_MS = 5 * 60 * 1000;
@@ -14,18 +16,21 @@ export interface HubUpdate {
 
 export interface HubSubscribeOptions {
   key: string;
-  url: string;
+  /** 完整请求（方法/头/body 已合成） */
+  request?: HttpRequest;
+  /** 兼容旧调用：只给 URL 时按 GET 处理 */
+  url?: string;
   intervalSec: number;
   dataPath?: string;
+  timeoutMs?: number;
   onUpdate: (update: HubUpdate) => void;
 }
 
 export interface DataHubOptions {
-  fetchImpl?: (url: string) => Promise<unknown>;
+  fetchImpl?: (req: HttpRequest, timeoutMs: number) => Promise<unknown>;
   setIntervalImpl?: (fn: () => void, ms: number) => unknown;
   clearIntervalImpl?: (handle: unknown) => void;
   now?: () => number;
-  /** 页面是否隐藏（隐藏时跳过请求，但计时器继续跑） */
   isHidden?: () => boolean;
   maxBackoffMs?: number;
 }
@@ -34,13 +39,15 @@ interface Subscriber {
   key: string;
   intervalSec: number;
   dataPath?: string;
+  timeoutMs: number;
   onUpdate: (update: HubUpdate) => void;
   hasData: boolean;
   lastData?: unknown;
 }
 
 interface Feed {
-  url: string;
+  id: string;
+  request: HttpRequest;
   subs: Map<string, Subscriber>;
   timer: unknown;
   timerActive: boolean;
@@ -48,20 +55,46 @@ interface Feed {
   failCount: number;
 }
 
-function defaultFetch(url: string): Promise<unknown> {
-  return fetch(url).then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  });
+function normalizeRequest(opts: HubSubscribeOptions): HttpRequest {
+  if (opts.request) return opts.request;
+  return { url: opts.url ?? "", method: "GET", headers: {} };
+}
+
+function defaultFetch(req: HttpRequest, timeoutMs: number): Promise<unknown> {
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  if (controller) {
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+  return fetch(req.url, {
+    method: req.method,
+    headers: req.headers,
+    ...(req.body === undefined ? {} : { body: req.body }),
+    ...(controller ? { signal: controller.signal } : {}),
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<unknown>;
+    })
+    .catch((e: unknown) => {
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new Error(`请求超时（${timeoutMs}ms）`);
+      }
+      throw e;
+    })
+    .finally(() => {
+      if (timer !== null) clearTimeout(timer);
+    });
 }
 
 /**
- * 数据源中心：按 URL 归并订阅者，一轮只发一次请求。
- * 提供间隔协商（组内取最快）、单飞、失败退避、页面隐藏暂停。
+ * 数据源中心：按「方法 + 完整 URL + 请求头 + body」合并订阅者，一轮只发一次请求。
+ * 支持间隔协商（组内最快）、单飞、失败退避、页面隐藏暂停、请求超时。
  */
 export class DataHub {
   private readonly feeds = new Map<string, Feed>();
-  private readonly fetchImpl: (url: string) => Promise<unknown>;
+  private readonly fetchImpl: (req: HttpRequest, timeoutMs: number) => Promise<unknown>;
   private readonly setIntervalImpl: (fn: () => void, ms: number) => unknown;
   private readonly clearIntervalImpl: (handle: unknown) => void;
   private readonly now: () => number;
@@ -85,25 +118,29 @@ export class DataHub {
   }
 
   subscribe(opts: HubSubscribeOptions): void {
-    const url = opts.url;
-    if (!url) return;
-    let feed = this.feeds.get(url);
+    const request = normalizeRequest(opts);
+    if (!request.url.trim()) return;
+    const id = feedKey(request);
+
+    let feed = this.feeds.get(id);
     if (!feed) {
       feed = {
-        url,
+        id,
+        request,
         subs: new Map(),
         timer: undefined,
         timerActive: false,
         inflight: null,
         failCount: 0,
       };
-      this.feeds.set(url, feed);
+      this.feeds.set(id, feed);
     }
     const existing = feed.subs.get(opts.key);
     feed.subs.set(opts.key, {
       key: opts.key,
       intervalSec: opts.intervalSec,
       dataPath: opts.dataPath,
+      timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       onUpdate: opts.onUpdate,
       hasData: existing?.hasData ?? false,
       lastData: existing?.lastData,
@@ -117,7 +154,7 @@ export class DataHub {
       feed.subs.delete(key);
       if (!feed.subs.size) {
         this.stopTimer(feed);
-        this.feeds.delete(feed.url);
+        this.feeds.delete(feed.id);
       } else {
         this.reschedule(feed);
       }
@@ -149,7 +186,6 @@ export class DataHub {
 
   // ---- 内部 ----
 
-  /** 组内取最快间隔 */
   private baseDelayMs(feed: Feed): number {
     let fastest = Number.POSITIVE_INFINITY;
     for (const sub of feed.subs.values()) {
@@ -163,6 +199,12 @@ export class DataHub {
     const base = this.baseDelayMs(feed);
     if (!feed.failCount) return base;
     return Math.min(base * Math.pow(2, feed.failCount), this.maxBackoffMs);
+  }
+
+  private feedTimeoutMs(feed: Feed): number {
+    let t = Number.POSITIVE_INFINITY;
+    for (const sub of feed.subs.values()) t = Math.min(t, sub.timeoutMs);
+    return Number.isFinite(t) ? t : DEFAULT_TIMEOUT_MS;
   }
 
   private reschedule(feed: Feed): void {
@@ -188,7 +230,7 @@ export class DataHub {
     const task = (async () => {
       try {
         this.requests += 1;
-        const payload = await this.fetchImpl(feed.url);
+        const payload = await this.fetchImpl(feed.request, this.feedTimeoutMs(feed));
         feed.failCount = 0;
         this.dispatchPayload(feed, payload);
         this.reschedule(feed);

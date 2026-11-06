@@ -87,6 +87,10 @@ function openCharts(): void {
   router.push("/charts");
 }
 
+function goSettings(): void {
+  router.push("/settings");
+}
+
 // ---- 轮播演示 ----
 const playlistOpen = ref(false);
 const playlistPick = ref<string[]>([]);
@@ -243,6 +247,7 @@ function exportWorkspace(): void {
       <nav class="library__nav">
         <button class="library__nav-btn active">大屏库</button>
         <button class="library__nav-btn" @click="openCharts">图表库</button>
+        <button class="library__nav-btn" @click="goSettings">接口设置</button>
       </nav>
       <div class="library__actions">
         <button class="library__btn library__btn--primary" @click="openCreate">

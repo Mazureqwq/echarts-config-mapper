@@ -53,11 +53,67 @@ export function saveWorkspace(ws: Workspace): void {
   }
 }
 
+export const SECRET_MASK = "***";
+
+function maskHeaders(headers: unknown): unknown {
+  if (!isRecord(headers)) return headers;
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(headers)) out[key] = SECRET_MASK;
+  return out;
+}
+
+function scrubSpec(spec: unknown): unknown {
+  if (!isRecord(spec)) return spec;
+  const source = spec.source;
+  if (!isRecord(source) || !isRecord(source.headers)) return spec;
+  return { ...spec, source: { ...source, headers: maskHeaders(source.headers) } };
+}
+
+/**
+ * 导出前的脱敏：请求头里的 token 是明文存在 localStorage 的，
+ * 导出的 JSON 常常被贴进 issue / 聊天窗口，所以默认把 header 值替换成 ***，
+ * 只在用户显式打开 exportHeaders 时才原样导出。
+ * 返回新对象，绝不修改内存里的工作区。
+ */
+export function scrubSecrets(target: ExportTarget): ExportTarget {
+  if (targetKind(target) === "workspace") {
+    const ws = target as Workspace;
+    const keep = ws.settings?.api?.exportHeaders === true;
+    if (keep) return target;
+    const api = ws.settings?.api;
+    return {
+      ...ws,
+      assets: ws.assets.map((a) => ({ ...a, spec: scrubSpec(a.spec) as typeof a.spec })),
+      screens: ws.screens.map((s) => ({
+        ...s,
+        items: s.items.map((it) =>
+          it.kind === "chart" ? { ...it, spec: scrubSpec(it.spec) as typeof it.spec } : it
+        ),
+      })),
+      settings: {
+        ...ws.settings,
+        ...(api ? { api: { ...api, ...(api.headers ? { headers: maskHeaders(api.headers) as Record<string, string> } : {}) } } : {}),
+      },
+    };
+  }
+  if (targetKind(target) === "asset") {
+    const asset = target as ChartAsset;
+    return { ...asset, spec: scrubSpec(asset.spec) as ChartAsset["spec"] };
+  }
+  const screen = target as Screen;
+  return {
+    ...screen,
+    items: screen.items.map((it) =>
+      it.kind === "chart" ? { ...it, spec: scrubSpec(it.spec) as typeof it.spec } : it
+    ),
+  };
+}
+
 export function exportJson(target: ExportTarget): string {
   const envelope: Envelope = {
     format: "chartforge/v1",
     kind: targetKind(target),
-    payload: target,
+    payload: scrubSecrets(target),
   };
   return JSON.stringify(envelope, null, 2);
 }

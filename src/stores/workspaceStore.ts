@@ -1,7 +1,14 @@
 import { defineStore } from "pinia";
 import { createWorkspace, createChartAsset, createChartSpec } from "@/core/model/schema";
 import { setPath } from "@/core/model/path";
-import type { ChartAsset, ChartData, ChartSpec, ChartType, Workspace } from "@/core/model/types";
+import type {
+  ApiSettings,
+  ChartAsset,
+  ChartData,
+  ChartSpec,
+  ChartType,
+  Workspace,
+} from "@/core/model/types";
 import {
   loadWorkspace,
   saveWorkspace,
@@ -184,6 +191,32 @@ export const useWorkspaceStore = defineStore("workspace", {
         touched = true;
       }
       if (touched) this.save();
+    },
+    /** 更新全局接口设置（baseUrl / 公共头 / 公共 query / 超时） */
+    updateApiSettings(patch: Partial<ApiSettings>): void {
+      const prev: Partial<ApiSettings> = this.workspace.settings.api ?? {};
+      const next: ApiSettings = {
+        ...prev,
+        ...patch,
+        baseUrl: String(patch.baseUrl ?? prev.baseUrl ?? "").trim(),
+      };
+      if (next.headers && !Object.keys(next.headers).length) delete next.headers;
+      if (next.query && !Object.keys(next.query).length) delete next.query;
+      // 全空时不留一个空壳配置，避免旧数据里出现 settings.api: {}
+      const empty =
+        !next.baseUrl &&
+        !next.headers &&
+        !next.query &&
+        !next.timeoutMs &&
+        !next.defaultIntervalSec &&
+        next.exportHeaders !== true;
+      if (empty) delete this.workspace.settings.api;
+      else this.workspace.settings.api = next;
+      this.save();
+    },
+    resetApiSettings(): void {
+      delete this.workspace.settings.api;
+      this.save();
     },
     exportAll(): string {
       return exportJson(this.workspace);

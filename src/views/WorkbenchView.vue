@@ -24,7 +24,19 @@ const liveSignature = computed(() =>
     .filter((i) => i.kind === "chart" && i.spec.source)
     .map((i) => {
       const s = i.kind === "chart" ? i.spec.source : undefined;
-      return `${i.id}:${s?.url ?? ""}:${s?.intervalSec ?? 0}:${s?.dataPath ?? ""}`;
+      const key = JSON.stringify({
+        url: s?.url ?? "",
+        path: s?.path ?? "",
+        method: s?.method ?? "GET",
+        body: s?.body ?? "",
+        headers: s?.headers ?? null,
+        query: s?.query ?? null,
+        timeoutMs: s?.timeoutMs ?? 0,
+        intervalSec: s?.intervalSec ?? 0,
+        dataPath: s?.dataPath ?? "",
+        api: ws.settings.api ?? null,
+      });
+      return `${i.id}:${key}`;
     })
     .join("|")
 );
@@ -34,7 +46,7 @@ function syncLive(): void {
   executor = null;
   const live = doc.items.filter((i) => i.kind === "chart" && i.spec.source);
   if (!live.length) return;
-  executor = new LiveExecutor();
+  executor = new LiveExecutor({ resolveApi: () => ws.settings.api });
   for (const item of live) {
     if (item.kind !== "chart" || !item.spec.source) continue;
     executor.register(item.id, item.spec.source, (u) => {

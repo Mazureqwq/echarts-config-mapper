@@ -52,7 +52,7 @@ function setupLive(): void {
   executor?.dispose();
   executor = null;
   if (!doc.items.some((i) => i.kind === "chart" && i.spec.source)) return;
-  executor = new LiveExecutor();
+  executor = new LiveExecutor({ resolveApi: () => ws.settings.api });
   for (const item of doc.items) {
     if (item.kind === "chart" && item.spec.source) {
       executor.register(

@@ -26,7 +26,7 @@ describe("live/dataPath", () => {
 });
 
 describe("live/liveExecutor", () => {
-  function setup(fetchImpl: (url: string) => Promise<unknown>) {
+  function setup(fetchImpl: (req: { url: string }, timeoutMs: number) => Promise<unknown>) {
     const captured: number[] = [];
     const timers: Array<() => void> = [];
     const executor = new LiveExecutor({

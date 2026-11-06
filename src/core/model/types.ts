@@ -30,11 +30,63 @@ export interface ShapeSpec {
   radius?: number;
 }
 
+/** 全局接口设置（设置页配置，所有图表共用） */
+export interface ApiSettings {
+  /** 接口前缀，如 https://api.example.com；留空表示只允许绝对地址 */
+  baseUrl: string;
+  /** 公共请求头（Authorization 等） */
+  headers?: Record<string, string>;
+  /** 公共查询参数（appKey、tenant 等） */
+  query?: Record<string, string>;
+  /** 请求超时（毫秒） */
+  timeoutMs?: number;
+  /** 新建实时数据源时的默认间隔（秒） */
+  defaultIntervalSec?: number;
+  /** 导出 JSON 时是否写入 header 值（默认剔除，避免 token 外泄） */
+  exportHeaders?: boolean;
+}
+
+export type HttpMethodName = "GET" | "POST";
+
 export interface LiveSource {
+  /** 绝对地址（旧数据用），优先于 path */
   url: string;
   intervalSec: number;
   dataPath?: string;
+  /** 相对路径，与全局 baseUrl 拼接 */
+  path?: string;
+  /** 请求方法，默认 GET */
+  method?: HttpMethodName;
+  /** POST 的 JSON 文本 */
+  body?: string;
+  /** 图表级请求头（覆盖全局同名） */
+  headers?: Record<string, string>;
+  /** 图表级查询参数（覆盖全局同名） */
+  query?: Record<string, string>;
+  /** 图表级超时（毫秒），留空用全局默认 */
+  timeoutMs?: number;
+  /** 行过滤条件（多条为 AND） */
+  filter?: Array<{ field: string; op: LiveFilterOp; value: string }>;
+  /** 只保留这些列（列投影，保序） */
+  select?: string[];
+  /** 排序 */
+  sort?: { field: string; desc?: boolean };
+  /** 取前 N 行（1–5000） */
+  limit?: number;
+  /** 字段映射；留空则按规则自动推断 */
+  map?: { category?: string; value?: string; seriesField?: string };
 }
+
+export type LiveFilterOp =
+  | "eq"
+  | "ne"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "in"
+  | "notEmpty";
 
 export type ChartData =
   | { kind: "category"; categories: string[]; series: { name: string; values: number[] }[] }
@@ -117,5 +169,5 @@ export interface Workspace {
   version: 1;
   assets: ChartAsset[];
   screens: Screen[];
-  settings: { autosave: boolean };
+  settings: { autosave: boolean; api?: ApiSettings };
 }

@@ -1,4 +1,5 @@
 import type {
+  ApiSettings,
   Background,
   ChartAsset,
   ChartData,
@@ -8,6 +9,7 @@ import type {
   Frame,
   ImageItem,
   ImageSpec,
+  LiveSource,
   Screen,
   ScreenItem,
   ShapeItem,
@@ -154,6 +156,133 @@ function normalizeData(raw: unknown, type: ChartType): ChartData {
   return initialDataFor(type);
 }
 
+function stringMap(raw: unknown): Record<string, string> | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const key = k.trim();
+    if (!key) continue;
+    if (typeof v === "string") out[key] = v;
+    else if (typeof v === "number" || typeof v === "boolean") out[key] = String(v);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+const FILTER_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "in", "notEmpty"] as const;
+
+/** 数据源规范化：绝对地址与相对路径至少要有一个，其余字段逐项校验兜底 */
+function normalizeLiveSource(raw: unknown): LiveSource | undefined {
+  if (!isRecord(raw)) return undefined;
+  const url = typeof raw.url === "string" ? raw.url : "";
+  const path = typeof raw.path === "string" ? raw.path : "";
+  if (!url.trim() && !path.trim()) return undefined;
+
+  const headers = stringMap(raw.headers);
+  const query = stringMap(raw.query);
+
+  const filtersRaw = Array.isArray(raw.filter) ? raw.filter : undefined;
+  const filter = filtersRaw
+    ?.filter((f): f is Record<string, unknown> => isRecord(f))
+    .map((f) => ({
+      field: typeof f.field === "string" ? f.field : "",
+      op: (FILTER_OPS as readonly string[]).includes(String(f.op))
+        ? (String(f.op) as (typeof FILTER_OPS)[number])
+        : ("eq" as const),
+      value: typeof f.value === "string" ? f.value : String(f.value ?? ""),
+    }))
+    .filter((f) => f.field.trim() !== "");
+
+  const select = Array.isArray(raw.select)
+    ? raw.select.filter((s): s is string => typeof s === "string" && s.trim() !== "")
+    : undefined;
+
+  const sortRaw = isRecord(raw.sort) ? raw.sort : undefined;
+  const sort =
+    sortRaw && typeof sortRaw.field === "string" && sortRaw.field.trim()
+      ? { field: sortRaw.field, ...(sortRaw.desc === true ? { desc: true } : {}) }
+      : undefined;
+
+  const limitRaw = Number(raw.limit);
+  const limit =
+    Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(5000, Math.max(1, Math.round(limitRaw)))
+      : undefined;
+
+  const mapRaw = isRecord(raw.map) ? raw.map : undefined;
+  const map =
+    mapRaw &&
+    ["category", "value", "seriesField"].some(
+      (k) => typeof mapRaw[k] === "string" && String(mapRaw[k]).trim() !== ""
+    )
+      ? {
+          ...(typeof mapRaw.category === "string" && mapRaw.category.trim()
+            ? { category: mapRaw.category.trim() }
+            : {}),
+          ...(typeof mapRaw.value === "string" && mapRaw.value.trim()
+            ? { value: mapRaw.value.trim() }
+            : {}),
+          ...(typeof mapRaw.seriesField === "string" && mapRaw.seriesField.trim()
+            ? { seriesField: mapRaw.seriesField.trim() }
+            : {}),
+        }
+      : undefined;
+
+  const timeoutRaw = Number(raw.timeoutMs);
+  const timeoutMs =
+    Number.isFinite(timeoutRaw) && timeoutRaw > 0
+      ? Math.min(120000, Math.max(1000, Math.round(timeoutRaw)))
+      : undefined;
+
+  return {
+    url,
+    intervalSec: num(raw.intervalSec, 30),
+    ...(path.trim() ? { path } : {}),
+    ...(raw.method === "POST" ? { method: "POST" as const } : {}),
+    ...(typeof raw.body === "string" && raw.body.trim() ? { body: raw.body } : {}),
+    ...(typeof raw.dataPath === "string" && raw.dataPath.trim() ? { dataPath: raw.dataPath } : {}),
+    ...(headers ? { headers } : {}),
+    ...(query ? { query } : {}),
+    ...(filter && filter.length ? { filter } : {}),
+    ...(select && select.length ? { select } : {}),
+    ...(sort ? { sort } : {}),
+    ...(limit ? { limit } : {}),
+    ...(map ? { map } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
+  };
+}
+
+function normalizeApiSettings(raw: unknown): ApiSettings | undefined {
+  if (!isRecord(raw)) return undefined;
+  const baseUrl = typeof raw.baseUrl === "string" ? raw.baseUrl.trim() : "";
+  const headers = stringMap(raw.headers);
+  const query = stringMap(raw.query);
+  const timeoutRaw = Number(raw.timeoutMs);
+  const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : undefined;
+  const intervalRaw = Number(raw.defaultIntervalSec);
+  const defaultIntervalSec =
+    Number.isFinite(intervalRaw) && intervalRaw > 0
+      ? Math.min(3600, Math.max(1, Math.round(intervalRaw)))
+      : undefined;
+  if (
+    !baseUrl &&
+    !headers &&
+    !query &&
+    !timeoutMs &&
+    !defaultIntervalSec &&
+    raw.exportHeaders !== true
+  ) {
+    return undefined;
+  }
+  return {
+    baseUrl,
+    ...(headers ? { headers } : {}),
+    ...(query ? { query } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
+    ...(defaultIntervalSec ? { defaultIntervalSec } : {}),
+    ...(raw.exportHeaders === true ? { exportHeaders: true } : {}),
+  };
+}
+
 function normalizeSpec(raw: unknown): ChartSpec {
   const r = isRecord(raw) ? raw : {};
   const typeRaw = str(r.type, "line");
@@ -162,20 +291,8 @@ function normalizeSpec(raw: unknown): ChartSpec {
     : "line";
   const option = isRecord(r.option) ? (r.option as Record<string, unknown>) : {};
   const data = normalizeData(r.data, type);
-  const sourceRaw = r.source;
-  if (isRecord(sourceRaw) && typeof sourceRaw.url === "string") {
-    return {
-      type,
-      option,
-      data,
-      source: {
-        url: sourceRaw.url,
-        intervalSec: num(sourceRaw.intervalSec, 30),
-        ...(typeof sourceRaw.dataPath === "string" ? { dataPath: sourceRaw.dataPath } : {}),
-      },
-    };
-  }
-  return { type, option, data };
+  const source = normalizeLiveSource(r.source);
+  return source ? { type, option, data, source } : { type, option, data };
 }
 
 function normalizeItem(raw: unknown): ScreenItem | null {
@@ -292,10 +409,14 @@ export function normalizeWorkspace(raw: unknown): Workspace {
   const assetsRaw = Array.isArray(raw.assets) ? raw.assets : [];
   const screensRaw = Array.isArray(raw.screens) ? raw.screens : [];
   const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
+  const api = normalizeApiSettings(settingsRaw.api);
   return {
     version: 1,
     assets: assetsRaw.map((a) => normalizeAsset(a)).filter((a): a is ChartAsset => a !== null),
     screens: screensRaw.map((s) => normalizeScreen(s)).filter((s): s is Screen => s !== null),
-    settings: { autosave: settingsRaw.autosave !== false },
+    settings: {
+      autosave: settingsRaw.autosave !== false,
+      ...(api ? { api } : {}),
+    },
   };
 }
