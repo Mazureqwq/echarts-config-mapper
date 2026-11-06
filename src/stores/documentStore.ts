@@ -46,6 +46,25 @@ function newId(): string {
     : `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampFrameToCanvas(frame: Frame, width: number, height: number): Frame {
+  const canvasWidth = Math.max(1, Number.isFinite(width) ? width : 1);
+  const canvasHeight = Math.max(1, Number.isFinite(height) ? height : 1);
+  const w = clamp(Number.isFinite(frame.w) ? frame.w : 1, 1, canvasWidth);
+  const h = clamp(Number.isFinite(frame.h) ? frame.h : 1, 1, canvasHeight);
+  const x = clamp(Number.isFinite(frame.x) ? frame.x : 0, 0, canvasWidth - w);
+  const y = clamp(Number.isFinite(frame.y) ? frame.y : 0, 0, canvasHeight - h);
+  return { ...frame, x, y, w, h };
+}
+
+function clampDelta(value: number, min: number, max: number): number {
+  if (max < min) return min;
+  return clamp(value, min, max);
+}
+
 function setPath(obj: Record<string, unknown>, keys: string[], value: unknown): void {
   let node: Record<string, unknown> = obj;
   for (let i = 0; i < keys.length - 1; i++) {
@@ -124,7 +143,7 @@ export const useDocumentStore = defineStore("document", {
     },
     addScreen(name?: string, canvas?: { width: number; height: number }) {
       const ws = useWorkspaceStore();
-      const screen = createScreen(name ?? `图表${ws.workspace.screens.length + 1}`, canvas);
+      const screen = createScreen(name ?? `大屏${ws.workspace.screens.length + 1}`, canvas);
       ws.workspace.screens.push(screen);
       this.currentScreenId = screen.id;
       this.selectedIds = [];
@@ -140,24 +159,13 @@ export const useDocumentStore = defineStore("document", {
       if (meta.tags !== undefined) screen.tags = meta.tags;
       this.commit();
     },
-    ensureChart(type: ChartType): string {
+    addChart(type: ChartType): string {
       const screen = this.currentScreen;
       if (!screen) return "";
-      const existing = screen.items.find((i) => i.kind === "chart");
-      if (existing) {
-        this.changeChartType(existing.id, type);
-        return existing.id;
-      }
-      const item = createItem(
-        "chart",
-        {
-          x: 24,
-          y: 24,
-          w: Math.max(100, screen.canvas.width - 48),
-          h: Math.max(100, screen.canvas.height - 48),
-        },
-        chartRegistry[type].defaultSpec()
-      ) as ChartItem;
+      const item = createItem("chart", {}, chartRegistry[type].defaultSpec()) as ChartItem;
+      const offset = (screen.items.length % 8) * 20;
+      item.frame.x = Math.round((screen.canvas.width - item.frame.w) / 2) + offset;
+      item.frame.y = Math.round((screen.canvas.height - item.frame.h) / 2) + offset;
       this.addItem(item);
       return item.id;
     },
@@ -170,6 +178,7 @@ export const useDocumentStore = defineStore("document", {
     addItem(item: ScreenItem) {
       const screen = this.currentScreen;
       if (!screen) return;
+      Object.assign(item.frame, clampFrameToCanvas(item.frame, screen.canvas.width, screen.canvas.height));
       screen.items.push(item);
       this.selectedIds = [item.id];
       this.commit();
@@ -185,17 +194,29 @@ export const useDocumentStore = defineStore("document", {
       this.commit();
     },
     updateItemFrame(id: string, frame: Partial<Frame>, opts?: { commit?: boolean }) {
-      const item = this.items.find((i) => i.id === id);
-      if (!item) return;
-      Object.assign(item.frame, frame);
+      const screen = this.currentScreen;
+      const item = screen?.items.find((i) => i.id === id);
+      if (!item || !screen) return;
+      Object.assign(
+        item.frame,
+        clampFrameToCanvas({ ...item.frame, ...frame }, screen.canvas.width, screen.canvas.height)
+      );
       if (opts?.commit !== false) this.commit();
     },
     moveBy(ids: string[], dx: number, dy: number, opts?: { commit?: boolean }) {
-      for (const id of ids) {
-        const item = this.items.find((i) => i.id === id);
-        if (!item || item.locked) continue;
-        item.frame.x += dx;
-        item.frame.y += dy;
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const moving = screen.items.filter((item) => ids.includes(item.id) && !item.locked);
+      if (moving.length === 0) return;
+      const minX = Math.min(...moving.map((item) => item.frame.x));
+      const minY = Math.min(...moving.map((item) => item.frame.y));
+      const maxX = Math.max(...moving.map((item) => item.frame.x + item.frame.w));
+      const maxY = Math.max(...moving.map((item) => item.frame.y + item.frame.h));
+      const boundedDx = clampDelta(dx, -minX, screen.canvas.width - maxX);
+      const boundedDy = clampDelta(dy, -minY, screen.canvas.height - maxY);
+      for (const item of moving) {
+        item.frame.x += boundedDx;
+        item.frame.y += boundedDy;
       }
       if (opts?.commit !== false) this.commit();
     },
@@ -362,14 +383,15 @@ export const useDocumentStore = defineStore("document", {
       if (this.clipboard.length === 0) return;
       const screen = this.currentScreen;
       if (!screen) return;
-      const hasChart = screen.items.some((i) => i.kind === "chart");
-      const clones = deepClone(this.clipboard)
-        .filter((it) => !hasChart || it.kind !== "chart")
-        .map((it) => ({
-          ...it,
-          id: newId(),
-          frame: { ...it.frame, x: it.frame.x + 10, y: it.frame.y + 10 },
-        }));
+      const clones = deepClone(this.clipboard).map((it) => ({
+        ...it,
+        id: newId(),
+        frame: clampFrameToCanvas(
+          { ...it.frame, x: it.frame.x + 10, y: it.frame.y + 10 },
+          screen.canvas.width,
+          screen.canvas.height
+        ),
+      }));
       if (clones.length === 0) return;
       screen.items.push(...clones);
       this.selectedIds = clones.map((it) => it.id);
@@ -380,10 +402,11 @@ export const useDocumentStore = defineStore("document", {
       if (items.length === 0) return;
       const screen = this.currentScreen;
       if (!screen) return;
-      const hasChart = screen.items.some((i) => i.kind === "chart");
-      const source = hasChart ? items.filter((i) => i.kind !== "chart") : items;
-      if (source.length === 0) return;
-      const clones = deepClone(source).map((it) => ({ ...it, id: newId() }));
+      const clones = deepClone(items).map((it) => ({
+        ...it,
+        id: newId(),
+        frame: clampFrameToCanvas(it.frame, screen.canvas.width, screen.canvas.height),
+      }));
       screen.items.push(...clones);
       this.selectedIds = clones.map((it) => it.id);
       this.commit();
@@ -462,6 +485,42 @@ export const useDocumentStore = defineStore("document", {
       if (patch.width !== undefined) screen.canvas.width = patch.width;
       if (patch.height !== undefined) screen.canvas.height = patch.height;
       if (patch.background !== undefined) screen.canvas.background = patch.background;
+      this.commit();
+    },
+    fitItemsToCanvas(width: number, height: number) {
+      const screen = this.currentScreen;
+      if (!screen) return;
+      const targetWidth = clamp(Math.round(width), 320, 7680);
+      const targetHeight = clamp(Math.round(height), 320, 7680);
+      if (screen.items.length > 0) {
+        const minX = Math.min(...screen.items.map((item) => item.frame.x));
+        const minY = Math.min(...screen.items.map((item) => item.frame.y));
+        const maxX = Math.max(...screen.items.map((item) => item.frame.x + item.frame.w));
+        const maxY = Math.max(...screen.items.map((item) => item.frame.y + item.frame.h));
+        const boundsWidth = Math.max(1, maxX - minX);
+        const boundsHeight = Math.max(1, maxY - minY);
+        const scale = Math.min(1, targetWidth / boundsWidth, targetHeight / boundsHeight);
+        const offsetX = (targetWidth - boundsWidth * scale) / 2;
+        const offsetY = (targetHeight - boundsHeight * scale) / 2;
+        for (const item of screen.items) {
+          Object.assign(
+            item.frame,
+            clampFrameToCanvas(
+              {
+                ...item.frame,
+                x: offsetX + (item.frame.x - minX) * scale,
+                y: offsetY + (item.frame.y - minY) * scale,
+                w: item.frame.w * scale,
+                h: item.frame.h * scale,
+              },
+              targetWidth,
+              targetHeight
+            )
+          );
+        }
+      }
+      screen.canvas.width = targetWidth;
+      screen.canvas.height = targetHeight;
       this.commit();
     },
     setScreenName(name: string) {

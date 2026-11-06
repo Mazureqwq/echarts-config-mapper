@@ -19,7 +19,7 @@ import type {
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
 export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#FFFFFF" };
-export const DEFAULT_SCREEN_NAME = "未命名图表";
+export const DEFAULT_SCREEN_NAME = "未命名大屏";
 export const CANVAS_SIZE = { width: 1920, height: 1080 } as const;
 
 const CHART_TYPES: readonly ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar"];

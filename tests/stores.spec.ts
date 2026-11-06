@@ -162,6 +162,71 @@ describe("stores/documentStore", () => {
     expect(doc.liveStatus[item.id].stale).toBe(true);
   });
 
+  it("同一大屏可以添加多个独立图表", () => {
+    const { doc, screen } = seedScreen();
+    const firstId = doc.addChart("line");
+    const secondId = doc.addChart("bar");
+
+    expect(firstId).not.toBe(secondId);
+    expect(screen.items).toHaveLength(2);
+    expect(screen.items.map((item) => item.kind === "chart" ? item.spec.type : item.kind)).toEqual(["line", "bar"]);
+  });
+
+  it("图表可复制和粘贴到同一大屏", () => {
+    const { doc, screen } = seedScreen();
+    const chart = createItem("chart", { x: 40, y: 50 }, createChartSpec("line")) as ChartItem;
+    screen.items.push(chart);
+    doc.selectedIds = [chart.id];
+
+    doc.duplicate();
+    expect(screen.items).toHaveLength(2);
+    expect(screen.items[1].kind).toBe("chart");
+
+    doc.copy();
+    doc.paste();
+    expect(screen.items).toHaveLength(3);
+    expect(screen.items[2].kind).toBe("chart");
+  });
+
+  it("新元素、移动和尺寸编辑都限制在固定画布范围内", () => {
+    const { doc, screen } = seedScreen();
+    const item = createItem("shape", { x: 1900, y: 1000, w: 400, h: 300 });
+    doc.addItem(item);
+
+    expect(item.frame.x + item.frame.w).toBeLessThanOrEqual(screen.canvas.width);
+    expect(item.frame.y + item.frame.h).toBeLessThanOrEqual(screen.canvas.height);
+
+    doc.moveBy([item.id], 10000, 10000);
+    expect(item.frame.x + item.frame.w).toBeLessThanOrEqual(screen.canvas.width);
+    expect(item.frame.y + item.frame.h).toBeLessThanOrEqual(screen.canvas.height);
+
+    doc.updateItemFrame(item.id, { x: -100, y: -100, w: 5000, h: 5000 });
+    expect(item.frame.x).toBe(0);
+    expect(item.frame.y).toBe(0);
+    expect(item.frame.w).toBeLessThanOrEqual(screen.canvas.width);
+    expect(item.frame.h).toBeLessThanOrEqual(screen.canvas.height);
+  });
+
+  it("缩小画布时可以将全部元素等比适配进去", () => {
+    const { doc, screen } = seedScreen();
+    const first = createItem("shape", { x: 100, y: 100, w: 400, h: 300 });
+    const second = createItem("text", { x: 1500, y: 800, w: 400, h: 250 });
+    screen.items.push(first, second);
+
+    doc.fitItemsToCanvas(800, 600);
+
+    expect(screen.canvas.width).toBe(800);
+    expect(screen.canvas.height).toBe(600);
+    expect(first.frame.w / 400).toBeCloseTo(first.frame.h / 300);
+    expect(second.frame.w / 400).toBeCloseTo(second.frame.h / 250);
+    for (const item of screen.items) {
+      expect(item.frame.x).toBeGreaterThanOrEqual(0);
+      expect(item.frame.y).toBeGreaterThanOrEqual(0);
+      expect(item.frame.x + item.frame.w).toBeLessThanOrEqual(800);
+      expect(item.frame.y + item.frame.h).toBeLessThanOrEqual(600);
+    }
+  });
+
   it("addGroup/ungroup 与 bringForward/sendBackward", () => {
     const { doc, screen } = seedScreen();
     const a = createItem("shape", {});
@@ -211,12 +276,13 @@ describe("stores/documentStore", () => {
     expect(assets[0].spec).toEqual(item.spec);
   });
 
-  it("addScreen 自定义画布尺寸并默认命名图表N", () => {
+  it("addScreen 自定义画布尺寸并默认命名大屏N", () => {
     const { doc } = seedScreen();
     const before = useWorkspaceStore().workspace.screens.length;
     const s = doc.addScreen(undefined, { width: 800, height: 600 });
     expect(useWorkspaceStore().workspace.screens).toHaveLength(before + 1);
-    expect(s.name).toBe(`图表${before + 1}`);
+    expect(s.name).toBe(`大屏${before + 1}`);
+    expect(s.items).toHaveLength(0);
     expect(s.canvas.width).toBe(800);
     expect(s.canvas.height).toBe(600);
   });
@@ -229,43 +295,45 @@ describe("stores/documentStore", () => {
     expect(screen.tags).toEqual(["销售"]);
   });
 
-  it("ensureChart 首次添加、再次调用切换类型不产生第二个图表", () => {
-    const { doc, screen } = seedScreen();
-    doc.initHistory();
-    const id1 = doc.ensureChart("line");
-    const chartItems = () => screen.items.filter((i) => i.kind === "chart");
-    expect(chartItems()).toHaveLength(1);
-    const id2 = doc.ensureChart("bar");
-    expect(id2).toBe(id1);
-    expect(chartItems()).toHaveLength(1);
-    expect((chartItems()[0] as ChartItem).spec.type).toBe("bar");
-  });
-
-  it("ensureChart 图表尺寸铺满画布留 24px 边距", () => {
+  it("addChart 将新图表居中放入指定尺寸画布", () => {
     const { doc, screen } = seedScreen();
     screen.canvas.width = 1000;
     screen.canvas.height = 500;
-    doc.ensureChart("pie");
-    const c = screen.items[0];
-    expect(c.frame).toMatchObject({ x: 24, y: 24, w: 952, h: 452 });
+    const id = doc.addChart("pie");
+    const chart = screen.items.find((item) => item.id === id);
+
+    expect(chart?.kind).toBe("chart");
+    expect(chart?.frame).toMatchObject({ x: 300, y: 100, w: 400, h: 300 });
   });
 
-  it("已有图表时 paste/duplicate 不新增图表项", () => {
+  it("连续 addChart 的叠放偏移不会把图表推出画布", () => {
     const { doc, screen } = seedScreen();
-    const chart = createItem("chart") as ChartItem;
-    const text = createItem("text") as ScreenItem;
-    screen.items.push(chart, text);
-    doc.selectedIds = [text.id];
-    doc.copy();
-    doc.paste(); // 剪贴板是 text，正常贴入
-    expect(screen.items).toHaveLength(3);
-    doc.selectedIds = [chart.id];
-    doc.copy();
-    doc.paste(); // 剪贴板是 chart，被拒
-    expect(screen.items).toHaveLength(3);
-    doc.duplicate(); // 选中 chart，被拒
-    expect(screen.items).toHaveLength(3);
+    screen.canvas.width = 1000;
+    screen.canvas.height = 500;
+    const ids = Array.from({ length: 8 }, () => doc.addChart("bar"));
+
+    expect(new Set(ids).size).toBe(8);
+    expect(screen.items).toHaveLength(8);
+    for (const item of screen.items) {
+      expect(item.frame.x).toBeGreaterThanOrEqual(0);
+      expect(item.frame.y).toBeGreaterThanOrEqual(0);
+      expect(item.frame.x + item.frame.w).toBeLessThanOrEqual(screen.canvas.width);
+      expect(item.frame.y + item.frame.h).toBeLessThanOrEqual(screen.canvas.height);
+    }
   });
+
+  it("setCanvas 保留原位时只改画布尺寸、不搬动元素", () => {
+    const { doc, screen } = seedScreen();
+    const item = createItem("shape", { x: 1500, y: 900, w: 300, h: 150 });
+    screen.items.push(item);
+
+    doc.setCanvas({ width: 800, height: 600 });
+
+    expect(screen.canvas.width).toBe(800);
+    expect(screen.canvas.height).toBe(600);
+    expect(item.frame).toMatchObject({ x: 1500, y: 900, w: 300, h: 150 });
+  });
+
 });
 
 describe("stores/uiStore", () => {

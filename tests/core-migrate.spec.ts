@@ -23,7 +23,7 @@ describe("model/migrate 版本迁移", () => {
 
   it("version:1 但字段残缺时由规范化补齐", () => {
     const ws = migrate({ version: 1, screens: [{ id: "a" }] });
-    expect(ws.screens[0].name).toBe("未命名图表");
+    expect(ws.screens[0].name).toBe("未命名大屏");
     expect(ws.assets).toEqual([]);
   });
 });

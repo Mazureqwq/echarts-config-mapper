@@ -40,7 +40,7 @@ describe("model/schema 工厂与规范化", () => {
     });
     expect(ws.screens).toHaveLength(1);
     const screen = ws.screens[0];
-    expect(screen.name).toBe("未命名图表");
+    expect(screen.name).toBe("未命名大屏");
     expect(screen.canvas).toEqual({
       width: 1920,
       height: 1080,
