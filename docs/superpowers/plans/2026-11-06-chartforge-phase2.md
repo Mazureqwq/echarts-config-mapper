@@ -16,7 +16,7 @@
 |---|---|---|
 | T1 资产元信息与规范化 | 已完成（`639dacf`） | `category/tags/defaultSize` 可选字段 + 规范化兜底 + 单测 |
 | T2 保存为资产 / 放置副本 | 已完成（`da552bc`） | `saveChartAsAsset`、`placeAsset`、`renameWithSuffix`、`duplicateAsset/updateAssetMeta/removeAsset` |
-| T3 图表资产库页 `/charts` | 已完成（`14b2c53`） | 检索/编辑信息/复制/导出/删除 + 拖拽源；大屏库顶部加导航 |
+| T3 图表资产库页 `/charts` | 已完成（`14b2c53`，主流程修正见 T9） | 检索/编辑信息/复制/导出/删除 + 拖拽源；大屏库顶部加导航 |
 | T4 左栏图表库 tab 与拖入副本 | 已完成（`65cecb4`） | `AssetLibraryPanel` + `ASSET_DND_MIME` → `doc.placeAsset` |
 | T5 图表聚焦编辑与类型切换 | 已完成（`825d85f`） | 聚焦编辑基线已有（双击 + Esc）；补类型下拉（二次确认）与「保存到图表库」（含缩略图） |
 | T6 对齐与等距分布 | 已完成（`a5633da`） | 基线已有 `alignDistribute` + 工具条；补 3 个单测（左/右对齐、等距、忽略锁定） |
@@ -263,7 +263,8 @@
 - 数据层：`ChartAsset` 元信息、`saveChartAsAsset`、`placeAsset`、资产 CRUD 全部就位并有单测。
 - UI：`/charts` 图表资产库页、左栏「图表库」tab（拖拽源）、检查器类型切换与「保存到图表库」、顶栏「保存到大屏库」、视图快捷键均已完成。
 - 质量门：`pnpm typecheck` 0 error、`pnpm test` 92 passed / 11 files、`pnpm build` 成功。
-- 遗留：浏览器端人工走查（T8 Step 2 清单）需在本地 `pnpm dev` 执行；`src/assets/screens/` 未跟踪产物仍未纳入版本库。
+- 主流程按用户纠正调整为「图表库 → 大屏」（T9，提交 `944e2d5`、`566f763`）：新增 `/charts/:id` 图表编辑页、图表库「新建图表」、`/` 重定向到图表库、大屏库移到 `/screens`。
+- 遗留：浏览器端人工走查需在本地 `pnpm dev` 执行（清单：图表库新建 → 编辑参数/数据 → 拖入大屏 → 副本独立 → 大屏保存缩略图）；`src/assets/screens/` 未跟踪产物仍未纳入版本库。
 
 ## Self-Review（对照规格）
 
