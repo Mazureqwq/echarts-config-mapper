@@ -28,6 +28,9 @@ const CHART_TYPE_LABELS: Array<{ type: ChartType; label: string }> = [
 const renderError = ref("");
 const pendingType = ref<ChartType | null>(null);
 
+/** 当前图表资产（必须早于任何 watch / 计算属性声明，watch 会立即执行 getter） */
+const asset = computed(() => ws.assets.find((a) => a.id === props.id) ?? null);
+
 const history = markRaw(
   new History<ChartSpec>({ limit: 80, clone: (v) => JSON.parse(JSON.stringify(v)) as ChartSpec })
 );
@@ -117,8 +120,6 @@ watch(
   () => asset.value?.updatedAt,
   () => scheduleThumbnail()
 );
-
-const asset = computed(() => ws.assets.find((a) => a.id === props.id) ?? null);
 
 /** 供配置面板复用的图表项视图（只读 spec，写操作走 ws 方法） */
 const item = computed<ChartItem | null>(() => {
