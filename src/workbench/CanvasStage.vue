@@ -32,6 +32,7 @@ const ui = useUiStore();
 const stageEl = ref<HTMLDivElement | null>(null);
 const marquee = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 const guides = ref<SnapGuide[]>([]);
+const panning = ref(false);
 
 interface Point {
   x: number; y: number;
@@ -74,9 +75,9 @@ function canvasPoint(ev: { clientX: number; clientY: number }): Point {
 
 // ---- 缩放平移 ----
 let spacePressed = false;
-let panState: { startX: number; startY: number; panX: number; panY: number } | null = null;
+let panState: { startX: number; startY: number; panX: number; panY: number; started: boolean; clearSelectionOnClick: boolean } | null = null;
 let marqueeState: { start: Point; additive: boolean } | null = null;
-let moveState: { start: Point; ids: string[]; started: boolean; last?: { x: number; y: number } } | null = null;
+let moveState: { start: Point; ids: string[]; started: boolean; bounds: { x: number; y: number; w: number; h: number } | null; last?: { x: number; y: number } } | null = null;
 
 function fitToWindow(): void {
   const rect = stageEl.value?.getBoundingClientRect();
@@ -90,20 +91,48 @@ function fitToWindow(): void {
   });
 }
 
+function zoomAt(clientX: number, clientY: number, nextZoom: number): void {
+  const rect = stageEl.value?.getBoundingClientRect();
+  if (!rect) {
+    ui.setZoom(nextZoom);
+    return;
+  }
+
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+  const currentScale = ui.zoom / 100;
+  const anchorX = (localX - ui.pan.x) / currentScale;
+  const anchorY = (localY - ui.pan.y) / currentScale;
+
+  ui.setZoom(nextZoom);
+  const nextScale = ui.zoom / 100;
+  ui.setPan({
+    x: localX - anchorX * nextScale,
+    y: localY - anchorY * nextScale,
+  });
+}
+
+function zoomAtStageCenter(nextZoom: number): void {
+  const rect = stageEl.value?.getBoundingClientRect();
+  if (!rect) {
+    ui.setZoom(nextZoom);
+    return;
+  }
+  zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, nextZoom);
+}
+
+function zoomBy(delta: number): void {
+  zoomAtStageCenter(ui.zoom + delta);
+}
+
 function zoomReset(): void {
-  ui.setZoom(100);
+  zoomAtStageCenter(100);
 }
 
 function onWheel(ev: WheelEvent): void {
-  const before = canvasPoint(ev);
+  if (ev.deltaY === 0) return;
   const factor = ev.deltaY > 0 ? 0.9 : 1.1;
-  ui.setZoom(ui.zoom * factor);
-  const after = canvasPoint(ev);
-  const z = ui.zoom / 100;
-  ui.setPan({
-    x: ui.pan.x + (after.x - before.x) * z,
-    y: ui.pan.y + (after.y - before.y) * z,
-  });
+  zoomAt(ev.clientX, ev.clientY, ui.zoom * factor);
 }
 
 // ---- 吸附 ----
@@ -140,13 +169,22 @@ function selectionBBox(ids: string[]): { x: number; y: number; w: number; h: num
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+function clampTranslation(delta: number, start: number, size: number, canvasSize: number): number {
+  const min = -start;
+  const max = canvasSize - start - size;
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, delta));
+}
+
 // ---- 指针交互 ----
 function onWindowMove(ev: MouseEvent): void {
   if (panState) {
-    ui.setPan({
-      x: panState.panX + (ev.clientX - panState.startX),
-      y: panState.panY + (ev.clientY - panState.startY),
-    });
+    const dx = ev.clientX - panState.startX;
+    const dy = ev.clientY - panState.startY;
+    if (!panState.started && Math.hypot(dx, dy) < 3) return;
+    panState.started = true;
+    panning.value = true;
+    ui.setPan({ x: panState.panX + dx, y: panState.panY + dy });
     return;
   }
   if (marqueeState) {
@@ -168,14 +206,16 @@ function onWindowMove(ev: MouseEvent): void {
     moveState.started = true;
     let dx = rawDx;
     let dy = rawDy;
-    if (ui.snapEnabled) {
-      const bbox = selectionBBox(moveState.ids);
-      if (bbox) {
-        const snapped = snapDelta({ dx, dy }, buildCandidates(bbox));
-        dx = snapped.dx;
-        dy = snapped.dy;
-        guides.value = snapped.guides;
-      }
+    if (ui.snapEnabled && moveState.bounds) {
+      const snapped = snapDelta({ dx, dy }, buildCandidates(moveState.bounds));
+      dx = snapped.dx;
+      dy = snapped.dy;
+      guides.value = snapped.guides;
+    }
+    const canvas = doc.currentScreen?.canvas;
+    if (canvas && moveState.bounds) {
+      dx = clampTranslation(dx, moveState.bounds.x, moveState.bounds.w, canvas.width);
+      dy = clampTranslation(dy, moveState.bounds.y, moveState.bounds.h, canvas.height);
     }
     // 以增量方式移动（相对上次位置）
     const last = moveState.last ?? { x: 0, y: 0 };
@@ -195,26 +235,61 @@ function onWindowUp(): void {
   if (moveState && moveState.started) {
     doc.commit();
   }
+  if (panState?.clearSelectionOnClick && !panState.started) {
+    doc.selectedIds = [];
+  }
   marqueeState = null;
   marquee.value = null;
   panState = null;
+  panning.value = false;
   moveState = null;
   guides.value = [];
   window.removeEventListener("mousemove", onWindowMove);
   window.removeEventListener("mouseup", onWindowUp);
 }
 
-function onStageDown(ev: MouseEvent): void {
-  if (ev.button === 1 || (ev.button === 0 && spacePressed)) {
+function onCanvasBackgroundDown(ev: MouseEvent): void {
+  if (ev.button === 0 && ev.shiftKey && !spacePressed) {
+    ev.preventDefault();
+    marqueeState = { start: canvasPoint(ev), additive: true };
+  } else if (ev.button === 0 || ev.button === 1) {
+    ev.preventDefault();
     panState = {
       startX: ev.clientX,
       startY: ev.clientY,
       panX: ui.pan.x,
       panY: ui.pan.y,
+      started: false,
+      clearSelectionOnClick: ev.button === 0 && !ev.shiftKey && !spacePressed,
+    };
+  } else {
+    return;
+  }
+  window.addEventListener("mousemove", onWindowMove);
+  window.addEventListener("mouseup", onWindowUp);
+}
+
+function onStageDown(ev: MouseEvent): void {
+  const onGrayBackground = ev.target === ev.currentTarget;
+  const panGesture =
+    ev.button === 1 ||
+    (ev.button === 0 && (spacePressed || (onGrayBackground && !ev.shiftKey)));
+
+  if (panGesture) {
+    ev.preventDefault();
+    panState = {
+      startX: ev.clientX,
+      startY: ev.clientY,
+      panX: ui.pan.x,
+      panY: ui.pan.y,
+      started: false,
+      clearSelectionOnClick: ev.button === 0 && onGrayBackground && !spacePressed,
     };
   } else if (ev.button === 0) {
     marqueeState = { start: canvasPoint(ev), additive: ev.shiftKey };
     if (!ev.shiftKey) doc.selectedIds = [];
+  } else {
+    return;
   }
   window.addEventListener("mousemove", onWindowMove);
   window.addEventListener("mouseup", onWindowUp);
@@ -241,7 +316,8 @@ function onItemClick(ev: MouseEvent, item: ScreenItem): void {
     doc.selectedIds = groupIds;
   }
   if (!ev.shiftKey && doc.selectedIds.includes(item.id)) {
-    moveState = { start: canvasPoint(ev), ids: [...doc.selectedIds], started: false };
+    const ids = [...doc.selectedIds];
+    moveState = { start: canvasPoint(ev), ids, started: false, bounds: selectionBBox(ids) };
   }
   window.addEventListener("mousemove", onWindowMove);
   window.addEventListener("mouseup", onWindowUp);
@@ -337,7 +413,6 @@ function onDrop(ev: DragEvent): void {
   } catch {
     return;
   }
-  if (payload.kind === "chart" && doc.items.some((i) => i.kind === "chart")) return;
   const pt = canvasPoint(ev);
   let item: ScreenItem;
   if (payload.kind === "chart") {
@@ -369,6 +444,7 @@ defineExpose({ canvasPoint, DROP_MIME });
   <div
     ref="stageEl"
     class="canvas-stage"
+    :class="{ 'canvas-stage--panning': panning }"
     tabindex="0"
     @wheel.prevent="onWheel"
     @mousedown="onStageDown"
@@ -376,22 +452,26 @@ defineExpose({ canvasPoint, DROP_MIME });
     @drop.prevent="onDrop"
   >
     <div v-if="!ui.previewing" class="canvas-stage__zoom-bar" @mousedown.stop>
-      <button class="canvas-stage__tool-btn" title="缩小" @click="ui.zoomOut()">−</button>
+      <button class="canvas-stage__tool-btn" title="缩小" @click="zoomBy(-10)">−</button>
       <span class="canvas-stage__zoom-label">{{ ui.zoom }}%</span>
-      <button class="canvas-stage__tool-btn" title="放大" @click="ui.zoomIn()">＋</button>
+      <button class="canvas-stage__tool-btn" title="放大" @click="zoomBy(10)">＋</button>
       <span class="canvas-stage__tool-sep" />
       <button class="canvas-stage__tool-btn" title="适应窗口" @click="fitToWindow">适应</button>
       <button class="canvas-stage__tool-btn" title="恢复 100%" @click="zoomReset">100%</button>
+      <span class="canvas-stage__tool-sep" />
+      <span class="canvas-stage__pan-hint">灰色区域也可拖动平移</span>
     </div>
     <div class="canvas-stage__canvas" :style="canvasStyle">
-      <div class="canvas-stage__bg" :style="bgStyle" />
-      <ItemView
-        v-for="item in items"
-        :key="item.id"
-        :item="item"
-        @mousedown.stop="onItemClick($event, item)"
-        @dblclick.stop="onItemDblclick($event, item)"
-      />
+      <div class="canvas-stage__content">
+        <div class="canvas-stage__bg" :style="bgStyle" title="拖动空白画布以平移视图" @mousedown.stop="onCanvasBackgroundDown" />
+        <ItemView
+          v-for="item in items"
+          :key="item.id"
+          :item="item"
+          @mousedown.stop="onItemClick($event, item)"
+          @dblclick.stop="onItemDblclick($event, item)"
+        />
+      </div>
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
       <div v-if="!ui.previewing" class="canvas-stage__toolbar" data-ui-only @mousedown.stop>
         <button
@@ -468,9 +548,19 @@ defineExpose({ canvasPoint, DROP_MIME });
   top: 0;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
 }
+.canvas-stage__content {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
 .canvas-stage__bg {
   position: absolute;
   inset: 0;
+  pointer-events: auto;
+  cursor: grab;
+}
+.canvas-stage--panning .canvas-stage__bg {
+  cursor: grabbing;
 }
 .canvas-stage__guide {
   position: absolute;
@@ -496,6 +586,12 @@ defineExpose({ canvasPoint, DROP_MIME });
   text-align: center;
   font-size: 12px;
   color: var(--cf-text-2);
+}
+.canvas-stage__pan-hint {
+  padding: 0 4px;
+  color: var(--cf-text-2);
+  font-size: 11px;
+  white-space: nowrap;
 }
 .canvas-stage__toolbar {
   position: absolute;

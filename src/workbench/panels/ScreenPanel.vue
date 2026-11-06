@@ -1,22 +1,59 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
 import { themeMode, setTheme } from "@/shared/theme";
 import type { Background } from "@/core/model/types";
+import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 
 const doc = useDocumentStore();
 const screen = computed(() => doc.currentScreen);
+const pendingCanvasSize = ref<{ width: number; height: number } | null>(null);
+const pendingOverflowCount = ref(0);
+const canvasResizeMessage = computed(() => {
+  const size = pendingCanvasSize.value;
+  if (!size) return "";
+  return `缩小到 ${size.width} × ${size.height} 后有 ${pendingOverflowCount.value} 个元素会超出画布。保留原位会裁切超出部分；等比适配会缩放并居中全部元素。`;
+});
 
 function onName(ev: Event): void {
   doc.setScreenName((ev.target as HTMLInputElement).value);
 }
 
 function onCanvasDim(dim: "width" | "height", ev: Event): void {
+  const current = screen.value;
+  if (!current) return;
   const raw = Number((ev.target as HTMLInputElement).value);
   if (!Number.isFinite(raw)) return;
   const value = Math.min(7680, Math.max(320, Math.round(raw)));
-  if (dim === "width") doc.setCanvas({ width: value });
-  else doc.setCanvas({ height: value });
+  const width = dim === "width" ? value : current.canvas.width;
+  const height = dim === "height" ? value : current.canvas.height;
+  if (width === current.canvas.width && height === current.canvas.height) return;
+
+  const isShrinking = width < current.canvas.width || height < current.canvas.height;
+  const overflowing = current.items.filter(
+    (item) => item.frame.x < 0 || item.frame.y < 0 ||
+      item.frame.x + item.frame.w > width || item.frame.y + item.frame.h > height
+  );
+  if (isShrinking && overflowing.length > 0) {
+    pendingCanvasSize.value = { width, height };
+    pendingOverflowCount.value = overflowing.length;
+    return;
+  }
+  doc.setCanvas({ width, height });
+}
+
+function keepCanvasPositions(): void {
+  const size = pendingCanvasSize.value;
+  if (!size) return;
+  doc.setCanvas(size);
+  pendingCanvasSize.value = null;
+}
+
+function fitCanvasContents(): void {
+  const size = pendingCanvasSize.value;
+  if (!size) return;
+  doc.fitItemsToCanvas(size.width, size.height);
+  pendingCanvasSize.value = null;
 }
 
 function onKind(ev: Event): void {
@@ -42,7 +79,7 @@ function patchBg(patch: Partial<Extract<Background, { kind: "color" }>> & Partia
 
 <template>
   <div v-if="screen" class="screen-panel">
-    <label class="screen-panel__row">图表名称
+    <label class="screen-panel__row">大屏名称
       <input :value="screen.name" @change="onName" />
     </label>
     <label class="screen-panel__row">画布尺寸
@@ -98,6 +135,15 @@ function patchBg(patch: Partial<Extract<Background, { kind: "color" }>> & Partia
         <option value="dark">暗色</option>
       </select>
     </label>
+    <ConfirmDialog
+      v-if="pendingCanvasSize"
+      title="缩小画布"
+      :message="canvasResizeMessage"
+      cancel-text="保留原位"
+      confirm-text="等比适配全部元素"
+      @cancel="keepCanvasPositions"
+      @confirm="fitCanvasContents"
+    />
   </div>
 </template>
 

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import type { ChartType, ScreenItem } from "@/core/model/types";
 import { useDocumentStore } from "@/stores/documentStore";
 import Icon from "@/shared/ui/Icon.vue";
@@ -10,12 +9,8 @@ const doc = useDocumentStore();
 
 const DROP_MIME = "application/x-chartforge-item";
 
-const hasChart = computed(() => doc.items.some((i) => i.kind === "chart"));
-
 function pickChart(type: ChartType): void {
-  const existing = doc.items.find((i) => i.kind === "chart");
-  if (existing) doc.changeChartType(existing.id, type);
-  else doc.ensureChart(type);
+  doc.addChart(type);
 }
 
 const CHART_TYPES: Array<{ type: ChartType; label: string }> = [
@@ -56,8 +51,7 @@ function drag(ev: DragEvent, payload: { kind: ScreenItem["kind"]; chartType?: Ch
           <span>{{ c.label }}</span>
         </div>
       </div>
-      <div v-if="hasChart" class="elements-panel__hint">画布只能有一个图表，点击类型直接切换</div>
-      <div v-else class="elements-panel__hint">按住拖到画布中放置</div>
+      <div class="elements-panel__hint">单击添加图表，或拖入画布指定位置</div>
     </template>
     <template v-else>
       <div class="elements-panel__group-title">素材</div>
