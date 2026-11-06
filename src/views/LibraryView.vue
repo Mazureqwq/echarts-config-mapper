@@ -81,6 +81,10 @@ function openPlay(id: string): void {
   router.push(`/play/${id}`);
 }
 
+function openCharts(): void {
+  router.push("/charts");
+}
+
 function clampDim(v: number, fallback: number): number {
   if (!Number.isFinite(v)) return fallback;
   return Math.min(7680, Math.max(320, Math.round(v)));
@@ -198,6 +202,10 @@ function exportWorkspace(): void {
   <div class="library">
     <header class="library__header">
       <h1 class="library__logo"><Icon name="chart" :size="20" /> ChartForge 图表工作台</h1>
+      <nav class="library__nav">
+        <button class="library__nav-btn active">大屏库</button>
+        <button class="library__nav-btn" @click="openCharts">图表库</button>
+      </nav>
       <div class="library__actions">
         <button class="library__btn library__btn--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建大屏
@@ -368,6 +376,25 @@ function exportWorkspace(): void {
   gap: 8px;
   font-size: 18px;
   margin: 0;
+}
+.library__nav {
+  display: flex;
+  gap: 6px;
+}
+.library__nav-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--cf-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cf-text-2);
+  cursor: pointer;
+  font-size: 13px;
+}
+.library__nav-btn.active {
+  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
+  border-color: var(--cf-primary);
+  color: var(--cf-primary);
+  font-weight: 600;
 }
 .library__actions {
   margin-left: auto;
