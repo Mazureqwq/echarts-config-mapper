@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUiStore } from "@/stores/uiStore";
-import type { ChartItem, ChartType, Frame, ScreenItem } from "@/core/model/types";
+import type { ChartData, ChartItem, ChartType, Frame, ScreenItem } from "@/core/model/types";
 import { renderChartThumbnail } from "./chartThumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import FramePanel from "./panels/FramePanel.vue";
@@ -41,6 +41,13 @@ const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
 
 function onFrameChange(patch: Partial<Frame>): void {
   if (single.value) doc.updateItemFrame(single.value.id, patch);
+}
+function onChartPath(id: string, path: string, value: unknown): void {
+  doc.applyChartConfig(id, path, value);
+}
+
+function onChartData(id: string, data: ChartData): void {
+  doc.updateChartData(id, data);
 }
 const CHART_TYPE_LABELS: Array<{ type: ChartType; label: string }> = [
   { type: "line", label: "折线图" },
@@ -139,12 +146,19 @@ function confirmSaveAsset(): void {
               </option>
             </select>
           </div>
-          <button class="inspector__wide-btn" @click="openAssetDialog(focusItem)">
-            保存到图表库
+          <button class="inspector__wide-btn inspector__wide-btn--ghost" @click="openAssetDialog(focusItem)">
+            另存为图表资产
           </button>
         </div>
-        <div class="inspector__section"><ChartConfigPanel :item="focusItem" /></div>
-        <div class="inspector__section"><DataTablePanel :item="focusItem" /></div>
+        <div class="inspector__section">
+          <ChartConfigPanel
+            :item="focusItem"
+            @change-path="(path, value) => onChartPath(focusItem!.id, path, value)"
+          />
+        </div>
+        <div class="inspector__section">
+          <DataTablePanel :item="focusItem" @change-data="(data) => onChartData(focusItem!.id, data)" />
+        </div>
       </div>
     </template>
 
@@ -215,16 +229,19 @@ function confirmSaveAsset(): void {
                 </option>
               </select>
             </div>
-            <button class="inspector__wide-btn" @click="openAssetDialog(single)">
-              保存到图表库
+            <button class="inspector__wide-btn inspector__wide-btn--ghost" @click="openAssetDialog(single)">
+              另存为图表资产
             </button>
           </div>
           <div class="inspector__section">
             <div class="inspector__section-title">图表配置</div>
-            <ChartConfigPanel :item="single" />
+            <ChartConfigPanel
+              :item="single"
+              @change-path="(path, value) => onChartPath(single!.id, path, value)"
+            />
           </div>
           <div class="inspector__section">
-            <DataTablePanel :item="single" />
+            <DataTablePanel :item="single" @change-data="(data) => onChartData(single!.id, data)" />
           </div>
         </template>
       </div>
@@ -249,8 +266,8 @@ function confirmSaveAsset(): void {
 
     <ConfirmDialog
       v-if="assetOpen"
-      title="保存到图表库"
-      message="保存为可复用的图表资产，之后可在大屏中拖入副本。"
+      title="另存为图表资产"
+      message="把这个图表另外保存一份到图表库（图表库是图表的正式产地，这里用于把大屏里的图表回收复用）。"
       confirm-text="保存"
       @confirm="confirmSaveAsset"
       @cancel="assetOpen = false"
@@ -370,6 +387,16 @@ function confirmSaveAsset(): void {
 }
 .inspector__wide-btn:hover {
   background: color-mix(in srgb, var(--cf-primary) 18%, transparent);
+}
+.inspector__wide-btn--ghost {
+  border-color: var(--cf-border);
+  background: transparent;
+  color: var(--cf-text-2);
+}
+.inspector__wide-btn--ghost:hover {
+  color: var(--cf-primary);
+  border-color: var(--cf-primary);
+  background: color-mix(in srgb, var(--cf-primary) 8%, transparent);
 }
 .inspector__form {
   display: flex;

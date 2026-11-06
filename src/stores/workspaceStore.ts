@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
-import { createWorkspace } from "@/core/model/schema";
-import type { Workspace } from "@/core/model/types";
+import { createWorkspace, createChartAsset, createChartSpec } from "@/core/model/schema";
+import { setPath } from "@/core/model/path";
+import type { ChartAsset, ChartData, ChartType, Workspace } from "@/core/model/types";
 import {
   loadWorkspace,
   saveWorkspace,
@@ -73,6 +74,48 @@ export const useWorkspaceStore = defineStore("workspace", {
       return typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    },
+    /** 新建图表资产（图表库是图表的生产地） */
+    createAsset(type: ChartType, name: string, size?: { w: number; h: number }): string {
+      const asset = createChartAsset(name.trim() || "未命名图表", createChartSpec(type));
+      if (size) asset.defaultSize = { w: size.w, h: size.h };
+      this.workspace.assets.push(asset);
+      this.save();
+      return asset.id;
+    },
+    assetById(id: string): ChartAsset | undefined {
+      return this.workspace.assets.find((a) => a.id === id);
+    },
+    /** 按 option 点分路径修改资产配置 */
+    applyAssetConfig(id: string, path: string, value: unknown): void {
+      const asset = this.assetById(id);
+      if (!asset) return;
+      setPath(asset.spec.option as Record<string, unknown>, path.split("."), value);
+      asset.updatedAt = Date.now();
+      this.save();
+    },
+    updateAssetData(id: string, data: ChartData): void {
+      const asset = this.assetById(id);
+      if (!asset) return;
+      asset.spec.data = JSON.parse(JSON.stringify(data)) as ChartData;
+      asset.updatedAt = Date.now();
+      this.save();
+    },
+    /** 切换图表类型（重置参数与数据，保留名称/尺寸/元信息） */
+    updateAssetType(id: string, type: ChartType): void {
+      const asset = this.assetById(id);
+      if (!asset) return;
+      asset.spec = createChartSpec(type);
+      asset.category = asset.category || "";
+      asset.updatedAt = Date.now();
+      this.save();
+    },
+    updateAssetSize(id: string, size: { w: number; h: number }): void {
+      const asset = this.assetById(id);
+      if (!asset) return;
+      asset.defaultSize = { w: Math.max(120, Math.round(size.w)), h: Math.max(80, Math.round(size.h)) };
+      asset.updatedAt = Date.now();
+      this.save();
     },
     duplicateAsset(id: string) {
       const src = this.workspace.assets.find((a) => a.id === id);

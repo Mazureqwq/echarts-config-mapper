@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { ChartItem } from "@/core/model/types";
+import type { ChartData, ChartItem } from "@/core/model/types";
 import { chartRegistry } from "@/core/chart/registry";
 import { dataToMatrix, matrixToChartData } from "@/core/chart/chartData";
 import { parseTsv } from "@/core/chart/tsv";
-import { useDocumentStore } from "@/stores/documentStore";
 
 const props = defineProps<{ item: ChartItem }>();
-const doc = useDocumentStore();
+const emit = defineEmits<{ (e: "changeData", data: ChartData): void }>();
 
 const tsvMode = ref(false);
 const tsvText = ref("");
@@ -19,7 +18,7 @@ const matrix = computed<string[][]>(() => dataToMatrix(props.item.spec.data));
 function applyMatrix(next: string[][]): void {
   if (next.length === 0) return;
   const data = matrixToChartData(next, props.item.spec.type);
-  doc.updateChartData(props.item.id, data);
+  emit("changeData", data);
 }
 
 function onCell(r: number, c: number, ev: Event): void {

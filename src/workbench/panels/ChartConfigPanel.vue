@@ -3,10 +3,9 @@ import { computed } from "vue";
 import type { ChartItem } from "@/core/model/types";
 import { chartRegistry } from "@/core/chart/registry";
 import type { FieldConfig } from "@/core/chart/registry";
-import { useDocumentStore } from "@/stores/documentStore";
 
 const props = defineProps<{ item: ChartItem }>();
-const doc = useDocumentStore();
+const emit = defineEmits<{ (e: "changePath", path: string, value: unknown): void }>();
 
 const descriptor = computed(() => chartRegistry[props.item.spec.type]);
 
@@ -39,7 +38,7 @@ function onInput(field: FieldConfig, ev: Event): void {
   } else {
     value = target.value;
   }
-  doc.applyChartConfig(props.item.id, field.path, value);
+  emit("changePath", field.path, value);
 }
 </script>
 

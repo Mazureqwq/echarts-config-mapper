@@ -18,6 +18,7 @@ import type {
   ScreenItem,
   Workspace,
 } from "@/core/model/types";
+import { setPath } from "@/core/model/path";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
 
@@ -73,19 +74,6 @@ function clampFrameToCanvas(frame: Frame, width: number, height: number): Frame 
 function clampDelta(value: number, min: number, max: number): number {
   if (max < min) return min;
   return clamp(value, min, max);
-}
-
-function setPath(obj: Record<string, unknown>, keys: string[], value: unknown): void {
-  let node: Record<string, unknown> = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const k = keys[i];
-    const cur = node[k];
-    if (cur === null || cur === undefined || typeof cur !== "object") {
-      node[k] = /^\d+$/.test(keys[i + 1]) ? [] : {};
-    }
-    node = node[k] as Record<string, unknown>;
-  }
-  node[keys[keys.length - 1]] = value;
 }
 
 function restoreWorkspace(target: Workspace, source: Workspace): void {
