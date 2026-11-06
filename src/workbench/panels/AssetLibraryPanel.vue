@@ -114,10 +114,10 @@ function place(asset: ChartAsset): void {
     </div>
 
     <div v-if="ws.assets.length === 0" class="asset-lib__empty">
-      还没有图表资产。先做一个图表，选中后在右侧「保存到图表库」。
+      图表库还没有图表。先在图表库（/charts）新建并编辑图表，再拖进大屏。
     </div>
     <div v-else-if="filtered.length === 0" class="asset-lib__empty">没有符合筛选条件的图表资产</div>
-    <div v-else class="asset-lib__hint">拖到画布指定位置，或双击/点击 ＋ 居中放置</div>
+    <div v-else class="asset-lib__hint">拖到画布指定位置，或双击/点击 ＋ 居中放置（均为独立副本）</div>
   </div>
 </template>
 

@@ -71,6 +71,67 @@ describe("stores/workspaceStore", () => {
     expect(store._map.size).toBe(1);
     vi.useRealTimers();
   });
+
+  it("createAsset 在图表库中新建图表资产（含类型与默认尺寸）", () => {
+    const ws = useWorkspaceStore();
+    ws.load();
+    const id = ws.createAsset("bar", "销量图", { w: 800, h: 500 });
+    const asset = ws.assetById(id)!;
+
+    expect(ws.workspace.assets).toHaveLength(1);
+    expect(asset.name).toBe("销量图");
+    expect(asset.spec.type).toBe("bar");
+    expect(asset.defaultSize).toEqual({ w: 800, h: 500 });
+  });
+
+  it("图表资产的配置/数据/类型/尺寸编辑都会落库且只影响自己", () => {
+    const ws = useWorkspaceStore();
+    ws.load();
+    const a = ws.createAsset("line", "A", { w: 600, h: 400 });
+    const b = ws.createAsset("line", "B", { w: 600, h: 400 });
+    const assetA = ws.assetById(a)!;
+    const assetB = ws.assetById(b)!;
+
+    ws.applyAssetConfig(a, "title.text", "销售趋势");
+    expect((assetA.spec.option as Record<string, unknown>).title).toEqual({ text: "销售趋势" });
+    expect(assetB.spec.option).toEqual({});
+
+    ws.updateAssetData(a, {
+      kind: "category",
+      categories: ["一月", "二月"],
+      series: [{ name: "销量", values: [1, 2] }],
+    });
+    expect(assetA.spec.data).toMatchObject({ kind: "category", categories: ["一月", "二月"] });
+    expect(assetB.spec.data).toMatchObject({ kind: "category", categories: [] });
+
+    ws.updateAssetType(b, "pie");
+    expect(assetB.spec.type).toBe("pie");
+    expect(assetB.spec.option).toEqual({});
+    expect(assetA.spec.type).toBe("line");
+
+    ws.updateAssetSize(a, { w: 900, h: 480 });
+    expect(assetA.defaultSize).toEqual({ w: 900, h: 480 });
+    expect(assetB.defaultSize).toEqual({ w: 600, h: 400 });
+  });
+
+  it("资产编辑后的图表拖入大屏得到最新副本", () => {
+    const { doc, ws, screen } = seedScreen();
+    const assetId = ws.createAsset("line", "趋势", { w: 500, h: 300 });
+    ws.applyAssetConfig(assetId, "title.text", "标题A");
+    ws.updateAssetData(assetId, {
+      kind: "category",
+      categories: ["Q1"],
+      series: [{ name: "值", values: [7] }],
+    });
+
+    const itemId = doc.placeAsset(assetId);
+    const item = screen.items.find((i) => i.id === itemId) as ChartItem;
+
+    expect(item.frame.w).toBe(500);
+    expect(item.frame.h).toBe(300);
+    expect((item.spec.option as Record<string, unknown>).title).toEqual({ text: "标题A" });
+    expect(item.spec.data).toMatchObject({ categories: ["Q1"] });
+  });
 });
 
 describe("stores/documentStore", () => {

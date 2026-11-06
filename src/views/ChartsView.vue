@@ -33,6 +33,12 @@ const editTagsText = ref("");
 
 const confirming = ref<ChartAsset | null>(null);
 
+const createOpen = ref(false);
+const createName = ref("");
+const createType = ref<ChartType>("line");
+const createWidth = ref(640);
+const createHeight = ref(400);
+
 onMounted(() => {
   ws.load();
 });
@@ -66,6 +72,27 @@ const filteredAssets = computed<ChartAsset[]>(() => {
 
 function typeLabel(type: ChartType): string {
   return CHART_TYPE_LABELS[type] ?? type;
+}
+
+function openCreate(): void {
+  createName.value = `图表${ws.assets.length + 1}`;
+  createType.value = "line";
+  createWidth.value = 640;
+  createHeight.value = 400;
+  createOpen.value = true;
+}
+
+function confirmCreate(): void {
+  const id = ws.createAsset(createType.value, createName.value, {
+    w: Math.max(120, Math.round(createWidth.value || 640)),
+    h: Math.max(80, Math.round(createHeight.value || 400)),
+  });
+  createOpen.value = false;
+  router.push(`/charts/${id}`);
+}
+
+function openEditor(asset: ChartAsset): void {
+  router.push(`/charts/${asset.id}`);
 }
 
 function openEdit(asset: ChartAsset): void {
@@ -124,7 +151,7 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
 }
 
 function goScreens(): void {
-  router.push("/");
+  router.push("/screens");
 }
 </script>
 
@@ -136,6 +163,11 @@ function goScreens(): void {
         <button class="charts__nav-btn" @click="goScreens">大屏库</button>
         <button class="charts__nav-btn active">图表库</button>
       </nav>
+      <div class="charts__actions">
+        <button class="charts__btn charts__btn--primary" @click="openCreate">
+          <Icon name="plus" :size="14" /> 新建图表
+        </button>
+      </div>
     </header>
 
     <main class="charts__body">
@@ -161,8 +193,10 @@ function goScreens(): void {
 
       <div v-if="assets.length === 0" class="charts__empty">
         <Icon name="chart" :size="42" />
-        <p>还没有图表资产，先在大屏里做一张图，再点「保存到图表库」</p>
-        <button class="charts__btn charts__btn--primary" @click="goScreens">去大屏库</button>
+        <p>还没有图表，点击「新建图表」开始制作</p>
+        <button class="charts__btn charts__btn--primary" @click="openCreate">
+          <Icon name="plus" :size="14" /> 新建图表
+        </button>
       </div>
       <div v-else-if="filteredAssets.length === 0" class="charts__empty">
         <Icon name="chart" :size="42" />
@@ -176,14 +210,16 @@ function goScreens(): void {
           draggable="true"
           @dragstart="onDragStart($event, asset)"
         >
-          <div class="charts__thumb">
+          <div class="charts__thumb" title="点击编辑图表" @click="openEditor(asset)">
             <img v-if="asset.thumbnail" :src="asset.thumbnail" alt="" />
             <div v-else class="charts__thumb-empty">
               <Icon name="chart" :size="28" />
               <span>{{ typeLabel(asset.spec.type) }}</span>
             </div>
           </div>
-          <div class="charts__card-name" :title="asset.name">{{ asset.name }}</div>
+          <div class="charts__card-name" :title="asset.name" @click="openEditor(asset)">
+            {{ asset.name }}
+          </div>
           <div class="charts__card-chips">
             <span class="charts__chip">{{ asset.category || typeLabel(asset.spec.type) }}</span>
             <span v-for="t in asset.tags ?? []" :key="t" class="charts__chip charts__chip--tag">
@@ -191,6 +227,7 @@ function goScreens(): void {
             </span>
           </div>
           <div class="charts__card-ops">
+            <button title="编辑图表" @click="openEditor(asset)"><Icon name="chart" :size="13" /></button>
             <button title="编辑信息" @click="openEdit(asset)"><Icon name="settings" :size="13" /></button>
             <button title="复制" @click="duplicate(asset.id)"><Icon name="copy" :size="13" /></button>
             <button title="导出 JSON" @click="exportAsset(asset)"><Icon name="download" :size="13" /></button>
@@ -198,7 +235,7 @@ function goScreens(): void {
               <Icon name="trash" :size="13" />
             </button>
           </div>
-          <div class="charts__hint">拖到画布即可加入大屏</div>
+          <div class="charts__hint">点卡片编辑；拖到大屏画布即可加入</div>
         </div>
       </div>
     </main>
@@ -211,6 +248,42 @@ function goScreens(): void {
       @confirm="doDelete"
       @cancel="confirming = null"
     />
+
+    <ConfirmDialog
+      v-if="createOpen"
+      title="新建图表"
+      message="选择图表类型并设置默认尺寸，创建后进入图表编辑。"
+      confirm-text="创建并编辑"
+      @confirm="confirmCreate"
+      @cancel="createOpen = false"
+    >
+      <div class="charts__form">
+        <label class="charts__field">
+          名称
+          <input v-model="createName" type="text" placeholder="图表名称" />
+        </label>
+        <label class="charts__field">
+          类型
+          <select v-model="createType">
+            <option v-for="(label, type) in CHART_TYPE_LABELS" :key="type" :value="type">
+              {{ label }}
+            </option>
+          </select>
+        </label>
+        <label class="charts__field">
+          宽度（px）
+          <input v-model.number="createWidth" type="number" min="120" max="7680" step="1" />
+        </label>
+        <label class="charts__field">
+          高度（px）
+          <input v-model.number="createHeight" type="number" min="80" max="7680" step="1" />
+        </label>
+        <div class="charts__form-note">
+          该尺寸为拖入大屏时的默认大小：{{ Math.max(120, createWidth || 640) }} ×
+          {{ Math.max(80, createHeight || 400) }} px
+        </div>
+      </div>
+    </ConfirmDialog>
 
     <ConfirmDialog
       v-if="editOpen && editTarget"
@@ -281,10 +354,20 @@ function goScreens(): void {
   color: var(--cf-primary);
   font-weight: 600;
 }
+.charts__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
 .charts__body {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+}
+.charts__form-note {
+  color: var(--cf-text-2);
+  font-size: 12px;
+  text-align: right;
 }
 .charts__filters {
   display: flex;

@@ -102,11 +102,11 @@ function goPlay(): void {
 
 <template>
   <header class="topbar">
-    <router-link class="topbar__back" to="/" title="返回列表"><Icon name="menu" :size="16" /></router-link>
+    <router-link class="topbar__back" to="/screens" title="返回大屏库"><Icon name="menu" :size="16" /></router-link>
     <input
       class="topbar__name"
       :value="screen?.name ?? ''"
-      placeholder="图表名称"
+      placeholder="大屏名称"
       @change="onRename"
     />
     <span class="topbar__save" :class="{ 'topbar__save--error': ws.saveState === 'error' }">
