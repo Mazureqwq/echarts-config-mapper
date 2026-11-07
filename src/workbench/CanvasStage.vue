@@ -483,12 +483,12 @@ defineExpose({ canvasPoint, DROP_MIME });
     @drop.prevent="onDrop"
   >
     <div v-if="!ui.previewing" class="canvas-stage__zoom-bar" @mousedown.stop>
-      <button class="canvas-stage__tool-btn" title="缩小" @click="zoomBy(-10)">−</button>
+      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="缩小" @click="zoomBy(-10)">−</button>
       <span class="canvas-stage__zoom-label">{{ ui.zoom }}%</span>
-      <button class="canvas-stage__tool-btn" title="放大" @click="zoomBy(10)">＋</button>
+      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="放大" @click="zoomBy(10)">＋</button>
       <span class="canvas-stage__tool-sep" />
-      <button class="canvas-stage__tool-btn" title="适应窗口" @click="fitToWindow">适应</button>
-      <button class="canvas-stage__tool-btn" title="恢复 100%" @click="zoomReset">100%</button>
+      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="适应窗口" @click="fitToWindow">适应</button>
+      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="恢复 100%" @click="zoomReset">100%</button>
       <span class="canvas-stage__tool-sep" />
       <span class="canvas-stage__pan-hint">灰色区域也可拖动平移</span>
     </div>
@@ -506,7 +506,7 @@ defineExpose({ canvasPoint, DROP_MIME });
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
       <div v-if="!ui.previewing" class="canvas-stage__toolbar" data-ui-only @mousedown.stop>
         <button
-          class="canvas-stage__tool-btn"
+          class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
           :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
           title="吸附开关"
           @click="ui.setSnapEnabled(!ui.snapEnabled)"
@@ -518,24 +518,24 @@ defineExpose({ canvasPoint, DROP_MIME });
           <button
             v-for="t in ALIGN_TOOLS"
             :key="t.mode"
-            class="canvas-stage__tool-btn"
+            class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
             :title="t.title"
             @click="doc.alignDistribute(t.mode)"
           >
             <Icon :name="t.icon" :size="14" />
           </button>
           <span class="canvas-stage__tool-sep" />
-          <button class="canvas-stage__tool-btn" title="组合 (Ctrl+G)" @click="doc.addGroup()">
+          <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="组合 (Ctrl+G)" @click="doc.addGroup()">
             <Icon name="group" :size="14" />
           </button>
-          <button class="canvas-stage__tool-btn" title="取消组合 (Ctrl+Shift+G)" @click="doc.ungroup()">
+          <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="取消组合 (Ctrl+Shift+G)" @click="doc.ungroup()">
             <Icon name="close" :size="14" />
           </button>
         </template>
         <template v-if="doc.selectedIds.length > 0">
           <span class="canvas-stage__tool-sep" />
           <button
-            class="canvas-stage__tool-btn canvas-stage__tool-btn--danger"
+            class="cf-button cf-button--plain cf-button--small cf-button--danger canvas-stage__tool-btn canvas-stage__tool-btn--danger"
             title="删除选中元素 (Delete)"
             @click="doc.removeItems([...doc.selectedIds])"
           >
@@ -641,19 +641,6 @@ defineExpose({ canvasPoint, DROP_MIME });
   background: var(--cf-panel);
   box-shadow: var(--cf-shadow);
   border: 1px solid var(--cf-border);
-}
-.canvas-stage__tool-btn {
-  border: none;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  padding: 4px 7px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-.canvas-stage__tool-btn:hover {
-  background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
-  color: var(--cf-primary);
 }
 .canvas-stage__tool-btn--danger:hover {
   background: color-mix(in srgb, var(--cf-danger) 12%, transparent);

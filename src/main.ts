@@ -1,6 +1,7 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 import "./style/index.css";
+import "./style/ui-primitives.css";
 import App from "./App.vue";
 import router from "./router";
 import { initTheme } from "@/shared/theme";

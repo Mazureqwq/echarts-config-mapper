@@ -154,7 +154,7 @@ function confirmSaveAsset(): void {
         <div v-if="focusItem.sourceAssetId" class="inspector__source">
           <template v-if="sourceAsset(focusItem)">
             <span class="inspector__source-label">来源：{{ sourceAsset(focusItem)!.name }}</span>
-            <button class="inspector__source-btn" @click="openSource(focusItem)">打开源图表</button>
+            <button class="cf-button cf-button--plain cf-button--small" @click="openSource(focusItem)">打开源图表</button>
           </template>
           <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
         </div>
@@ -164,7 +164,7 @@ function confirmSaveAsset(): void {
             <span class="inspector__label">类型</span>
             <select
               :key="`focus-${focusItem.id}-${focusItem.spec.type}`"
-              class="inspector__select"
+              class="inspector__select cf-control cf-control--compact"
               :value="focusItem.spec.type"
               @change="onTypeSelect(focusItem.id, $event)"
             >
@@ -173,7 +173,7 @@ function confirmSaveAsset(): void {
               </option>
             </select>
           </div>
-          <button class="inspector__wide-btn inspector__wide-btn--ghost" @click="openAssetDialog(focusItem)">
+          <button class="cf-button cf-button--ghost inspector__wide-btn" @click="openAssetDialog(focusItem)">
             另存为图表资产
           </button>
         </div>
@@ -203,7 +203,7 @@ function confirmSaveAsset(): void {
             <button
               v-for="t in ALIGN_TOOLS"
               :key="t.mode"
-              class="inspector__icon-btn"
+              class="cf-button cf-button--plain cf-button--icon"
               :title="t.title"
               @click="doc.alignDistribute(t.mode)"
             >
@@ -211,10 +211,10 @@ function confirmSaveAsset(): void {
             </button>
           </div>
           <div class="inspector__align-grid">
-            <button class="inspector__icon-btn" title="组合 (Ctrl+G)" @click="doc.addGroup()">
+            <button class="cf-button cf-button--plain cf-button--icon" title="组合 (Ctrl+G)" @click="doc.addGroup()">
               <Icon name="group" :size="15" />
             </button>
-            <button class="inspector__icon-btn" title="取消组合" @click="doc.ungroup()">
+            <button class="cf-button cf-button--plain cf-button--icon" title="取消组合" @click="doc.ungroup()">
               <Icon name="close" :size="15" />
             </button>
           </div>
@@ -239,7 +239,7 @@ function confirmSaveAsset(): void {
         <div v-if="singleChart && singleChart.sourceAssetId" class="inspector__source">
           <template v-if="sourceAsset(singleChart)">
             <span class="inspector__source-label">来源：{{ sourceAsset(singleChart)!.name }}</span>
-            <button class="inspector__source-btn" @click="openSource(singleChart)">打开源图表</button>
+            <button class="cf-button cf-button--plain cf-button--small" @click="openSource(singleChart)">打开源图表</button>
           </template>
           <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
         </div>
@@ -258,7 +258,7 @@ function confirmSaveAsset(): void {
               <span class="inspector__label">类型</span>
               <select
                 :key="`${single.id}-${single.spec.type}`"
-                class="inspector__select"
+                class="inspector__select cf-control cf-control--compact"
                 :value="single.spec.type"
                 @change="onTypeSelect(single.id, $event)"
               >
@@ -267,7 +267,7 @@ function confirmSaveAsset(): void {
                 </option>
               </select>
             </div>
-            <button class="inspector__wide-btn inspector__wide-btn--ghost" @click="openAssetDialog(single)">
+            <button class="cf-button cf-button--ghost inspector__wide-btn" @click="openAssetDialog(single)">
               另存为图表资产
             </button>
           </div>
@@ -317,18 +317,18 @@ function confirmSaveAsset(): void {
       <div class="inspector__form">
         <label class="inspector__form-row">
           名称
-          <input v-model="assetName" type="text" placeholder="图表名称" />
+          <input v-model="assetName" type="text" placeholder="图表名称" class="cf-control cf-control--compact" />
         </label>
         <label class="inspector__form-row">
           分类
-          <select v-model="assetCategory">
+          <select v-model="assetCategory" class="cf-control cf-control--compact">
             <option value="">未分类</option>
             <option v-for="c in CHART_TYPE_LABELS" :key="c.type" :value="c.label">{{ c.label }}</option>
           </select>
         </label>
         <label class="inspector__form-row">
           标签
-          <input v-model="assetTagsText" type="text" placeholder="用逗号或空格分隔" />
+          <input v-model="assetTagsText" type="text" placeholder="用逗号或空格分隔" class="cf-control cf-control--compact" />
         </label>
       </div>
     </ConfirmDialog>
@@ -358,15 +358,6 @@ function confirmSaveAsset(): void {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 150px;
-}
-.inspector__source-btn {
-  border: none;
-  background: transparent;
-  color: var(--cf-primary);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
 }
 .inspector__source-missing {
   color: var(--cf-text-2);
@@ -411,22 +402,6 @@ function confirmSaveAsset(): void {
   gap: 6px;
   margin-bottom: 8px;
 }
-.inspector__icon-btn {
-  width: 32px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-}
-.inspector__icon-btn:hover {
-  color: var(--cf-primary);
-  border-color: var(--cf-primary);
-}
 .inspector__row {
   display: flex;
   align-items: center;
@@ -438,38 +413,6 @@ function confirmSaveAsset(): void {
 .inspector__label {
   flex: none;
   width: 32px;
-}
-.inspector__select {
-  flex: 1;
-  padding: 5px 8px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 12px;
-}
-.inspector__wide-btn {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--cf-primary);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
-  color: var(--cf-primary);
-  font-size: 12px;
-  cursor: pointer;
-}
-.inspector__wide-btn:hover {
-  background: color-mix(in srgb, var(--cf-primary) 18%, transparent);
-}
-.inspector__wide-btn--ghost {
-  border-color: var(--cf-border);
-  background: transparent;
-  color: var(--cf-text-2);
-}
-.inspector__wide-btn--ghost:hover {
-  color: var(--cf-primary);
-  border-color: var(--cf-primary);
-  background: color-mix(in srgb, var(--cf-primary) 8%, transparent);
 }
 .inspector__form {
   display: flex;
@@ -485,14 +428,8 @@ function confirmSaveAsset(): void {
   font-size: 13px;
   color: var(--cf-text-2);
 }
-.inspector__form-row input,
-.inspector__form-row select {
-  width: 160px;
-  padding: 5px 8px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 12px;
-}
+
+.inspector__select { flex: 1; }
+.inspector__wide-btn { width: 100%; }
+.inspector__form-row .cf-control { width: 160px; }
 </style>

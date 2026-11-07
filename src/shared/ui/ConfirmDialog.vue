@@ -20,8 +20,8 @@ const emit = defineEmits<{
         <div class="cf-confirm__message">{{ message }}</div>
         <div class="cf-confirm__slot"><slot /></div>
         <div class="cf-confirm__actions">
-          <button class="cf-confirm__btn" @click="emit('cancel')">{{ cancelText ?? "取消" }}</button>
-          <button class="cf-confirm__btn cf-confirm__btn--primary" @click="emit('confirm')">
+          <button class="cf-button cf-button--ghost" @click="emit('cancel')">{{ cancelText ?? "取消" }}</button>
+          <button class="cf-button cf-button--primary" @click="emit('confirm')">
             {{ confirmText ?? "确定" }}
           </button>
         </div>
@@ -61,18 +61,4 @@ const emit = defineEmits<{
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-.cf-confirm__btn {
-  padding: 6px 16px;
-  border-radius: 6px;
-  border: 1px solid var(--cf-border, #e2e4e8);
-  background: transparent;
-  color: var(--cf-text, #1f2329);
-  cursor: pointer;
-}
-.cf-confirm__btn--primary {
-  background: var(--cf-primary, #4f6ef7);
-  border-color: var(--cf-primary, #4f6ef7);
-  color: #fff;
-}
-</style>
+}</style>

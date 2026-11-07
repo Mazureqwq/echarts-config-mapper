@@ -1,0 +1,142 @@
+/* Shared interaction primitives for consistent sizing, focus states and variants. */
+.cf-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--cf-border);
+  border-radius: 7px;
+  background: var(--cf-panel);
+  color: var(--cf-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.cf-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--cf-primary) 48%, var(--cf-border));
+  background: color-mix(in srgb, var(--cf-primary) 7%, transparent);
+  color: var(--cf-primary);
+}
+
+.cf-button:focus-visible,
+.cf-control:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--cf-primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.cf-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cf-button--primary {
+  border-color: var(--cf-primary);
+  background: var(--cf-primary);
+  color: #fff;
+}
+
+.cf-button--primary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--cf-primary) 84%, #000);
+  background: color-mix(in srgb, var(--cf-primary) 84%, #000);
+  color: #fff;
+}
+
+.cf-button--danger {
+  color: var(--cf-danger);
+}
+
+.cf-button.cf-button--danger:hover:not(:disabled) {
+  border-color: var(--cf-danger);
+  background: color-mix(in srgb, var(--cf-danger) 10%, transparent);
+  color: var(--cf-danger);
+}
+
+.cf-button--plain {
+  border-color: transparent;
+  background: transparent;
+  color: var(--cf-text-2);
+}
+
+.cf-button--plain:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--cf-bg);
+  color: var(--cf-primary);
+}
+
+.cf-button--ghost {
+  background: transparent;
+  color: var(--cf-text-2);
+}
+
+.cf-button--small {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.cf-button--icon {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  gap: 0;
+}
+
+.cf-control {
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--cf-border);
+  border-radius: 7px;
+  background: var(--cf-bg);
+  color: var(--cf-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.cf-control:focus-visible {
+  border-color: var(--cf-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cf-primary) 14%, transparent);
+  outline: none;
+}
+
+.cf-control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cf-control--compact {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.cf-control--textarea {
+  min-height: 96px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.cf-control--cell {
+  min-height: 26px;
+  padding: 4px 6px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.cf-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px;
+}

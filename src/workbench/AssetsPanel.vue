@@ -82,7 +82,7 @@ function typeLabel(type: ChartType): string {
 
 <template>
   <div class="assets-panel">
-    <input v-model="search" class="assets-panel__search" placeholder="搜索资产" />
+    <input v-model="search" class="assets-panel__search cf-control" placeholder="搜索资产" />
     <div class="assets-panel__grid">
       <div
         v-for="asset in filtered"
@@ -125,7 +125,7 @@ function typeLabel(type: ChartType): string {
       @confirm="confirmRename"
       @cancel="renaming = null"
     >
-      <input v-model="renameText" class="assets-panel__rename-input" />
+      <input v-model="renameText" class="assets-panel__rename-input cf-control" />
     </ConfirmDialog>
 
     <ConfirmDialog
@@ -234,10 +234,6 @@ function typeLabel(type: ChartType): string {
 .assets-panel__rename-input {
   width: 100%;
   margin-top: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--cf-primary);
-  border-radius: 5px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
+  border-color: var(--cf-primary);
 }
 </style>

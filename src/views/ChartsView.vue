@@ -11,6 +11,7 @@ import Icon from "@/shared/ui/Icon.vue";
 import AppHeader from "@/shared/ui/AppHeader.vue";
 import CollectionFilterBar from "@/shared/ui/CollectionFilterBar.vue";
 import EmptyState from "@/shared/ui/EmptyState.vue";
+import CollectionCardFrame from "@/shared/ui/CollectionCardFrame.vue";
 
 const router = useRouter();
 const ws = useWorkspaceStore();
@@ -243,7 +244,7 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
     <AppHeader active="charts">
       <template #actions>
         <div class="charts__actions">
-        <button class="charts__btn charts__btn--primary" @click="openCreate">
+        <button class="cf-button cf-button--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建图表
         </button>
       </div>
@@ -275,14 +276,14 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
         <span class="charts__batch-count">已选 {{ selectedCount }} 项</span>
         <label class="charts__batch-field">
           分类
-          <select v-model="batchCategory" class="charts__select">
+          <select v-model="batchCategory" class="cf-control cf-control--compact">
             <option value="">未分类</option>
             <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
           </select>
         </label>
-        <button class="charts__btn" @click="applyBatchCategory">应用分类</button>
-        <button class="charts__btn charts__btn--danger" @click="batchDeleteOpen = true">批量删除</button>
-        <button class="charts__btn charts__btn--ghost" @click="clearSelection">取消选择</button>
+        <button class="cf-button" @click="applyBatchCategory">应用分类</button>
+        <button class="cf-button cf-button--danger" @click="batchDeleteOpen = true">批量删除</button>
+        <button class="cf-button cf-button--ghost" @click="clearSelection">取消选择</button>
       </div>
 
       <EmptyState v-if="assets.length === 0" title="图表库还是空的。流程是「先做图表，再拼大屏」：">
@@ -297,55 +298,55 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
           </li>
         </ol>
         <template #actions>
-          <button class="charts__btn charts__btn--primary" @click="openCreate">
+          <button class="cf-button cf-button--primary" @click="openCreate">
             <Icon name="plus" :size="14" /> 新建第一张图表
           </button>
-          <button class="charts__btn" @click="goScreens">去大屏库看看</button>
+          <button class="cf-button" @click="goScreens">去大屏库看看</button>
         </template>
       </EmptyState>
       <EmptyState v-else-if="filteredAssets.length === 0" title="没有符合筛选条件的图表" />
-      <div v-else class="charts__grid">
-        <div
+      <div v-else class="charts__grid cf-collection-grid">
+        <CollectionCardFrame
           v-for="asset in filteredAssets"
           :key="asset.id"
-          class="charts__card"
-          draggable="true"
+          :title="asset.name"
+          :thumbnail="asset.thumbnail"
+          draggable
+          @open="openEditor(asset)"
           @dragstart="onDragStart($event, asset)"
         >
-          <label class="charts__pick" title="选择" @click.stop>
-            <input
-              type="checkbox"
-              :checked="isSelected(asset.id)"
-              @change="toggleSelect(asset.id)"
-            />
-          </label>
-          <div class="charts__thumb" title="点击编辑图表" @click="openEditor(asset)">
-            <img v-if="asset.thumbnail" :src="asset.thumbnail" alt="" />
-            <div v-else class="charts__thumb-empty">
-              <Icon name="chart" :size="28" />
-              <span>{{ typeLabel(asset.spec.type) }}</span>
-            </div>
-          </div>
-          <div class="charts__card-name" :title="asset.name" @click="openEditor(asset)">
-            {{ asset.name }}
-          </div>
-          <div class="charts__card-chips">
-            <span class="charts__chip">{{ asset.category || typeLabel(asset.spec.type) }}</span>
-            <span v-for="t in asset.tags ?? []" :key="t" class="charts__chip charts__chip--tag">
+          <template #selection>
+            <label class="collection-card__checkbox" title="选择">
+              <input
+                type="checkbox"
+                :checked="isSelected(asset.id)"
+                @change="toggleSelect(asset.id)"
+              />
+            </label>
+          </template>
+          <template #thumbnail-placeholder>
+            <Icon name="chart" :size="28" />
+            <span>{{ typeLabel(asset.spec.type) }}</span>
+          </template>
+          <template #metadata>
+            <span class="collection-card__chip">{{ asset.category || typeLabel(asset.spec.type) }}</span>
+            <span v-for="t in asset.tags ?? []" :key="t" class="collection-card__chip collection-card__chip--tag">
               {{ t }}
             </span>
-          </div>
-          <div class="charts__card-ops">
-            <button title="编辑图表" @click="openEditor(asset)"><Icon name="chart" :size="13" /></button>
-            <button title="编辑信息" @click="openEdit(asset)"><Icon name="settings" :size="13" /></button>
-            <button title="复制" @click="duplicate(asset.id)"><Icon name="copy" :size="13" /></button>
-            <button title="导出 JSON" @click="exportAsset(asset)"><Icon name="download" :size="13" /></button>
-            <button title="删除" class="charts__danger" @click="askDelete(asset)">
+          </template>
+          <template #actions>
+            <button class="cf-button cf-button--plain cf-button--icon" title="编辑图表" @click="openEditor(asset)"><Icon name="chart" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon" title="编辑信息" @click="openEdit(asset)"><Icon name="settings" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon" title="复制" @click="duplicate(asset.id)"><Icon name="copy" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon" title="导出 JSON" @click="exportAsset(asset)"><Icon name="download" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon cf-button--danger" title="删除" @click="askDelete(asset)">
               <Icon name="trash" :size="13" />
             </button>
-          </div>
-          <div class="charts__hint">点卡片编辑；拖到大屏画布即可加入</div>
-        </div>
+          </template>
+          <template #footer>
+            <div class="charts__hint">点卡片编辑；拖到大屏画布即可加入</div>
+          </template>
+        </CollectionCardFrame>
       </div>
     </main>
 
@@ -378,11 +379,11 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
       <div class="charts__form">
         <label class="charts__field">
           名称
-          <input v-model="createName" type="text" placeholder="图表名称" />
+          <input v-model="createName" type="text" placeholder="图表名称" class="cf-control" />
         </label>
         <label class="charts__field">
           类型
-          <select v-model="createType">
+          <select v-model="createType" class="cf-control">
             <option v-for="(label, type) in CHART_TYPE_LABELS" :key="type" :value="type">
               {{ label }}
             </option>
@@ -390,11 +391,11 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
         </label>
         <label class="charts__field">
           宽度（px）
-          <input v-model.number="createWidth" type="number" min="120" max="7680" step="1" />
+          <input v-model.number="createWidth" type="number" min="120" max="7680" step="1" class="cf-control" />
         </label>
         <label class="charts__field">
           高度（px）
-          <input v-model.number="createHeight" type="number" min="80" max="7680" step="1" />
+          <input v-model.number="createHeight" type="number" min="80" max="7680" step="1" class="cf-control" />
         </label>
         <div class="charts__form-note">
           该尺寸为拖入大屏时的默认大小：{{ Math.max(120, createWidth || 640) }} ×
@@ -414,18 +415,18 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
       <div class="charts__form">
         <label class="charts__field">
           名称
-          <input v-model="editName" type="text" placeholder="图表名称" />
+          <input v-model="editName" type="text" placeholder="图表名称" class="cf-control" />
         </label>
         <label class="charts__field">
           分类
-          <select v-model="editCategory">
+          <select v-model="editCategory" class="cf-control">
             <option value="">未分类</option>
             <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
           </select>
         </label>
         <label class="charts__field">
           标签
-          <input v-model="editTagsText" type="text" placeholder="用逗号或空格分隔" />
+          <input v-model="editTagsText" type="text" placeholder="用逗号或空格分隔" class="cf-control" />
         </label>
       </div>
     </ConfirmDialog>
@@ -454,14 +455,8 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   color: var(--cf-text-2);
   font-size: 12px;
   text-align: right;
-}.charts__select {
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}.charts__steps li {
+}
+.charts__steps li {
   background: var(--cf-panel);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
@@ -474,7 +469,8 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   color: var(--cf-text);
   font-size: 13px;
   margin-bottom: 2px;
-}.charts__check {
+}
+.charts__check {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -505,141 +501,10 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   gap: 6px;
   color: var(--cf-text-2);
 }
-.charts__btn--danger {
-  border-color: var(--cf-danger);
-  color: var(--cf-danger);
-}
-.charts__btn--danger:hover {
-  background: color-mix(in srgb, var(--cf-danger) 12%, transparent);
-}
-.charts__btn--ghost {
-  background: transparent;
-  color: var(--cf-text-2);
-}
-.charts__pick {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--cf-panel) 85%, transparent);
-  border: 1px solid var(--cf-border);
-  cursor: pointer;
-}
-.charts__pick input {
-  margin: 0;
-  cursor: pointer;
-}
-.charts__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 16px;
-}
-.charts__card {
-  position: relative;
-  background: var(--cf-panel);
-  border: 1px solid var(--cf-border);
-  border-radius: 10px;
-  overflow: hidden;
-  cursor: grab;
-}
-.charts__card:active {
-  cursor: grabbing;
-}
-.charts__thumb {
-  aspect-ratio: 16 / 9;
-  background: var(--cf-canvas-bg);
-}
-.charts__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.charts__thumb-empty {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--cf-text-2);
-  font-size: 12px;
-}
-.charts__card-name {
-  padding: 10px 12px 4px;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.charts__card-chips {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  padding: 0 12px;
-  min-height: 8px;
-}
-.charts__chip {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
-  color: var(--cf-primary);
-  font-size: 11px;
-}
-.charts__chip--tag {
-  background: var(--cf-bg);
-  color: var(--cf-text-2);
-  border: 1px solid var(--cf-border);
-}
-.charts__card-ops {
-  display: flex;
-  gap: 2px;
-  padding: 6px 8px 4px;
-}
-.charts__card-ops button {
-  border: none;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 6px;
-}
-.charts__card-ops button:hover {
-  background: var(--cf-bg);
-  color: var(--cf-primary);
-}
-.charts__danger:hover {
-  color: var(--cf-danger) !important;
-}
 .charts__hint {
-  padding: 0 12px 10px;
   color: var(--cf-text-2);
   font-size: 11px;
   opacity: 0.8;
-}
-.charts__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text);
-  cursor: pointer;
-  font-size: 13px;
-}
-.charts__btn--primary {
-  background: var(--cf-primary);
-  border-color: var(--cf-primary);
-  color: #fff;
 }
 .charts__form {
   display: flex;
@@ -655,14 +520,6 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   font-size: 13px;
   color: var(--cf-text-2);
 }
-.charts__field input,
-.charts__field select {
-  width: 170px;
-  padding: 6px 8px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
+
+.charts__field .cf-control { width: 170px; }
 </style>

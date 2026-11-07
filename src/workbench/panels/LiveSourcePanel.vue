@@ -310,7 +310,7 @@ function useDefaultInterval(): void {
       <template v-if="enabled">
         <label class="live__row">
           <span>写法</span>
-          <select v-model="useAbsolute" class="live__select">
+          <select v-model="useAbsolute" class="live__select cf-control cf-control--compact">
             <option :value="false">相对路径（用全局 baseUrl）</option>
             <option :value="true">完整地址</option>
           </select>
@@ -318,11 +318,11 @@ function useDefaultInterval(): void {
 
         <label v-if="!useAbsolute" class="live__row">
           <span>相对路径</span>
-          <input v-model="path" placeholder="/api/sales" spellcheck="false" />
+          <input v-model="path" placeholder="/api/sales" spellcheck="false" class="cf-control cf-control--compact" />
         </label>
         <label v-else class="live__row">
           <span>完整地址</span>
-          <input v-model="absoluteUrl" placeholder="https://api.example.com/sales" spellcheck="false" />
+          <input v-model="absoluteUrl" placeholder="https://api.example.com/sales" spellcheck="false" class="cf-control cf-control--compact" />
         </label>
 
         <div class="live__preview">
@@ -335,7 +335,7 @@ function useDefaultInterval(): void {
 
         <div class="live__row">
           <span>方法</span>
-          <select v-model="method" class="live__select">
+          <select v-model="method" class="live__select cf-control cf-control--compact">
             <option value="GET">GET</option>
             <option value="POST">POST</option>
           </select>
@@ -343,7 +343,7 @@ function useDefaultInterval(): void {
         <textarea
           v-if="method === 'POST'"
           v-model="body"
-          class="live__textarea"
+          class="live__textarea cf-control cf-control cf-control--compact--textarea"
           rows="3"
           spellcheck="false"
           placeholder='{"region":"华东"}'
@@ -351,18 +351,18 @@ function useDefaultInterval(): void {
 
         <label class="live__row">
           <span>间隔（秒，≥{{ LIVE_MIN_INTERVAL_SEC }}）</span>
-          <input v-model.number="intervalSec" type="number" :min="LIVE_MIN_INTERVAL_SEC" :max="LIVE_MAX_INTERVAL_SEC" />
+          <input v-model.number="intervalSec" type="number" :min="LIVE_MIN_INTERVAL_SEC" :max="LIVE_MAX_INTERVAL_SEC" class="cf-control cf-control--compact" />
         </label>
         <button class="live__link" @click="useDefaultInterval">用全局默认间隔（{{ defaultInterval }} 秒）</button>
 
         <label class="live__row">
           <span>超时（毫秒）</span>
-          <input v-model.number="timeoutMs" type="number" :min="MIN_TIMEOUT_MS" :max="MAX_TIMEOUT_MS" step="500" />
+          <input v-model.number="timeoutMs" type="number" :min="MIN_TIMEOUT_MS" :max="MAX_TIMEOUT_MS" step="500" class="cf-control cf-control--compact" />
         </label>
 
         <label class="live__row">
           <span>取值路径 dataPath</span>
-          <input v-model="dataPath" placeholder="result.rows  或  result.rows[*].value" spellcheck="false" />
+          <input v-model="dataPath" placeholder="result.rows  或  result.rows[*].value" spellcheck="false" class="cf-control cf-control--compact" />
         </label>
         <div class="live__hint">
           载荷支持二维表（首行表头）、对象数组 <code>[{"月份":"一月","销量":10}]</code>、纯数值数组；
@@ -373,18 +373,18 @@ function useDefaultInterval(): void {
           <summary>图表级请求头 / 查询参数（覆盖全局同名项）</summary>
           <div class="live__pairs">
             <span class="live__pairs-label">请求头（Key=Value，每行一条）</span>
-            <textarea v-model="headersText" class="live__textarea" rows="3" spellcheck="false" placeholder="X-Tenant=demo" />
+            <textarea v-model="headersText" class="live__textarea cf-control cf-control cf-control--compact--textarea" rows="3" spellcheck="false" placeholder="X-Tenant=demo" />
             <span class="live__pairs-label">查询参数（key=value，每行一条）</span>
-            <textarea v-model="queryText" class="live__textarea" rows="2" spellcheck="false" placeholder="region=east" />
+            <textarea v-model="queryText" class="live__textarea cf-control cf-control cf-control--compact--textarea" rows="2" spellcheck="false" placeholder="region=east" />
           </div>
         </details>
 
         <div class="live__ops">
-          <button class="live__btn" @click="tab = 'debug'">去调试台试一下</button>
-          <button class="live__btn live__btn--primary" @click="save">保存数据源</button>
+          <button class="cf-button cf-button--small live__btn" @click="tab = 'debug'">去调试台试一下</button>
+          <button class="cf-button cf-button--small cf-button--primary live__btn" @click="save">保存数据源</button>
         </div>
       </template>
-      <button v-else class="live__btn live__btn--primary" @click="save">保存数据源</button>
+      <button v-else class="cf-button cf-button--small cf-button--primary live__btn" @click="save">保存数据源</button>
 
       <div v-if="notice" class="live__notice">{{ notice }}</div>
     </div>
@@ -395,7 +395,7 @@ function useDefaultInterval(): void {
         请求：<code>{{ probe?.method ?? method }} {{ finalUrl || "（还没填地址）" }}</code>
       </div>
       <div class="live__ops">
-        <button class="live__btn live__btn--primary" :disabled="probing" @click="runProbe">
+        <button class="cf-button cf-button--small cf-button--primary live__btn" :disabled="probing" @click="runProbe">
           {{ probing ? "请求中…" : "发一次请求" }}
         </button>
         <span v-if="probe" class="live__status-code" :class="probe.ok ? 'is-ok' : 'is-bad'">
@@ -437,7 +437,7 @@ function useDefaultInterval(): void {
           </button>
         </div>
 
-        <button class="live__btn" :disabled="!picked.ok" @click="fillFromProbe">
+        <button class="cf-button cf-button--small live__btn" :disabled="!picked.ok" @click="fillFromProbe">
           用这份数据填充图表（快照）
         </button>
         <div v-if="snapshotNotice" class="live__notice">{{ snapshotNotice }}</div>
@@ -454,21 +454,21 @@ function useDefaultInterval(): void {
         <div class="live__debug-block">
           <div class="live__debug-title">行过滤（多条为「并且」）</div>
           <div v-for="(f, i) in filters" :key="i" class="live__filter">
-            <select v-model="f.field" class="live__select live__select--field">
+            <select v-model="f.field" class="live__select live__select--field cf-control cf-control--compact">
               <option value="">字段</option>
               <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
             </select>
-            <select v-model="f.op" class="live__select live__select--op">
+            <select v-model="f.op" class="live__select live__select--op cf-control cf-control--compact">
               <option v-for="op in FILTER_OPS" :key="op.value" :value="op.value">{{ op.label }}</option>
             </select>
             <input
               v-if="f.op !== 'notEmpty'"
               v-model="f.value"
-              class="live__input"
+              class="live__input cf-control cf-control--compact"
               placeholder="值"
               :disabled="!f.field"
             />
-            <button class="live__icon-btn" title="删除条件" @click="removeFilter(i)">×</button>
+            <button class="cf-button cf-button--plain cf-button--icon live__icon-btn" title="删除条件" @click="removeFilter(i)">×</button>
           </div>
           <button class="live__link" @click="addFilter">＋ 添加条件</button>
         </div>
@@ -493,11 +493,11 @@ function useDefaultInterval(): void {
           <div class="live__row">
             <span>排序字段</span>
             <div class="live__inline">
-              <select v-model="sortField" class="live__select">
+              <select v-model="sortField" class="live__select cf-control cf-control--compact">
                 <option value="">不排序</option>
                 <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
               </select>
-              <select v-model="sortDesc" class="live__select live__select--op" :disabled="!sortField">
+              <select v-model="sortDesc" class="live__select live__select--op cf-control cf-control--compact" :disabled="!sortField">
                 <option :value="false">升序</option>
                 <option :value="true">降序</option>
               </select>
@@ -505,7 +505,7 @@ function useDefaultInterval(): void {
           </div>
           <div class="live__row">
             <span>取前 N 行（0 = 不限）</span>
-            <input v-model.number="limit" type="number" min="0" max="5000" class="live__input live__input--num" />
+            <input v-model.number="limit" type="number" min="0" max="5000" class="live__input live__input--num cf-control cf-control--compact" />
           </div>
         </div>
 
@@ -513,21 +513,21 @@ function useDefaultInterval(): void {
           <div class="live__debug-title">字段映射（留空 = 按第一行自动推断）</div>
           <div class="live__row">
             <span>分类列</span>
-            <select v-model="mapCategory" class="live__select">
+            <select v-model="mapCategory" class="live__select cf-control cf-control--compact">
               <option value="">自动</option>
               <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
             </select>
           </div>
           <div class="live__row">
             <span>数值列</span>
-            <select v-model="mapValue" class="live__select">
+            <select v-model="mapValue" class="live__select cf-control cf-control--compact">
               <option value="">自动</option>
               <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
             </select>
           </div>
           <div class="live__row">
             <span>系列字段（长表转宽表）</span>
-            <select v-model="mapSeries" class="live__select">
+            <select v-model="mapSeries" class="live__select cf-control cf-control--compact">
               <option value="">无</option>
               <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
             </select>
@@ -560,8 +560,8 @@ function useDefaultInterval(): void {
         </div>
 
         <div class="live__ops">
-          <button class="live__btn live__btn--primary" @click="save">保存加工设置</button>
-          <button class="live__btn" @click="clearProcessing">清空加工</button>
+          <button class="cf-button cf-button--small cf-button--primary live__btn" @click="save">保存加工设置</button>
+          <button class="cf-button cf-button--small live__btn" @click="clearProcessing">清空加工</button>
         </div>
         <div v-if="notice" class="live__notice">{{ notice }}</div>
       </template>
@@ -614,16 +614,7 @@ function useDefaultInterval(): void {
   font-size: 12px;
   color: var(--cf-text-2);
 }
-.live__row input:not([type="checkbox"]),
-.live__select {
-  width: 170px;
-  padding: 4px 6px;
-  border: 1px solid var(--cf-border);
-  border-radius: 4px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 12px;
-}
+
 .live__inline {
   display: flex;
   gap: 4px;
@@ -637,15 +628,6 @@ function useDefaultInterval(): void {
 .live__select--op {
   width: 84px;
 }
-.live__input {
-  width: 90px;
-  padding: 4px 6px;
-  border: 1px solid var(--cf-border);
-  border-radius: 4px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 12px;
-}
 .live__input--num {
   width: 70px;
 }
@@ -654,27 +636,12 @@ function useDefaultInterval(): void {
   align-items: center;
   gap: 4px;
 }
-.live__icon-btn {
-  width: 20px;
-  height: 22px;
-  border: 1px solid var(--cf-border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-}
 .live__textarea {
   width: 100%;
+  min-height: 64px;
   padding: 5px 7px;
-  border: 1px solid var(--cf-border);
-  border-radius: 4px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 11px;
-  resize: vertical;
 }
 .live__preview,
 .live__hint,
@@ -735,24 +702,6 @@ function useDefaultInterval(): void {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-.live__btn {
-  padding: 6px 12px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--cf-text);
-  cursor: pointer;
-  font-size: 12px;
-}
-.live__btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.live__btn--primary {
-  border-color: var(--cf-primary);
-  background: var(--cf-primary);
-  color: #fff;
 }
 .live__status-code {
   font-size: 11px;
@@ -845,4 +794,8 @@ function useDefaultInterval(): void {
 .live__status--bad {
   color: var(--cf-danger);
 }
+.live__row .cf-control,
+.live__select { width: 170px; }
+.live__input { width: 90px; }
+.live__icon-btn { width: 24px; height: 26px; min-width: 24px; min-height: 26px; }
 </style>

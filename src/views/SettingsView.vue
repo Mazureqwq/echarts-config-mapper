@@ -157,11 +157,11 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
         <div class="settings__row">
           <input
             v-model="baseUrl"
-            class="settings__input"
+            class="settings__input cf-control"
             placeholder="https://api.example.com/v1"
             spellcheck="false"
           />
-          <button class="settings__btn" :disabled="probing" @click="testBaseUrl">
+          <button class="cf-button" :disabled="probing" @click="testBaseUrl">
             {{ probing ? "请求中…" : "探活" }}
           </button>
         </div>
@@ -181,7 +181,7 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
         <p class="settings__desc">每行一条 <code>Key=Value</code>，所有实时数据源都会带上；单个数据源的配置会覆盖同名项。</p>
         <textarea
           v-model="headersView"
-          class="settings__textarea"
+          class="settings__textarea cf-control cf-control--textarea"
           rows="4"
           spellcheck="false"
           :readonly="!revealHeaders"
@@ -200,7 +200,7 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
       <section class="settings__card">
         <h2>公共查询参数</h2>
         <p class="settings__desc">每行一条 <code>key=value</code>，会拼到每个请求的 URL 上（如 <code>appKey=xxx</code>）。</p>
-        <textarea v-model="queryText" class="settings__textarea" rows="3" spellcheck="false" placeholder="tenant=demo" />
+        <textarea v-model="queryText" class="settings__textarea cf-control cf-control--textarea" rows="3" spellcheck="false" placeholder="tenant=demo" />
       </section>
 
       <section class="settings__card">
@@ -208,11 +208,11 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
         <div class="settings__row settings__row--between">
           <label class="settings__field">
             <span>默认拉取间隔（秒）</span>
-            <input v-model.number="intervalSec" class="settings__input settings__input--num" type="number" min="5" max="3600" />
+            <input v-model.number="intervalSec" class="settings__input settings__input--num cf-control" type="number" min="5" max="3600" />
           </label>
           <label class="settings__field">
             <span>请求超时（毫秒，{{ MIN_TIMEOUT_MS }}–{{ MAX_TIMEOUT_MS }}）</span>
-            <input v-model.number="timeoutMs" class="settings__input settings__input--num" type="number" :min="MIN_TIMEOUT_MS" :max="MAX_TIMEOUT_MS" step="500" />
+            <input v-model.number="timeoutMs" class="settings__input settings__input--num cf-control" type="number" :min="MIN_TIMEOUT_MS" :max="MAX_TIMEOUT_MS" step="500" />
           </label>
         </div>
         <p class="settings__desc">新建数据源时用它做默认值；超时保护可避免接口卡死时图表一直停在旧数据。</p>
@@ -231,8 +231,8 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
       </section>
 
       <div class="settings__footer">
-        <button class="settings__btn settings__btn--primary" @click="save">保存设置</button>
-        <button class="settings__btn" @click="reset">恢复默认</button>
+        <button class="cf-button cf-button--primary" @click="save">保存设置</button>
+        <button class="cf-button" @click="reset">恢复默认</button>
         <span v-if="notice" class="settings__notice">{{ notice }}</span>
       </div>
     </main>
@@ -313,30 +313,16 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
   justify-content: space-between;
   flex-wrap: wrap;
 }
-.settings__input {
-  flex: 1;
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
+.settings__input { flex: 1; }
 .settings__input--num {
   flex: none;
   width: 130px;
 }
 .settings__textarea {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
-  resize: vertical;
 }
 .settings__textarea[readonly] {
   color: var(--cf-text-2);
@@ -355,24 +341,6 @@ const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl
   font-size: 12px;
   color: var(--cf-text);
   cursor: pointer;
-}
-.settings__btn {
-  padding: 7px 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--cf-text);
-  cursor: pointer;
-  font-size: 13px;
-}
-.settings__btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.settings__btn--primary {
-  background: var(--cf-primary);
-  border-color: var(--cf-primary);
-  color: #fff;
 }
 .settings__probe {
   font-size: 12px;

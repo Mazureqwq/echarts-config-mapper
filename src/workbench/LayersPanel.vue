@@ -102,18 +102,18 @@ function onRowDrop(ev: DragEvent, target: ScreenItem): void {
       <span v-else class="layers-panel__name" @dblclick.stop="startRename(item)">
         {{ item.name || item.kind }}
       </span>
-      <button class="layers-panel__btn" title="置顶" @click.stop="layerOp('top', item)">⤒</button>
-      <button class="layers-panel__btn" title="上移一层" @click.stop="layerOp('up', item)">↑</button>
-      <button class="layers-panel__btn" title="下移一层" @click.stop="layerOp('down', item)">↓</button>
-      <button class="layers-panel__btn" title="置底" @click.stop="layerOp('bottom', item)">⤓</button>
-      <button class="layers-panel__btn" :title="item.hidden ? '显示' : '隐藏'" @click.stop="toggleHidden(item)">
+      <button class="cf-button cf-button--plain cf-button--small layers-panel__btn" title="置顶" @click.stop="layerOp('top', item)">⤒</button>
+      <button class="cf-button cf-button--plain cf-button--small layers-panel__btn" title="上移一层" @click.stop="layerOp('up', item)">↑</button>
+      <button class="cf-button cf-button--plain cf-button--small layers-panel__btn" title="下移一层" @click.stop="layerOp('down', item)">↓</button>
+      <button class="cf-button cf-button--plain cf-button--small layers-panel__btn" title="置底" @click.stop="layerOp('bottom', item)">⤓</button>
+      <button class="cf-button cf-button--plain cf-button--small layers-panel__btn" :title="item.hidden ? '显示' : '隐藏'" @click.stop="toggleHidden(item)">
         <Icon :name="item.hidden ? 'eye-off' : 'eye'" :size="13" />
       </button>
-      <button class="layers-panel__btn" :title="item.locked ? '解锁' : '锁定'" @click.stop="toggleLock(item)">
+      <button class="cf-button cf-button--plain cf-button--small layers-panel__btn" :title="item.locked ? '解锁' : '锁定'" @click.stop="toggleLock(item)">
         <Icon :name="item.locked ? 'lock' : 'unlock'" :size="13" />
       </button>
       <button
-        class="layers-panel__btn layers-panel__danger"
+        class="cf-button cf-button--plain cf-button--small cf-button--danger layers-panel__btn layers-panel__danger"
         title="删除"
         :disabled="item.locked"
         @click.stop="onDelete(item)"
@@ -165,22 +165,8 @@ function onRowDrop(ev: DragEvent, target: ScreenItem): void {
   background: var(--cf-panel);
   color: var(--cf-text);
 }
-.layers-panel__btn {
-  border: none;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  padding: 2px;
-}
-.layers-panel__btn:hover {
-  color: var(--cf-primary);
-}
 .layers-panel__danger:hover:not(:disabled) {
   color: var(--cf-danger);
-}
-.layers-panel__btn:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 .layers-panel__empty {
   padding: 16px;

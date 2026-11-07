@@ -13,6 +13,7 @@ import Icon from "@/shared/ui/Icon.vue";
 import AppHeader from "@/shared/ui/AppHeader.vue";
 import CollectionFilterBar from "@/shared/ui/CollectionFilterBar.vue";
 import EmptyState from "@/shared/ui/EmptyState.vue";
+import CollectionCardFrame from "@/shared/ui/CollectionCardFrame.vue";
 
 const router = useRouter();
 const ws = useWorkspaceStore();
@@ -253,13 +254,13 @@ function exportWorkspace(): void {
     <AppHeader active="screens">
       <template #actions>
         <div class="library__actions">
-        <button class="library__btn library__btn--primary" @click="openCreate">
+        <button class="cf-button cf-button--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建大屏
         </button>
-        <button v-if="screens.length > 1" class="library__btn" @click="openPlaylist">
+        <button v-if="screens.length > 1" class="cf-button" @click="openPlaylist">
           <Icon name="chart" :size="14" /> 轮播演示
         </button>
-        <button class="library__btn" @click="exportWorkspace">
+        <button class="cf-button" @click="exportWorkspace">
           <Icon name="download" :size="14" /> 导出全部
         </button>
       </div>
@@ -290,39 +291,41 @@ function exportWorkspace(): void {
         <template #actions>
           <button
             v-if="ws.assets.length === 0"
-            class="library__btn library__btn--primary"
+            class="cf-button cf-button--primary"
             @click="openCharts"
           >
             去图表库
           </button>
-          <button class="library__btn" @click="openCreate">新建大屏</button>
+          <button class="cf-button" @click="openCreate">新建大屏</button>
         </template>
       </EmptyState>
       <EmptyState v-else-if="filteredScreens.length === 0" title="没有符合筛选条件的大屏" />
-      <div v-else class="library__grid">
-        <div v-for="screen in filteredScreens" :key="screen.id" class="library__card">
-          <div class="library__thumb" @click="openWorkbench(screen.id)">
-            <img v-if="screen.thumbnail" :src="screen.thumbnail" alt="" />
-            <div v-else class="library__thumb-empty">
-              {{ screen.canvas.width }} × {{ screen.canvas.height }}
-            </div>
-          </div>
-          <div class="library__card-name" @click="openWorkbench(screen.id)">{{ screen.name }}</div>
-          <div class="library__card-chips">
-            <span v-if="screen.category" class="library__chip">{{ screen.category }}</span>
-            <span v-for="t in screen.tags ?? []" :key="t" class="library__chip library__chip--tag">{{ t }}</span>
-          </div>
-          <div class="library__card-ops">
-            <button title="编辑信息" @click="openEdit(screen)"><Icon name="settings" :size="13" /></button>
-            <button title="演示" @click="openPlay(screen.id)"><Icon name="play" :size="13" /></button>
-            <button title="复制" @click="duplicate(screen.id)"><Icon name="copy" :size="13" /></button>
-            <button title="导出可交付产物（可直接打开 / 部署）" @click="openExportPackage(screen)">
+      <div v-else class="library__grid cf-collection-grid">
+        <CollectionCardFrame
+          v-for="screen in filteredScreens"
+          :key="screen.id"
+          :title="screen.name"
+          :thumbnail="screen.thumbnail"
+          @open="openWorkbench(screen.id)"
+        >
+          <template #thumbnail-placeholder>
+            {{ screen.canvas.width }} × {{ screen.canvas.height }}
+          </template>
+          <template #metadata>
+            <span v-if="screen.category" class="collection-card__chip">{{ screen.category }}</span>
+            <span v-for="t in screen.tags ?? []" :key="t" class="collection-card__chip collection-card__chip--tag">{{ t }}</span>
+          </template>
+          <template #actions>
+            <button class="cf-button cf-button--plain cf-button--icon" title="编辑信息" @click="openEdit(screen)"><Icon name="settings" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon" title="演示" @click="openPlay(screen.id)"><Icon name="play" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon" title="复制" @click="duplicate(screen.id)"><Icon name="copy" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon" title="导出可交付产物（可直接打开 / 部署）" @click="openExportPackage(screen)">
               <Icon name="package" :size="13" />
             </button>
-            <button title="导出 JSON" @click="exportScreen(screen)"><Icon name="download" :size="13" /></button>
-            <button title="删除" class="library__danger" @click="askDelete(screen)"><Icon name="trash" :size="13" /></button>
-          </div>
-        </div>
+            <button class="cf-button cf-button--plain cf-button--icon" title="导出 JSON" @click="exportScreen(screen)"><Icon name="download" :size="13" /></button>
+            <button class="cf-button cf-button--plain cf-button--icon cf-button--danger" title="删除" @click="askDelete(screen)"><Icon name="trash" :size="13" /></button>
+          </template>
+        </CollectionCardFrame>
       </div>
     </main>
 
@@ -353,7 +356,7 @@ function exportWorkspace(): void {
         </div>
         <label class="library__field">
           切换间隔（秒）
-          <input v-model.number="playlistInterval" type="number" min="3" max="600" step="1" />
+          <input v-model.number="playlistInterval" type="number" min="3" max="600" step="1" class="cf-control" />
         </label>
         <div class="library__play-note">
           演示中可用 ← / → 手动切屏，空格暂停/继续，Esc 返回工作台。
@@ -381,7 +384,7 @@ function exportWorkspace(): void {
       <div class="library__form">
         <label class="library__field">
           尺寸预设
-          <select v-model="createPreset" @change="onCreatePresetChange">
+          <select v-model="createPreset" @change="onCreatePresetChange" class="cf-control">
             <option v-for="preset in CANVAS_PRESETS" :key="preset.value" :value="preset.value">
               {{ preset.label }}
             </option>
@@ -396,7 +399,7 @@ function exportWorkspace(): void {
             max="7680"
             step="1"
             @input="onCreateWidthInput"
-          />
+           class="cf-control" />
         </label>
         <label class="library__field">
           高度（px）
@@ -407,7 +410,7 @@ function exportWorkspace(): void {
             max="7680"
             step="1"
             @input="onCreateHeightInput"
-          />
+           class="cf-control" />
         </label>
         <label class="library__check">
           <input type="checkbox" :checked="createAspectLocked" @change="onCreateAspectLockChange" />
@@ -448,18 +451,18 @@ function exportWorkspace(): void {
       <div class="library__form">
         <label class="library__field">
           名称
-          <input v-model="editName" type="text" placeholder="图表名称" />
+          <input v-model="editName" type="text" placeholder="图表名称" class="cf-control" />
         </label>
         <label class="library__field">
           分类
-          <select v-model="editCategory">
+          <select v-model="editCategory" class="cf-control">
             <option value="">未分类</option>
             <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
           </select>
         </label>
         <label class="library__field">
           标签
-          <input v-model="editTagsText" type="text" placeholder="用逗号或空格分隔" />
+          <input v-model="editTagsText" type="text" placeholder="用逗号或空格分隔" class="cf-control" />
         </label>
       </div>
     </ConfirmDialog>
@@ -485,28 +488,12 @@ function exportWorkspace(): void {
   gap: 8px;
   white-space: nowrap;
 }
-.library__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text);
-  cursor: pointer;
-  font-size: 13px;
-}
-.library__btn--primary {
-  background: var(--cf-primary);
-  border-color: var(--cf-primary);
-  color: #fff;
-}
 .library__body {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-}.library__steps li {
+}
+.library__steps li {
   background: var(--cf-panel);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
@@ -519,83 +506,6 @@ function exportWorkspace(): void {
   color: var(--cf-text);
   font-size: 13px;
   margin-bottom: 2px;
-}.library__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 16px;
-}
-.library__card {
-  background: var(--cf-panel);
-  border: 1px solid var(--cf-border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.library__thumb {
-  aspect-ratio: 16 / 9;
-  cursor: pointer;
-  background: var(--cf-canvas-bg);
-}
-.library__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.library__thumb-empty {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--cf-text-2);
-  font-size: 12px;
-}
-.library__card-name {
-  padding: 10px 12px 4px;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.library__card-chips {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  padding: 0 12px;
-  min-height: 8px;
-}
-.library__chip {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cf-primary) 10%, transparent);
-  color: var(--cf-primary);
-  font-size: 11px;
-}
-.library__chip--tag {
-  background: var(--cf-bg);
-  color: var(--cf-text-2);
-  border: 1px solid var(--cf-border);
-}
-.library__card-ops {
-  display: flex;
-  gap: 2px;
-  padding: 6px 8px 10px;
-}
-.library__card-ops button {
-  border: none;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 6px;
-}
-.library__card-ops button:hover {
-  background: var(--cf-bg);
-  color: var(--cf-primary);
-}
-.library__danger:hover {
-  color: var(--cf-danger) !important;
 }
 .library__play-list {
   display: grid;
@@ -683,16 +593,7 @@ function exportWorkspace(): void {
   font-size: 13px;
   color: var(--cf-text-2);
 }
-.library__field input,
-.library__field select {
-  width: 170px;
-  padding: 6px 8px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
+
 .library__check {
   display: flex;
   align-items: center;
@@ -709,4 +610,5 @@ function exportWorkspace(): void {
   font-size: 12px;
   text-align: right;
 }
+.library__field .cf-control { width: 170px; }
 </style>

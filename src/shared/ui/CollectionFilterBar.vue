@@ -18,11 +18,11 @@ withDefaults(
     <slot name="leading" />
     <input
       v-model="search"
-      class="collection-filter-bar__search"
+      class="collection-filter-bar__search cf-control"
       type="search"
       :placeholder="searchPlaceholder"
     />
-    <select v-model="category" class="collection-filter-bar__select">
+    <select v-model="category" class="collection-filter-bar__select cf-control">
       <option value="">全部分类</option>
       <option value="未分类">未分类</option>
       <option v-for="item in categories" :key="item" :value="item">{{ item }}</option>
@@ -51,28 +51,6 @@ withDefaults(
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
-
-.collection-filter-bar__search {
-  box-sizing: border-box;
-  width: 220px;
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
-
-.collection-filter-bar__select {
-  box-sizing: border-box;
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
-
 .collection-filter-bar__tags {
   display: flex;
   gap: 6px;
@@ -94,4 +72,6 @@ withDefaults(
   border-color: var(--cf-primary);
   color: var(--cf-primary);
 }
+.collection-filter-bar__search { width: 220px; }
+.collection-filter-bar__select { max-width: 240px; }
 </style>

@@ -73,7 +73,7 @@ function applyTsv(): void {
   <div class="data-table">
     <div class="data-table__head">
       <span class="data-table__title">数据（{{ descriptor.dataKind === "category" ? "类目/系列" : descriptor.dataKind === "nameValue" ? "名称/数值" : descriptor.dataKind === "xy" ? "x/y" : "系列/指标" }}）</span>
-      <button class="data-table__btn" @click="tsvMode ? (tsvMode = false) : openTsv()">{{ tsvMode ? "返回表格" : "粘贴 TSV" }}</button>
+      <button class="cf-button cf-button--small data-table__btn" @click="tsvMode ? (tsvMode = false) : openTsv()">{{ tsvMode ? "返回表格" : "粘贴 TSV" }}</button>
     </div>
 
     <template v-if="!tsvMode">
@@ -81,23 +81,23 @@ function applyTsv(): void {
         <table>
           <tr v-for="(row, r) in matrix" :key="r">
             <td v-for="(cell, c) in row" :key="c">
-              <input :value="cell" @change="onCell(r, c, $event)" />
+              <input :value="cell" @change="onCell(r, c, $event)" class="cf-control cf-control--cell" />
             </td>
           </tr>
         </table>
       </div>
       <div class="data-table__ops">
-        <button class="data-table__btn" @click="addRow">+ 行</button>
-        <button class="data-table__btn" @click="delRow">- 行</button>
-        <button class="data-table__btn" @click="addCol">+ 列</button>
-        <button class="data-table__btn" @click="delCol">- 列</button>
+        <button class="cf-button cf-button--small data-table__btn" @click="addRow">+ 行</button>
+        <button class="cf-button cf-button--small data-table__btn" @click="delRow">- 行</button>
+        <button class="cf-button cf-button--small data-table__btn" @click="addCol">+ 列</button>
+        <button class="cf-button cf-button--small data-table__btn" @click="delCol">- 列</button>
       </div>
     </template>
 
     <template v-else>
-      <textarea v-model="tsvText" class="data-table__tsv" rows="8" placeholder="从 Excel 复制后直接粘贴（制表符分隔）" />
+      <textarea v-model="tsvText" class="data-table__tsv cf-control cf-control--textarea" rows="8" placeholder="从 Excel 复制后直接粘贴（制表符分隔）" />
       <div class="data-table__ops">
-        <button class="data-table__btn data-table__btn--primary" @click="applyTsv">应用 TSV</button>
+        <button class="cf-button cf-button--small cf-button--primary data-table__btn" @click="applyTsv">应用 TSV</button>
       </div>
     </template>
 
@@ -132,11 +132,7 @@ function applyTsv(): void {
 }
 .data-table td input {
   width: 80px;
-  border: none;
-  padding: 4px 6px;
   font-size: 12px;
-  background: transparent;
-  color: var(--cf-text);
 }
 .data-table__tsv {
   width: 100%;
@@ -153,20 +149,6 @@ function applyTsv(): void {
   gap: 6px;
   margin-top: 8px;
   flex-wrap: wrap;
-}
-.data-table__btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  border: 1px solid var(--cf-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-}
-.data-table__btn--primary {
-  background: var(--cf-primary);
-  border-color: var(--cf-primary);
-  color: #fff;
 }
 .data-table__notice {
   margin-top: 6px;

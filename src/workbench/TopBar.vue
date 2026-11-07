@@ -113,7 +113,7 @@ function goPlay(): void {
   <header class="topbar">
     <router-link class="topbar__back" to="/screens" title="返回大屏库"><Icon name="menu" :size="16" /></router-link>
     <input
-      class="topbar__name"
+      class="topbar__name cf-control"
       :value="screen?.name ?? ''"
       placeholder="大屏名称"
       @change="onRename"
@@ -124,34 +124,34 @@ function goPlay(): void {
     </span>
 
     <div class="topbar__center">
-      <button class="topbar__btn" :disabled="!doc.history.canUndo" title="撤销 (Ctrl+Z)" @click="doc.undo()">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.history.canUndo" title="撤销 (Ctrl+Z)" @click="doc.undo()">
         <Icon name="undo" :size="15" />
       </button>
-      <button class="topbar__btn" :disabled="!doc.history.canRedo" title="重做 (Ctrl+Y)" @click="doc.redo()">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.history.canRedo" title="重做 (Ctrl+Y)" @click="doc.redo()">
         <Icon name="redo" :size="15" />
       </button>
       <span class="topbar__sep" />
       <button
-        class="topbar__btn"
+        class="cf-button cf-button--plain cf-button--small topbar__btn"
         :class="{ 'topbar__btn--on': ui.previewing }"
         title="预览（隐藏辅助线与手柄）"
         @click="ui.setPreviewing(!ui.previewing)"
       >
         <Icon name="eye" :size="15" /> 预览
       </button>
-      <button class="topbar__btn" title="演示模式" @click="goPlay">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" title="演示模式" @click="goPlay">
         <Icon name="play" :size="15" /> 演示
       </button>
     </div>
 
     <div class="topbar__right">
-      <button class="topbar__btn" title="保存并刷新缩略图（大屏库卡片预览）" @click="manualSave">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" title="保存并刷新缩略图（大屏库卡片预览）" @click="manualSave">
         <Icon name="check" :size="15" /> 保存到大屏库
       </button>
-      <button class="topbar__btn" title="导出 JSON" @click="exportJsonFile">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" title="导出 JSON" @click="exportJsonFile">
         <Icon name="download" :size="15" /> JSON
       </button>
-      <button class="topbar__btn" :disabled="exporting" :title="pngExportTitle" @click="exportPng">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="exporting" :title="pngExportTitle" @click="exportPng">
         <Icon name="image" :size="15" /> 导出大屏 PNG
       </button>
       <span
@@ -222,26 +222,6 @@ function goPlay(): void {
   display: flex;
   align-items: center;
   gap: 4px;
-}
-.topbar__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: none;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-.topbar__btn:hover:not(:disabled) {
-  background: var(--cf-bg);
-  color: var(--cf-text);
-}
-.topbar__btn:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 .topbar__btn--on {
   background: color-mix(in srgb, var(--cf-primary) 12%, transparent);

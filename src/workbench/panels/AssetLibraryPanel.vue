@@ -66,9 +66,9 @@ function place(asset: ChartAsset): void {
 
 <template>
   <div class="asset-lib">
-    <input v-model="search" class="asset-lib__search" type="search" placeholder="搜索名称或标签" />
+    <input v-model="search" class="asset-lib__search cf-control cf-control--compact" type="search" placeholder="搜索名称或标签" />
     <div class="asset-lib__filters">
-      <select v-model="categoryFilter" class="asset-lib__select">
+      <select v-model="categoryFilter" class="asset-lib__select cf-control cf-control--compact">
         <option value="">全部分类</option>
         <option value="未分类">未分类</option>
         <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
@@ -138,15 +138,6 @@ function place(asset: ChartAsset): void {
   display: flex;
   gap: 6px;
   margin-top: 8px;
-}
-.asset-lib__select {
-  flex: 1;
-  padding: 5px 8px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 12px;
 }
 .asset-lib__tags {
   display: flex;
@@ -249,4 +240,5 @@ function place(asset: ChartAsset): void {
   line-height: 1.5;
   text-align: center;
 }
+.asset-lib__select { flex: 1; }
 </style>

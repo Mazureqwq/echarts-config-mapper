@@ -206,16 +206,16 @@ function goScreens(): void {
 <template>
   <div class="chart-edit">
     <header class="chart-edit__header">
-      <button class="chart-edit__back" title="返回图表库" @click="goBack">
+      <button class="cf-button cf-button--plain cf-button--icon chart-edit__back" title="返回图表库" @click="goBack">
         <Icon name="menu" :size="16" />
       </button>
       <input
-        class="chart-edit__name"
+        class="chart-edit__name cf-control"
         :value="asset?.name ?? ''"
         placeholder="图表名称"
         @change="onRename"
       />
-      <select class="chart-edit__select" :value="asset?.spec.type" @change="onTypeChange">
+      <select class="chart-edit__select cf-control" :value="asset?.spec.type" @change="onTypeChange">
         <option v-for="c in CHART_TYPE_LABELS" :key="c.type" :value="c.type">{{ c.label }}</option>
       </select>
       <span class="chart-edit__size">
@@ -226,7 +226,7 @@ function goScreens(): void {
           max="7680"
           :value="asset?.defaultSize?.w ?? 640"
           @change="onSize('w', $event)"
-        />
+         class="cf-control" />
         ×
         <input
           type="number"
@@ -234,11 +234,11 @@ function goScreens(): void {
           max="7680"
           :value="asset?.defaultSize?.h ?? 400"
           @change="onSize('h', $event)"
-        />
+         class="cf-control" />
       </span>
       <span class="chart-edit__history">
         <button
-          class="chart-edit__icon-btn"
+          class="cf-button cf-button--plain cf-button--icon chart-edit__icon-btn"
           :disabled="!canUndo"
           title="撤销 (Ctrl+Z)"
           @click="undo"
@@ -246,7 +246,7 @@ function goScreens(): void {
           <Icon name="undo" :size="15" />
         </button>
         <button
-          class="chart-edit__icon-btn"
+          class="cf-button cf-button--plain cf-button--icon chart-edit__icon-btn"
           :disabled="!canRedo"
           title="重做 (Ctrl+Y)"
           @click="redo"
@@ -256,7 +256,7 @@ function goScreens(): void {
       </span>
       <span class="chart-edit__saved">已自动保存</span>
       <div class="chart-edit__actions">
-        <button class="chart-edit__btn" @click="goScreens">
+        <button class="cf-button" @click="goScreens">
           <Icon name="layers" :size="15" /> 大屏库
         </button>
       </div>
@@ -265,7 +265,7 @@ function goScreens(): void {
     <div v-if="!asset" class="chart-edit__empty">
       <Icon name="chart" :size="42" />
       <p>没有找到这个图表资产</p>
-      <button class="chart-edit__btn" @click="goBack">返回图表库</button>
+      <button class="cf-button" @click="goBack">返回图表库</button>
     </div>
 
     <div v-else class="chart-edit__body">
@@ -314,32 +314,7 @@ function goScreens(): void {
   border-bottom: 1px solid var(--cf-border);
   flex-shrink: 0;
 }
-.chart-edit__back {
-  border: none;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  padding: 4px;
-}
-.chart-edit__name {
-  width: 200px;
-  padding: 6px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
-.chart-edit__select {
-  padding: 6px 8px;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
+.chart-edit__name { width: 200px; }
 .chart-edit__size {
   display: inline-flex;
   align-items: center;
@@ -349,28 +324,13 @@ function goScreens(): void {
 }
 .chart-edit__size input {
   width: 68px;
+  min-height: 30px;
   padding: 5px 6px;
-  border: 1px solid var(--cf-border);
-  border-radius: 5px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
   font-size: 12px;
 }
 .chart-edit__history {
   display: inline-flex;
   gap: 4px;
-}
-.chart-edit__icon-btn {
-  width: 30px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--cf-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
 }
 .chart-edit__icon-btn:disabled {
   opacity: 0.4;
@@ -388,18 +348,6 @@ function goScreens(): void {
   margin-left: auto;
   display: flex;
   gap: 8px;
-}
-.chart-edit__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text);
-  cursor: pointer;
-  font-size: 13px;
 }
 .chart-edit__body {
   flex: 1;
