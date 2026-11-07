@@ -31,7 +31,7 @@ const screen = computed(() => ws.screens.find((s) => s.id === props.screenId) ??
 const pngExportTitle = computed(() => {
   const width = screen.value?.canvas.width ?? 1920;
   const height = screen.value?.canvas.height ?? 1080;
-  return `导出当前大屏为 PNG（2 倍分辨率，${width * 2} × ${height * 2} px）`;
+  return `导出当前大屏为高清 PNG 图片（2 倍分辨率，${width * 2} × ${height * 2} px）`;
 });
 
 const saveText = computed(() => {
@@ -94,8 +94,8 @@ async function exportPng(): Promise<void> {
     download(`${screen.value?.name || "大屏"}@2x.png`, snapshot.dataUrl, true);
     flash(
       snapshot.omittedResources > 0
-        ? `已导出 2 倍 PNG；${snapshot.omittedResources} 个跨域资源已替换为提示图`
-        : "已导出 2 倍 PNG"
+        ? `高清 PNG 已导出；${snapshot.omittedResources} 个跨域图片/图表图层已替换为提示图`
+        : "高清 PNG 已导出（2 倍分辨率）"
     );
   } catch (e) {
     flash(e instanceof Error ? e.message : String(e), true);
@@ -152,7 +152,7 @@ function goPlay(): void {
         <Icon name="download" :size="15" /> JSON
       </button>
       <button class="topbar__btn" :disabled="exporting" :title="pngExportTitle" @click="exportPng">
-        <Icon name="image" :size="15" /> PNG 2×
+        <Icon name="image" :size="15" /> 导出大屏 PNG
       </button>
       <span
         v-if="exportMsg"

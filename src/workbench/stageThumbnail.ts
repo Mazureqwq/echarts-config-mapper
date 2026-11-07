@@ -2,7 +2,7 @@ import { makeThumbnail, THUMBNAIL_MAX_SIDE } from "@/core/storage/thumbnail";
 
 export interface StageSnapshot {
   dataUrl: string;
-  /** Number of tainted chart canvases / inaccessible external images replaced with placeholders. */
+  /** Number of image/chart resources substituted with safe placeholders. */
   omittedResources: number;
 }
 
@@ -31,12 +31,28 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
- * Inline cross-origin images when the remote server allows CORS.
- * If it doesn't, use an inlined placeholder so one external image cannot taint the full export.
+ * Inlining CORS-readable images prevents later SVG/Canvas export from depending on remote origins.
+ * If the source denies CORS, replace that image in the export clone with an explanatory placeholder.
  */
-async function makeImageExportSafe(image: HTMLImageElement): Promise<boolean> {
-  const src = image.currentSrc || image.src;
-  if (!src || isLocalImageSource(src)) return false;
+async function makeImageExportSafe(image: HTMLImageElement, stripAllImages: boolean): Promise<boolean> {
+  // Do not let a srcset/picture candidate silently restore the remote URL after setting a safe src.
+  image.removeAttribute("srcset");
+  image.removeAttribute("sizes");
+  if (stripAllImages) {
+    image.src = placeholderDataUrl("图片已替换以保证导出");
+    return true;
+  }
+
+  const rawSrc = image.getAttribute("src")?.trim();
+  if (!rawSrc) return false;
+  let src: string;
+  try {
+    src = new URL(rawSrc, document.baseURI).href;
+  } catch {
+    image.src = placeholderDataUrl("无效图片已替换");
+    return true;
+  }
+  if (isLocalImageSource(src)) return false;
 
   try {
     const response = await fetch(src, { mode: "cors", credentials: "omit" });
@@ -51,10 +67,52 @@ async function makeImageExportSafe(image: HTMLImageElement): Promise<boolean> {
   }
 }
 
+function cssUrls(value: string): string[] {
+  return Array.from(value.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi), (match) => match[1].trim());
+}
+
+/** Remove external CSS image references from the cloned stage before serializing it. */
+function sanitizeBackgroundImages(source: HTMLElement, clone: HTMLElement, stripAllImages: boolean): number {
+  const sourceChildren = Array.from(source.querySelectorAll("*")).filter((node) => !node.closest("[data-ui-only]"));
+  const cloneChildren = Array.from(clone.querySelectorAll("*"));
+  const originals: Element[] = [source, ...sourceChildren];
+  const clones: Element[] = [clone, ...cloneChildren];
+  let omitted = 0;
+
+  for (let i = 0; i < Math.min(originals.length, clones.length); i++) {
+    const backgroundImage = window.getComputedStyle(originals[i]).backgroundImage;
+    const urls = cssUrls(backgroundImage);
+    if (!urls.length) continue;
+    if (stripAllImages || urls.some((url) => !isLocalImageSource(url))) {
+      (clones[i] as HTMLElement | SVGElement).style.backgroundImage = "none";
+      omitted += urls.length;
+    }
+  }
+  return omitted;
+}
+
+function sanitizeSvgImages(clone: HTMLElement, stripAllImages: boolean): number {
+  let omitted = 0;
+  for (const image of Array.from(clone.querySelectorAll("image"))) {
+    const href = image.getAttribute("href") ?? image.getAttribute("xlink:href") ?? "";
+    if (stripAllImages || (href && !isLocalImageSource(href))) {
+      image.setAttribute("href", placeholderDataUrl("图片已替换以保证导出"));
+      image.removeAttribute("xlink:href");
+      omitted++;
+    }
+  }
+  return omitted;
+}
+
+function isSecurityError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "name" in error && (error as { name?: unknown }).name === "SecurityError";
+}
+
 async function renderStageSnapshot(
   source: HTMLElement,
   maxSide: number,
-  mime: string
+  mime: string,
+  stripAllImages = false
 ): Promise<StageSnapshot> {
   const clone = source.cloneNode(true) as HTMLElement;
   clone.querySelectorAll("[data-ui-only]").forEach((n) => n.remove());
@@ -69,21 +127,31 @@ async function renderStageSnapshot(
     img.setAttribute("style", canvas.getAttribute("style") ?? "");
     img.width = canvas.width;
     img.height = canvas.height;
-    try {
-      const original = originals[index];
-      if (!original) throw new Error("画布图层缺失");
-      img.src = original.toDataURL();
-    } catch {
-      // A chart can itself be tainted by a third-party image/symbol. Replace that layer, not the whole export.
-      img.src = placeholderDataUrl("图表含跨域内容，已替换");
-      omittedResources++;
+    if (stripAllImages) {
+      img.src = placeholderDataUrl("图表图片已替换以保证导出");
+    } else {
+      try {
+        const original = originals[index];
+        if (!original) throw new Error("画布图层缺失");
+        img.src = original.toDataURL();
+      } catch {
+        // A chart can itself be tainted by a third-party image/symbol. Replace only that chart layer.
+        img.src = placeholderDataUrl("图表含跨域内容，已替换");
+        omittedResources++;
+      }
     }
     canvas.replaceWith(img);
   });
 
-  for (const image of Array.from(clone.querySelectorAll("img"))) {
-    if (await makeImageExportSafe(image)) omittedResources++;
+  for (const sourceNode of Array.from(clone.querySelectorAll("source"))) {
+    sourceNode.removeAttribute("srcset");
+    sourceNode.removeAttribute("src");
   }
+  for (const image of Array.from(clone.querySelectorAll("img"))) {
+    if (await makeImageExportSafe(image, stripAllImages)) omittedResources++;
+  }
+  omittedResources += sanitizeBackgroundImages(source, clone, stripAllImages);
+  omittedResources += sanitizeSvgImages(clone, stripAllImages);
 
   const w = source.offsetWidth || 1920;
   const h = source.offsetHeight || 1080;
@@ -111,8 +179,10 @@ async function renderStageSnapshot(
       const dataUrl = mime === "image/png" ? canvas.toDataURL("image/png") : makeThumbnail(canvas);
       return { dataUrl, omittedResources };
     } catch (error) {
-      if (error instanceof DOMException && error.name === "SecurityError") {
-        throw new Error("仍有跨域图片无法安全导出。请改用本地上传图片，或让图片服务器开放 CORS 后重试。");
+      if (isSecurityError(error)) {
+        // Last-resort retry: remove every raster/background image. A tainted resource must not block the whole screen.
+        if (!stripAllImages) return renderStageSnapshot(source, maxSide, mime, true);
+        throw new Error("浏览器仍检测到无法读取的跨域资源。请将素材下载后本地上传，再重新导出。");
       }
       throw error;
     }
@@ -130,10 +200,7 @@ export async function snapshotStage(
   return (await renderStageSnapshot(source, maxSide, mime)).dataUrl;
 }
 
-/**
- * Export the current screen at 2x resolution. A 1920x1080 stage becomes 3840x2160.
- * Cross-origin resources without CORS are represented by clear placeholders rather than failing the export.
- */
+/** Export the current screen at 2x resolution (e.g. 1920x1080 -> 3840x2160). */
 export async function snapshotStagePng(source: HTMLElement): Promise<StageSnapshot> {
   const w = source.offsetWidth || 1920;
   const h = source.offsetHeight || 1080;
