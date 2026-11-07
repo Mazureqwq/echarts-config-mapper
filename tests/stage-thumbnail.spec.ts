@@ -21,6 +21,13 @@ describe("screen PNG export safety and affordance", () => {
     expect(code).toContain("图表含跨域内容，已替换");
   });
 
+  it("renders library thumbnails from live canvases without foreignObject", () => {
+    const code = source("workbench/stageThumbnail.ts");
+    const start = code.indexOf("export async function snapshotStage(");
+    const end = code.indexOf("/** Export the current screen", start);
+    expect(code.slice(start, end)).toContain("renderSafeCanvasFallback(source, maxSide, mime)");
+  });
+
   it("inlines computed layout styles before serializing the stage clone", () => {
     const code = source("workbench/stageThumbnail.ts");
     expect(code).toContain("function inlineComputedStyles(source: HTMLElement, clone: HTMLElement)");

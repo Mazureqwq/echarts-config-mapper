@@ -436,7 +436,9 @@ export async function snapshotStage(
   maxSide: number = THUMBNAIL_MAX_SIDE,
   mime: string = "image/jpeg"
 ): Promise<string> {
-  return (await renderStageSnapshot(source, maxSide, mime)).dataUrl;
+  // Library previews use the direct painter: it reads the live ECharts canvases and
+  // computed element styles without relying on foreignObject rasterization.
+  return (await renderSafeCanvasFallback(source, maxSide, mime)).dataUrl;
 }
 
 /** Export the current screen at 2x resolution (e.g. 1920x1080 -> 3840x2160). */
