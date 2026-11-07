@@ -9,6 +9,8 @@ import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import AppHeader from "@/shared/ui/AppHeader.vue";
+import CollectionFilterBar from "@/shared/ui/CollectionFilterBar.vue";
+import EmptyState from "@/shared/ui/EmptyState.vue";
 
 const router = useRouter();
 const ws = useWorkspaceStore();
@@ -249,33 +251,25 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
     </AppHeader>
 
     <main class="charts__body">
-      <div v-if="assets.length > 0" class="charts__filters">
-        <label class="charts__check" title="全选当前筛选结果">
-          <input
-            type="checkbox"
-            :checked="allFilteredSelected"
-            @change="toggleSelectAll"
-          />
-          <span>全选</span>
-        </label>
-        <input v-model="search" class="charts__search" type="search" placeholder="搜索名称或标签" />
-        <select v-model="categoryFilter" class="charts__select">
-          <option value="">全部分类</option>
-          <option value="未分类">未分类</option>
-          <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-        <div class="charts__tags">
-          <button
-            v-for="t in allTags"
-            :key="t"
-            class="charts__tag"
-            :class="{ active: activeTag === t }"
-            @click="activeTag = activeTag === t ? null : t"
-          >
-            {{ t }}
-          </button>
-        </div>
-      </div>
+      <CollectionFilterBar
+        v-if="assets.length > 0"
+        v-model:search="search"
+        v-model:category="categoryFilter"
+        v-model:active-tag="activeTag"
+        :categories="CATEGORIES"
+        :tags="allTags"
+      >
+        <template #leading>
+          <label class="charts__check" title="全选当前筛选结果">
+            <input
+              type="checkbox"
+              :checked="allFilteredSelected"
+              @change="toggleSelectAll"
+            />
+            <span>全选</span>
+          </label>
+        </template>
+      </CollectionFilterBar>
 
       <div v-if="selectedCount > 0" class="charts__batch">
         <span class="charts__batch-count">已选 {{ selectedCount }} 项</span>
@@ -291,10 +285,8 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
         <button class="charts__btn charts__btn--ghost" @click="clearSelection">取消选择</button>
       </div>
 
-      <div v-if="assets.length === 0" class="charts__empty">
-        <Icon name="chart" :size="42" />
-        <p class="charts__empty-title">图表库还是空的。流程是「先做图表，再拼大屏」：</p>
-        <ol class="charts__steps">
+      <EmptyState v-if="assets.length === 0" title="图表库还是空的。流程是「先做图表，再拼大屏」：">
+        <ol class="empty-state__steps">
           <li>
             <strong>第 1 步 · 新建图表</strong>
             选类型、改参数、填数据，保存后这里会生成带缩略图的卡片。
@@ -304,17 +296,14 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
             打开「大屏库」新建大屏，把卡片拖到画布上组装。
           </li>
         </ol>
-        <div class="charts__empty-ops">
+        <template #actions>
           <button class="charts__btn charts__btn--primary" @click="openCreate">
             <Icon name="plus" :size="14" /> 新建第一张图表
           </button>
           <button class="charts__btn" @click="goScreens">去大屏库看看</button>
-        </div>
-      </div>
-      <div v-else-if="filteredAssets.length === 0" class="charts__empty">
-        <Icon name="chart" :size="42" />
-        <p>没有符合筛选条件的图表</p>
-      </div>
+        </template>
+      </EmptyState>
+      <EmptyState v-else-if="filteredAssets.length === 0" title="没有符合筛选条件的图表" />
       <div v-else class="charts__grid">
         <div
           v-for="asset in filteredAssets"
@@ -465,72 +454,14 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   color: var(--cf-text-2);
   font-size: 12px;
   text-align: right;
-}
-.charts__filters {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.charts__search {
-  width: 220px;
+}.charts__select {
   padding: 7px 10px;
   border: 1px solid var(--cf-border);
   border-radius: 7px;
   background: var(--cf-bg);
   color: var(--cf-text);
   font-size: 13px;
-}
-.charts__select {
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
-.charts__tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.charts__tag {
-  padding: 4px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  font-size: 12px;
-}
-.charts__tag.active {
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  border-color: var(--cf-primary);
-  color: var(--cf-primary);
-}
-.charts__empty {
-  text-align: center;
-  padding: 80px 0;
-  color: var(--cf-text-2);
-}
-.charts__empty p {
-  margin: 12px 0 16px;
-}
-.charts__empty-title {
-  font-size: 14px;
-  color: var(--cf-text);
-}
-.charts__steps {
-  list-style: none;
-  margin: 0 auto 20px;
-  padding: 0;
-  max-width: 520px;
-  display: grid;
-  gap: 10px;
-  text-align: left;
-}
-.charts__steps li {
+}.charts__steps li {
   background: var(--cf-panel);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
@@ -543,13 +474,7 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   color: var(--cf-text);
   font-size: 13px;
   margin-bottom: 2px;
-}
-.charts__empty-ops {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-.charts__check {
+}.charts__check {
   display: inline-flex;
   align-items: center;
   gap: 6px;

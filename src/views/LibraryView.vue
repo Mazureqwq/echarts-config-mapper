@@ -11,6 +11,8 @@ import { clampInterval, DEFAULT_INTERVAL_SEC } from "@/core/play/playlist";
 import { SCREEN_TEMPLATES, templateSlots } from "@/core/model/templates";
 import Icon from "@/shared/ui/Icon.vue";
 import AppHeader from "@/shared/ui/AppHeader.vue";
+import CollectionFilterBar from "@/shared/ui/CollectionFilterBar.vue";
+import EmptyState from "@/shared/ui/EmptyState.vue";
 
 const router = useRouter();
 const ws = useWorkspaceStore();
@@ -265,30 +267,17 @@ function exportWorkspace(): void {
     </AppHeader>
 
     <main class="library__body">
-      <div v-if="screens.length > 0" class="library__filters">
-        <input v-model="search" class="library__search" type="search" placeholder="搜索名称或标签" />
-        <select v-model="categoryFilter" class="library__select">
-          <option value="">全部分类</option>
-          <option value="未分类">未分类</option>
-          <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-        <div class="library__tags">
-          <button
-            v-for="t in allTags"
-            :key="t"
-            class="library__tag"
-            :class="{ active: activeTag === t }"
-            @click="activeTag = activeTag === t ? null : t"
-          >
-            {{ t }}
-          </button>
-        </div>
-      </div>
+      <CollectionFilterBar
+        v-if="screens.length > 0"
+        v-model:search="search"
+        v-model:category="categoryFilter"
+        v-model:active-tag="activeTag"
+        :categories="CATEGORIES"
+        :tags="allTags"
+      />
 
-      <div v-if="screens.length === 0" class="library__empty">
-        <Icon name="chart" :size="42" />
-        <p class="library__empty-title">还没有大屏。大屏是「拼装容器」，需要先在图表库里准备好图表：</p>
-        <ol class="library__steps">
+      <EmptyState v-if="screens.length === 0" title="还没有大屏。大屏是「拼装容器」，需要先在图表库里准备好图表：">
+        <ol class="empty-state__steps">
           <li>
             <strong>第 1 步 · 去图表库做图表</strong>
             {{ ws.assets.length > 0 ? `已有 ${ws.assets.length} 张图表可用，可以直接拼装。` : "新建图表并调好类型、参数和数据。" }}
@@ -298,7 +287,7 @@ function exportWorkspace(): void {
             在大屏画布里把左侧「图表库」的卡片拖到画布上组装、排版。
           </li>
         </ol>
-        <div class="library__empty-ops">
+        <template #actions>
           <button
             v-if="ws.assets.length === 0"
             class="library__btn library__btn--primary"
@@ -307,12 +296,9 @@ function exportWorkspace(): void {
             去图表库
           </button>
           <button class="library__btn" @click="openCreate">新建大屏</button>
-        </div>
-      </div>
-      <div v-else-if="filteredScreens.length === 0" class="library__empty">
-        <Icon name="chart" :size="42" />
-        <p>没有符合筛选条件的大屏</p>
-      </div>
+        </template>
+      </EmptyState>
+      <EmptyState v-else-if="filteredScreens.length === 0" title="没有符合筛选条件的大屏" />
       <div v-else class="library__grid">
         <div v-for="screen in filteredScreens" :key="screen.id" class="library__card">
           <div class="library__thumb" @click="openWorkbench(screen.id)">
@@ -520,72 +506,7 @@ function exportWorkspace(): void {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-}
-.library__filters {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.library__search {
-  width: 220px;
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
-.library__select {
-  padding: 7px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: var(--cf-bg);
-  color: var(--cf-text);
-  font-size: 13px;
-}
-.library__tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.library__tag {
-  padding: 4px 10px;
-  border: 1px solid var(--cf-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  font-size: 12px;
-}
-.library__tag.active {
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  border-color: var(--cf-primary);
-  color: var(--cf-primary);
-}
-.library__empty {
-  text-align: center;
-  padding: 80px 0;
-  color: var(--cf-text-2);
-}
-.library__empty p {
-  margin-top: 12px;
-}
-.library__empty-title {
-  font-size: 14px;
-  color: var(--cf-text);
-}
-.library__steps {
-  list-style: none;
-  margin: 0 auto 20px;
-  padding: 0;
-  max-width: 520px;
-  display: grid;
-  gap: 10px;
-  text-align: left;
-}
-.library__steps li {
+}.library__steps li {
   background: var(--cf-panel);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
@@ -598,13 +519,7 @@ function exportWorkspace(): void {
   color: var(--cf-text);
   font-size: 13px;
   margin-bottom: 2px;
-}
-.library__empty-ops {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-.library__grid {
+}.library__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 16px;
