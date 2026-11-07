@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import CanvasStage from "@/workbench/CanvasStage.vue";
@@ -73,23 +73,34 @@ onMounted(() => {
   if (ws.workspace.screens.length === 0) {
     doc.addScreen("我的图表");
     doc.initHistory();
+    void refreshThumbnailAfterRender();
     return;
   }
   const target = ws.workspace.screens.find((s) => s.id === props.id);
   doc.currentScreenId = target ? target.id : ws.workspace.screens[0].id;
   doc.initHistory();
   syncLive();
+  void refreshThumbnailAfterRender();
 });
 
 async function refreshThumbnail(): Promise<void> {
   const el = stageWrap.value?.querySelector(".canvas-stage__canvas") as HTMLElement | null;
-  if (!el || !doc.currentScreenId) return;
+  const screenId = doc.currentScreenId;
+  if (!el || !screenId) return;
   try {
     const dataUrl = await snapshotStage(el);
-    doc.setScreenThumbnail(doc.currentScreenId, dataUrl);
+    doc.setScreenThumbnail(screenId, dataUrl);
   } catch {
     /* 缩略图失败不阻塞 */
   }
+}
+
+async function refreshThumbnailAfterRender(): Promise<void> {
+  await nextTick();
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  await refreshThumbnail();
 }
 
 onBeforeUnmount(() => {

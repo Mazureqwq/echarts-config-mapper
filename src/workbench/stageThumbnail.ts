@@ -328,6 +328,22 @@ async function renderSafeCanvasFallback(source: HTMLElement, maxSide: number, mi
   return { dataUrl, omittedResources };
 }
 
+/** Inline the live cascade: a serialized foreignObject does not inherit the app stylesheets. */
+function inlineComputedStyles(source: HTMLElement, clone: HTMLElement): void {
+  const originals: Element[] = [source, ...Array.from(source.querySelectorAll("*"))];
+  const clones: Element[] = [clone, ...Array.from(clone.querySelectorAll("*"))];
+  for (let index = 0; index < Math.min(originals.length, clones.length); index++) {
+    const computed = window.getComputedStyle(originals[index]);
+    const target = clones[index] as HTMLElement | SVGElement;
+    for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex++) {
+      const property = computed.item(propertyIndex);
+      if (property) {
+        target.style.setProperty(property, computed.getPropertyValue(property), computed.getPropertyPriority(property));
+      }
+    }
+  }
+}
+
 async function renderStageSnapshot(
   source: HTMLElement,
   maxSide: number,
@@ -335,6 +351,7 @@ async function renderStageSnapshot(
   stripAllImages = false
 ): Promise<StageSnapshot> {
   const clone = source.cloneNode(true) as HTMLElement;
+  inlineComputedStyles(source, clone);
   clone.querySelectorAll("[data-ui-only]").forEach((n) => n.remove());
   clone.style.transform = "none";
   clone.style.boxShadow = "none";

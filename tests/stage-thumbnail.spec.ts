@@ -21,6 +21,24 @@ describe("screen PNG export safety and affordance", () => {
     expect(code).toContain("图表含跨域内容，已替换");
   });
 
+  it("inlines computed layout styles before serializing the stage clone", () => {
+    const code = source("workbench/stageThumbnail.ts");
+    expect(code).toContain("function inlineComputedStyles(source: HTMLElement, clone: HTMLElement)");
+    expect(code).toContain("window.getComputedStyle(originals[index])");
+    expect(code).toContain("target.style.setProperty(property, computed.getPropertyValue(property)");
+    expect(code.indexOf("inlineComputedStyles(source, clone)")).toBeLessThan(
+      code.indexOf('clone.querySelectorAll("[data-ui-only]")')
+    );
+  });
+
+  it("refreshes the saved preview after chart components paint when opening a screen", () => {
+    const code = source("views/WorkbenchView.vue");
+    expect(code).toContain("import { computed, nextTick,");
+    expect(code).toContain("async function refreshThumbnailAfterRender()");
+    expect(code).toContain("requestAnimationFrame(() => requestAnimationFrame(() => resolve()))");
+    expect(code.match(/void refreshThumbnailAfterRender\(\)/g)?.length).toBe(2);
+  });
+
   it("labels the action clearly and reports substituted resources", () => {
     const code = source("workbench/TopBar.vue");
     expect(code).toContain("导出大屏 PNG");
