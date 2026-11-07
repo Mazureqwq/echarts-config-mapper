@@ -28,6 +28,11 @@ function flash(msg: string, isError = false): void {
 }
 
 const screen = computed(() => ws.screens.find((s) => s.id === props.screenId) ?? null);
+const pngExportTitle = computed(() => {
+  const width = screen.value?.canvas.width ?? 1920;
+  const height = screen.value?.canvas.height ?? 1080;
+  return `导出当前大屏为 PNG（2 倍分辨率，${width * 2} × ${height * 2} px）`;
+});
 
 const saveText = computed(() => {
   if (ws.saveState === "error") return "保存失败：存储空间不足，请导出备份或删除部分图表后重试";
@@ -85,9 +90,13 @@ async function exportPng(): Promise<void> {
   }
   exporting.value = true;
   try {
-    const dataUrl = await snapshotStagePng(el);
-    download(`${screen.value?.name || "图表"}@2x.png`, dataUrl, true);
-    flash("已导出 2 倍 PNG");
+    const snapshot = await snapshotStagePng(el);
+    download(`${screen.value?.name || "大屏"}@2x.png`, snapshot.dataUrl, true);
+    flash(
+      snapshot.omittedResources > 0
+        ? `已导出 2 倍 PNG；${snapshot.omittedResources} 个跨域资源已替换为提示图`
+        : "已导出 2 倍 PNG"
+    );
   } catch (e) {
     flash(e instanceof Error ? e.message : String(e), true);
   } finally {
@@ -142,8 +151,8 @@ function goPlay(): void {
       <button class="topbar__btn" title="导出 JSON" @click="exportJsonFile">
         <Icon name="download" :size="15" /> JSON
       </button>
-      <button class="topbar__btn" :disabled="exporting" title="导出 2 倍 PNG" @click="exportPng">
-        <Icon name="image" :size="15" /> PNG@2x
+      <button class="topbar__btn" :disabled="exporting" :title="pngExportTitle" @click="exportPng">
+        <Icon name="image" :size="15" /> PNG 2×
       </button>
       <span
         v-if="exportMsg"
