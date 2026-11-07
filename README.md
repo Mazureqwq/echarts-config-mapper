@@ -72,6 +72,21 @@ pnpm typecheck  # 类型检查
 pnpm test       # 单元测试
 ```
 
+
+### 本地测试接口（mock server）
+
+想试实时数据 / 调试台 / 数据加工，又不想先去对接真接口？仓库自带一个零依赖的 mock 服务：
+
+```bash
+pnpm server        # 起在 http://localhost:8787，浏览器打开就是接口目录页
+```
+
+然后在 **接口设置** 里把 baseUrl 填成 `http://localhost:8787`，图表数据源里只写相对路径即可，
+例如 `/api/charts/line`（折线）、`/api/charts/pie`（饼图）、`/api/sales/wrapped` 配 `dataPath=data.rows`。
+六种图表各有接口，另外还有 POST、Bearer 鉴权、超时、随机失败、超大载荷等演练接口。
+
+接口清单、参数、每个接口适合哪种图表，见 **[server/README.md](server/README.md)**。
+
 ## 目录结构
 
 ```

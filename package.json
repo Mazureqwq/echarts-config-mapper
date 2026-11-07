@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
+    "server": "node server/index.mjs",
+    "mock": "node server/index.mjs",
     "deploy:pro": "pnpm build && ssh root@47.109.193.165 \"rm -rf /var/www/echarts-project/*\" && scp -r dist/* root@47.109.193.165:/var/www/echarts-project/ && ssh root@47.109.193.165 \"/usr/local/openresty/nginx/sbin/nginx -s reload\""
   },
   "dependencies": {
