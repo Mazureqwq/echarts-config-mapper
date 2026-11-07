@@ -108,6 +108,226 @@ function isSecurityError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "name" in error && (error as { name?: unknown }).name === "SecurityError";
 }
 
+function isSvgSource(src: string): boolean {
+  if (/^data:image\/svg\+xml/i.test(src)) return true;
+  try {
+    return new URL(src, document.baseURI).pathname.toLowerCase().endsWith(".svg");
+  } catch {
+    return false;
+  }
+}
+
+/** Load only raster bytes that can safely be drawn to a fresh canvas. */
+async function loadSafeRaster(src: string): Promise<HTMLImageElement | null> {
+  try {
+    if (!src || isSvgSource(src)) return null;
+    let dataUrl = src;
+    if (!/^data:image\/(png|jpe?g|gif|webp|avif);base64,/i.test(src)) {
+      const url = new URL(src, document.baseURI);
+      const sameOrigin = url.origin === window.location.origin || (url.protocol === "file:" && window.location.protocol === "file:");
+      const response = await fetch(url.href, {
+        mode: sameOrigin ? "same-origin" : "cors",
+        credentials: sameOrigin ? "same-origin" : "omit",
+      });
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      if (!/^image\/(png|jpeg|gif|webp|avif)$/i.test(blob.type)) return null;
+      dataUrl = await blobToDataUrl(blob);
+    }
+
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("image load failed"));
+      image.src = dataUrl;
+    });
+    return image;
+  } catch {
+    return null;
+  }
+}
+
+function drawPlaceholder(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, label: string): void {
+  ctx.fillStyle = "#f1f3f6";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#d8dde5";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = "#626b78";
+  ctx.font = "13px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x + w / 2, y + h / 2, Math.max(0, w - 12));
+}
+
+function drawImageFit(ctx: CanvasRenderingContext2D, image: CanvasImageSource & { width: number; height: number }, x: number, y: number, w: number, h: number, fit: string): void {
+  const iw = image.width;
+  const ih = image.height;
+  if (!iw || !ih || !w || !h) return;
+  if (fit === "contain") {
+    const scale = Math.min(w / iw, h / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    return;
+  }
+  const scale = Math.max(w / iw, h / ih);
+  const sw = w / scale;
+  const sh = h / scale;
+  ctx.drawImage(image, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
+}
+
+function drawTextItem(ctx: CanvasRenderingContext2D, node: Element, text: string, w: number): void {
+  const style = window.getComputedStyle(node);
+  const fontSize = Number.parseFloat(style.fontSize) || 16;
+  const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.4;
+  ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  ctx.fillStyle = style.color || "#222";
+  ctx.textAlign = (style.textAlign === "start" ? "left" : style.textAlign === "end" ? "right" : style.textAlign) as CanvasTextAlign;
+  ctx.textBaseline = "top";
+  const align = ctx.textAlign;
+  const x = align === "center" ? w / 2 : align === "right" ? w : 0;
+  let y = 0;
+  const maxWidth = Math.max(1, w);
+
+  for (const paragraph of text.split(/\r?\n/)) {
+    let line = "";
+    for (const char of Array.from(paragraph)) {
+      const candidate = line + char;
+      if (line && ctx.measureText(candidate).width > maxWidth) {
+        ctx.fillText(line, x, y, maxWidth);
+        y += lineHeight;
+        line = char;
+      } else line = candidate;
+    }
+    ctx.fillText(line, x, y, maxWidth);
+    y += lineHeight;
+  }
+}
+
+function safeCanvasDataUrl(canvas: HTMLCanvasElement): boolean {
+  try {
+    canvas.toDataURL("image/png");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Last-resort export that never rasterizes foreignObject HTML. It paints safe canvas layers,
+ * text, and shapes directly; inaccessible image resources become placeholders.
+ */
+async function renderSafeCanvasFallback(source: HTMLElement, maxSide: number, mime: string): Promise<StageSnapshot> {
+  const w = source.offsetWidth || 1920;
+  const h = source.offsetHeight || 1080;
+  const scale = maxSide / Math.max(w, h);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("无法创建导出画布");
+  ctx.scale(scale, scale);
+  let omittedResources = 0;
+
+  const bg = source.querySelector<HTMLElement>(".canvas-stage__bg");
+  const bgStyle = bg ? window.getComputedStyle(bg) : null;
+  const bgColor = bgStyle?.backgroundColor;
+  ctx.fillStyle = bgColor && bgColor !== "rgba(0, 0, 0, 0)" ? bgColor : "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+
+  const backgroundImage = bgStyle?.backgroundImage ?? "none";
+  const urls = cssUrls(backgroundImage);
+  if (urls.length) {
+    const image = await loadSafeRaster(urls[0]);
+    if (image) drawImageFit(ctx, image, 0, 0, w, h, "cover");
+    else omittedResources++;
+    omittedResources += Math.max(0, urls.length - 1);
+  } else if (backgroundImage.includes("gradient")) {
+    const colors = backgroundImage.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/gi) ?? [];
+    if (colors.length >= 2) {
+      const gradient = ctx.createLinearGradient(0, 0, w, h);
+      colors.forEach((color, index) => gradient.addColorStop(index / (colors.length - 1), color));
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  const items = Array.from(source.querySelectorAll<HTMLElement>("[data-item-id]"));
+  for (const item of items) {
+    const itemStyle = window.getComputedStyle(item);
+    if (itemStyle.display === "none" || itemStyle.visibility === "hidden") continue;
+    const x = Number.parseFloat(itemStyle.left) || item.offsetLeft;
+    const y = Number.parseFloat(itemStyle.top) || item.offsetTop;
+    const iw = item.offsetWidth;
+    const ih = item.offsetHeight;
+    if (!iw || !ih) continue;
+
+    ctx.save();
+    ctx.globalAlpha = Number.parseFloat(itemStyle.opacity) || 1;
+    ctx.translate(x + iw / 2, y + ih / 2);
+    const matrix = /^matrix\(([^)]+)\)$/.exec(itemStyle.transform);
+    if (matrix) {
+      const values = matrix[1].split(",").map(Number);
+      if (Number.isFinite(values[0]) && Number.isFinite(values[1])) ctx.rotate(Math.atan2(values[1], values[0]));
+    }
+    ctx.translate(-iw / 2, -ih / 2);
+
+    const chartCanvases = Array.from(item.querySelectorAll("canvas"));
+    if (chartCanvases.length) {
+      if (chartCanvases.every(safeCanvasDataUrl)) {
+        for (const chartCanvas of chartCanvases) ctx.drawImage(chartCanvas, 0, 0, iw, ih);
+      } else {
+        drawPlaceholder(ctx, 0, 0, iw, ih, "跨域图表内容已替换");
+        omittedResources++;
+      }
+      ctx.restore();
+      continue;
+    }
+
+    const itemImage = item.querySelector<HTMLImageElement>("img");
+    if (itemImage) {
+      const safeImage = await loadSafeRaster(itemImage.getAttribute("src") ?? itemImage.src);
+      if (safeImage) {
+        const fit = window.getComputedStyle(itemImage).objectFit;
+        drawImageFit(ctx, safeImage, 0, 0, iw, ih, fit);
+      } else {
+        drawPlaceholder(ctx, 0, 0, iw, ih, "跨域图片已替换");
+        omittedResources++;
+      }
+      ctx.restore();
+      continue;
+    }
+
+    const content = Array.from(item.children).find((node) => !node.hasAttribute("data-ui-only"));
+    const text = content?.textContent?.trim();
+    if (content && text) {
+      drawTextItem(ctx, content, text, iw);
+    } else if (content) {
+      const shapeStyle = window.getComputedStyle(content);
+      const fill = shapeStyle.backgroundColor;
+      if (fill && fill !== "rgba(0, 0, 0, 0)") {
+        ctx.fillStyle = fill;
+        if (shapeStyle.borderRadius.includes("50%")) {
+          ctx.beginPath();
+          ctx.ellipse(iw / 2, ih / 2, iw / 2, ih / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else ctx.fillRect(0, 0, iw, ih);
+      }
+      const borderWidth = Number.parseFloat(shapeStyle.borderTopWidth) || 0;
+      if (borderWidth > 0 && shapeStyle.borderTopStyle !== "none") {
+        ctx.strokeStyle = shapeStyle.borderTopColor;
+        ctx.lineWidth = borderWidth;
+        ctx.strokeRect(borderWidth / 2, borderWidth / 2, iw - borderWidth, ih - borderWidth);
+      }
+    }
+    ctx.restore();
+  }
+
+  const dataUrl = mime === "image/png" ? canvas.toDataURL("image/png") : makeThumbnail(canvas);
+  return { dataUrl, omittedResources };
+}
+
 async function renderStageSnapshot(
   source: HTMLElement,
   maxSide: number,
@@ -118,6 +338,8 @@ async function renderStageSnapshot(
   clone.querySelectorAll("[data-ui-only]").forEach((n) => n.remove());
   clone.style.transform = "none";
   clone.style.boxShadow = "none";
+
+  if (stripAllImages) return renderSafeCanvasFallback(source, maxSide, mime);
 
   let omittedResources = 0;
   const originals = Array.from(source.querySelectorAll("canvas"));
@@ -180,9 +402,9 @@ async function renderStageSnapshot(
       return { dataUrl, omittedResources };
     } catch (error) {
       if (isSecurityError(error)) {
-        // Last-resort retry: remove every raster/background image. A tainted resource must not block the whole screen.
+        // Retry using a direct safe canvas painter; do not rasterize a foreignObject for the fallback.
         if (!stripAllImages) return renderStageSnapshot(source, maxSide, mime, true);
-        throw new Error("浏览器仍检测到无法读取的跨域资源。请将素材下载后本地上传，再重新导出。");
+        return renderSafeCanvasFallback(source, maxSide, mime);
       }
       throw error;
     }

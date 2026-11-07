@@ -17,6 +17,7 @@ describe("screen PNG export safety and affordance", () => {
   it("retries a tainted export after stripping all image resources", () => {
     const code = source("workbench/stageThumbnail.ts");
     expect(code).toContain('if (!stripAllImages) return renderStageSnapshot(source, maxSide, mime, true)');
+    expect(code).toContain("renderSafeCanvasFallback");
     expect(code).toContain("图表含跨域内容，已替换");
   });
 
