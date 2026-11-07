@@ -98,8 +98,6 @@ function syncFromItem(): void {
   reveal.value = false;
 }
 
-watch(() => props.item.id, syncFromItem, { immediate: true });
-
 /** 连接页的表单 → 数据源（探活与保存共用同一份，避免「测的通但存的不对」） */
 const draft = computed<LiveSource | null>(() => {
   const url = useAbsolute.value ? absoluteUrl.value.trim() : "";
@@ -170,6 +168,13 @@ const probing = ref(false);
 const probe = ref<ProbeResult | null>(null);
 const reveal = ref(false);
 const snapshotNotice = ref("");
+
+/**
+ * 初次同步必须放在最后：`immediate: true` 会立刻执行 syncFromItem()，
+ * 而它要写 probe / reveal / snapshotNotice，声明在上面就会踩 TDZ
+ * （Cannot access 'probe' before initialization）。
+ */
+watch(() => props.item.id, syncFromItem, { immediate: true });
 
 /** dataPath 命中后的数据（调试台与加工预览共用） */
 const picked = computed(() => {
