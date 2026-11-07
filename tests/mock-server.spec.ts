@@ -161,6 +161,73 @@ describe("mock server：跨域与请求方式", () => {
   });
 });
 
+describe("mock server：默认数据量足够画出像样的图", () => {
+  /**
+   * 回归：`Number(null) === 0` 会让「不传参数」变成 0，再被 clamp 成下限 1，
+   * 于是接口默认只回 1 行、图表看着像坏了。这里锁住默认量级。
+   */
+  const CASES: Array<[string, (rows: any[]) => void, string]> = [
+    ["/api/charts/line", (r) => {
+      expect(r.length).toBe(12);
+      expect(Object.keys(r[0])).toEqual(["月份", "销售额", "成本", "利润"]);
+      expect(new Set(r.map((x) => x.月份)).size).toBe(12);
+    }, "折线：12 个月 × 3 列"],
+    ["/api/charts/bar", (r) => {
+      expect(r.length).toBe(12);
+      expect(Object.keys(r[0])).toEqual(["月份", "实际完成", "目标"]);
+    }, "柱状：12 个月 × 2 列"],
+    ["/api/charts/pie", (r) => {
+      expect(r.length).toBeGreaterThanOrEqual(8);
+      const total = r.reduce((s, x) => s + x.访问量, 0);
+      expect(total).toBeGreaterThan(1000);
+    }, "饼图：≥8 个分类"],
+    ["/api/charts/map", (r) => {
+      expect(r.length).toBe(34);
+      expect(r.map((x) => x.省份)).toContain("广东省");
+      expect(r.map((x) => x.省份)).toContain("澳门特别行政区");
+    }, "地图：34 个省级行政区全量"],
+    ["/api/charts/scatter", (r) => {
+      expect(r.length).toBe(120);
+      expect(new Set(r.map((x) => x.分组)).size).toBe(3);
+    }, "散点：120 点 / 3 组"],
+    ["/api/charts/radar", (r) => {
+      expect(r.length).toBeGreaterThanOrEqual(6);
+      expect(Object.keys(r[0]).length).toBe(4); // 指标 + 3 个系列
+    }, "雷达：≥6 指标 × 3 系列"],
+    ["/api/sales/rows", (r) => {
+      expect(r.length).toBe(240);
+      expect(new Set(r.map((x) => x.月份)).size).toBe(12);
+      expect(new Set(r.map((x) => x.渠道)).size).toBe(4);
+      expect(new Set(r.map((x) => x.区域)).size).toBe(5);
+    }, "长表：240 行 = 12 月 × 4 渠道 × 5 区域"],
+    ["/api/sales/scalars", (r) => expect(r.length).toBe(24), "数值数组：24 点"],
+    ["/api/live/random", (r) => expect(r.length).toBe(12), "实时：12 个时间点"],
+  ];
+
+  for (const [path, check, label] of CASES) {
+    it(`${path}（${label}）`, async () => {
+      const rows = await (await fetch(`${base}${path}`)).json();
+      expect(Array.isArray(rows)).toBe(true);
+      check(rows);
+    });
+  }
+
+  it("显式参数依然生效（默认值没有把参数吃掉）", async () => {
+    expect((await (await fetch(`${base}/api/charts/line?months=3`)).json()).length).toBe(3);
+    expect((await (await fetch(`${base}/api/charts/scatter?points=6`)).json()).length).toBe(6);
+    expect((await (await fetch(`${base}/api/sales/rows?rows=10`)).json()).length).toBe(10);
+    expect((await (await fetch(`${base}/api/sales/scalars?n=5`)).json()).length).toBe(5);
+  });
+
+  it("wrapped / matrix 封套里的数据量也对", async () => {
+    const wrapped = await (await fetch(`${base}/api/sales/wrapped`)).json();
+    expect(wrapped.data.rows.length).toBe(120);
+    expect(wrapped.data.total).toBe(120);
+    const matrix = await (await fetch(`${base}/api/sales/matrix`)).json();
+    expect(matrix.length).toBe(13); // 1 行表头 + 12 个月
+  });
+});
+
 describe("mock server：数据可复现", () => {
   it("同一个 seed 两次结果一致，不同 seed 不同", async () => {
     const a = await (await fetch(`${base}/api/charts/line?seed=7`)).json();

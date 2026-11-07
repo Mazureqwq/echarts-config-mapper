@@ -9,6 +9,7 @@ import { createServer } from "node:http";
 import {
   CHANNELS,
   REGIONS,
+  barRows,
   chartDataPayload,
   lineRows,
   liveSeries,
@@ -53,7 +54,12 @@ function applyCors(req, res) {
   res.setHeader("X-Server-Time", new Date().toISOString());
 }
 
+/**
+ * 取数字参数。注意 `Number(null) === 0`：不传参数时 searchParams.get() 返回 null，
+ * 直接 Number() 会得到 0，再被 clamp 成下限 1 —— 于是「默认值」形同虚设（曾经因此只返回 1 行）。
+ */
 function num(value, fallback) {
+  if (value === null || value === undefined || String(value).trim() === "") return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -95,21 +101,21 @@ export const ENDPOINTS = [
     params: [],
     chart: null,
   },
-  { method: "GET", path: "/api/charts/line", summary: "折线图：对象数组，字段名即系列名", params: ["?months=6|12", "?seed=1"], chart: "line" },
-  { method: "GET", path: "/api/charts/bar", summary: "柱状图（同折线，月份更多）", params: ["?months=12", "?seed=2"], chart: "bar" },
-  { method: "GET", path: "/api/charts/pie", summary: "饼图：{渠道, 占比}", params: ["?seed=1"], chart: "pie" },
-  { method: "GET", path: "/api/charts/map", summary: "地图：省级全称 + 数值", params: ["?seed=1"], chart: "map" },
-  { method: "GET", path: "/api/charts/scatter", summary: "散点：{x, y, 名称, 分组}", params: ["?points=24", "?seed=1"], chart: "scatter" },
-  { method: "GET", path: "/api/charts/radar", summary: "雷达：首列指标 + 多列系列", params: ["?seed=1"], chart: "radar" },
-  { method: "GET", path: "/api/sales/rows", summary: "长表（一行一个组合），练过滤/选列/排序/取前N/透视", params: ["?rows=48", "?seed=1"], chart: "line|bar|pie" },
-  { method: "GET", path: "/api/sales/wrapped", summary: "带封套 {code,data:{rows}}，练 dataPath=data.rows", params: ["?rows=24", "?seed=1"], chart: "line|bar" },
-  { method: "GET", path: "/api/sales/matrix", summary: "二维表（首行表头）", params: ["?months=6", "?seed=1"], chart: "line|bar" },
-  { method: "GET", path: "/api/sales/scalars", summary: "纯数值数组", params: ["?n=12", "?seed=1"], chart: "任意" },
+  { method: "GET", path: "/api/charts/line", summary: "折线图：12 个月 × 销售额/成本/利润", params: ["?months=12", "?seed=1"], chart: "line" },
+  { method: "GET", path: "/api/charts/bar", summary: "柱状图：12 个月 × 实际完成/目标", params: ["?months=12", "?seed=2"], chart: "bar" },
+  { method: "GET", path: "/api/charts/pie", summary: "饼图：8 个流量来源", params: ["?seed=1"], chart: "pie" },
+  { method: "GET", path: "/api/charts/map", summary: "地图：34 个省级行政区全量", params: ["?seed=1"], chart: "map" },
+  { method: "GET", path: "/api/charts/scatter", summary: "散点：120 个点分 3 组", params: ["?points=120", "?seed=1"], chart: "scatter" },
+  { method: "GET", path: "/api/charts/radar", summary: "雷达：6 指标 × 3 大区", params: ["?seed=1"], chart: "radar" },
+  { method: "GET", path: "/api/sales/rows", summary: "长表 240 行（12 月×4 渠道×5 区域），练过滤/选列/排序/取前N/透视", params: ["?rows=240", "?seed=1"], chart: "line|bar|pie" },
+  { method: "GET", path: "/api/sales/wrapped", summary: "带封套 {code,data:{rows}}，练 dataPath=data.rows", params: ["?rows=120", "?seed=1"], chart: "line|bar" },
+  { method: "GET", path: "/api/sales/matrix", summary: "二维表（首行表头，12 个月）", params: ["?months=12", "?seed=1"], chart: "line|bar" },
+  { method: "GET", path: "/api/sales/scalars", summary: "纯数值数组（24 个点，带趋势）", params: ["?n=24", "?seed=1"], chart: "任意" },
   { method: "GET", path: "/api/sales/chartdata", summary: "完整 ChartData（无需推断）", params: ["?seed=1"], chart: "line|bar" },
   { method: "POST", path: "/api/search", summary: "POST + JSON 体，按条件过滤长表并回显条件", params: ["body: {region?,channel?,keyword?,limit?}"], chart: "line|bar" },
   { method: "GET", path: "/api/echo", summary: "回显方法/查询参数/请求头（验证 token 与公共参数是否真的带上）", params: ["?任意=值"], chart: null },
   { method: "GET", path: "/api/secure/dashboard", summary: `需要 Authorization: Bearer ${DEMO_TOKEN}（也接受 ?token=）`, params: ["header: Authorization", "?token="], chart: "line|bar" },
-  { method: "GET", path: "/api/live/random", summary: "每次返回不同数据，肉眼确认实时刷新", params: ["?series=2"], chart: "line|bar" },
+  { method: "GET", path: "/api/live/random", summary: "每次返回不同数据（12 个时间点），肉眼确认实时刷新", params: ["?series=2&points=12"], chart: "line|bar" },
   { method: "GET", path: "/api/errors/500", summary: "固定 500（测失败提示与数据保留）", params: [], chart: null },
   { method: "GET", path: "/api/errors/404", summary: "固定 404", params: [], chart: null },
   { method: "GET", path: "/api/errors/html", summary: "返回 HTML 而不是 JSON（测非 JSON 提示）", params: [], chart: null },
@@ -210,10 +216,10 @@ export function createMockServer(options = {}) {
 
         // ---- 六种图表 ----
         case "/api/charts/line":
-          send(res, 200, lineRows(seed, clamp(num(url.searchParams.get("months"), 6), 1, 24)));
+          send(res, 200, lineRows(seed, clamp(num(url.searchParams.get("months"), 12), 1, 24)));
           return;
         case "/api/charts/bar":
-          send(res, 200, lineRows(seed + 1, clamp(num(url.searchParams.get("months"), 12), 1, 24)));
+          send(res, 200, barRows(seed + 1, clamp(num(url.searchParams.get("months"), 12), 1, 24)));
           return;
         case "/api/charts/pie":
           send(res, 200, pieRows(seed));
@@ -222,7 +228,7 @@ export function createMockServer(options = {}) {
           send(res, 200, mapRows(seed));
           return;
         case "/api/charts/scatter":
-          send(res, 200, scatterRows(seed, clamp(num(url.searchParams.get("points"), 24), 1, 500)));
+          send(res, 200, scatterRows(seed, clamp(num(url.searchParams.get("points"), 120), 1, 500)));
           return;
         case "/api/charts/radar":
           send(res, 200, radarRows(seed));
@@ -230,16 +236,16 @@ export function createMockServer(options = {}) {
 
         // ---- 数据形态 ----
         case "/api/sales/rows":
-          send(res, 200, salesRows({ seed, rows: clamp(num(url.searchParams.get("rows"), 48), 1, 5000) }));
+          send(res, 200, salesRows({ seed, rows: clamp(num(url.searchParams.get("rows"), 240), 1, 5000) }));
           return;
         case "/api/sales/wrapped":
-          send(res, 200, wrappedSales({ seed, rows: clamp(num(url.searchParams.get("rows"), 24), 1, 5000) }));
+          send(res, 200, wrappedSales({ seed, rows: clamp(num(url.searchParams.get("rows"), 120), 1, 5000) }));
           return;
         case "/api/sales/matrix":
-          send(res, 200, matrixTable(seed, clamp(num(url.searchParams.get("months"), 6), 1, 24)));
+          send(res, 200, matrixTable(seed, clamp(num(url.searchParams.get("months"), 12), 1, 24)));
           return;
         case "/api/sales/scalars":
-          send(res, 200, scalarList(seed, clamp(num(url.searchParams.get("n"), 12), 1, 500)));
+          send(res, 200, scalarList(seed, clamp(num(url.searchParams.get("n"), 24), 1, 500)));
           return;
         case "/api/sales/chartdata":
           send(res, 200, chartDataPayload(seed));
@@ -259,7 +265,7 @@ export function createMockServer(options = {}) {
             send(res, 400, { ok: false, error: "请求体不是合法 JSON" });
             return;
           }
-          const all = salesRows({ seed, rows: 96 });
+          const all = salesRows({ seed, rows: 240 });
           const region = body.region ? String(body.region) : "";
           const channel = body.channel ? String(body.channel) : "";
           const keyword = body.keyword ? String(body.keyword) : "";
@@ -315,13 +321,13 @@ export function createMockServer(options = {}) {
             );
             return;
           }
-          send(res, 200, lineRows(seed + 7, 6));
+          send(res, 200, lineRows(seed + 7, 12));
           return;
         }
 
         // ---- 实时 ----
         case "/api/live/random":
-          send(res, 200, liveSeries(clamp(num(url.searchParams.get("series"), 2), 1, 3)));
+          send(res, 200, liveSeries(clamp(num(url.searchParams.get("series"), 2), 1, 3), clamp(num(url.searchParams.get("points"), 12), 1, 60)));
           return;
 
         // ---- 异常与边界 ----
@@ -348,7 +354,7 @@ export function createMockServer(options = {}) {
         case "/api/errors/slow": {
           const ms = clamp(num(url.searchParams.get("ms"), 8000), 0, 60000);
           await sleep(ms);
-          send(res, 200, lineRows(seed, 4));
+          send(res, 200, lineRows(seed, 12));
           return;
         }
         case "/api/errors/flaky": {
@@ -357,7 +363,7 @@ export function createMockServer(options = {}) {
             send(res, 503, { ok: false, error: "随机失败（用于测试失败退避与旧数据保留）" });
             return;
           }
-          send(res, 200, lineRows(seed + Math.floor(Math.random() * 100), 6));
+          send(res, 200, lineRows(seed + Math.floor(Math.random() * 100), 12));
           return;
         }
         case "/api/errors/huge":
