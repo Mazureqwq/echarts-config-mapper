@@ -110,7 +110,7 @@ function goPlay(): void {
 </script>
 
 <template>
-  <header class="topbar">
+  <header class="topbar" role="toolbar" aria-label="编辑器工具栏">
     <router-link class="topbar__back" to="/screens" title="返回大屏库"><Icon name="menu" :size="16" /></router-link>
     <input
       class="topbar__name cf-control"

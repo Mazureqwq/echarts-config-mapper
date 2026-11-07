@@ -250,7 +250,7 @@ function exportWorkspace(): void {
 </script>
 
 <template>
-  <div class="library">
+  <div class="library cf-page">
     <AppHeader active="screens">
       <template #actions>
         <div class="library__actions">
@@ -267,7 +267,12 @@ function exportWorkspace(): void {
       </template>
     </AppHeader>
 
-    <main class="library__body">
+    <main class="library__body cf-page__content" aria-label="大屏资源库">
+      <section class="cf-page__heading" aria-labelledby="screens-page-title">
+        <div class="cf-page__eyebrow">ChartForge · 工作区</div>
+        <h2 id="screens-page-title" class="cf-page__title">大屏应用</h2>
+        <p class="cf-page__description">管理可视化大屏与演示播放，选择一个大屏即可继续编辑。</p>
+      </section>
       <CollectionFilterBar
         v-if="screens.length > 0"
         v-model:search="search"

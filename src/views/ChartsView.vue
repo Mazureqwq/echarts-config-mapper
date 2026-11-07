@@ -240,7 +240,7 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
 </script>
 
 <template>
-  <div class="charts">
+  <div class="charts cf-page">
     <AppHeader active="charts">
       <template #actions>
         <div class="charts__actions">
@@ -251,7 +251,12 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
       </template>
     </AppHeader>
 
-    <main class="charts__body">
+    <main class="charts__body cf-page__content" aria-label="图表资源库">
+      <section class="cf-page__heading" aria-labelledby="charts-page-title">
+        <div class="cf-page__eyebrow">ChartForge · 可复用资源</div>
+        <h2 id="charts-page-title" class="cf-page__title">图表库</h2>
+        <p class="cf-page__description">创建并整理图表资产，之后可复用到多个大屏中。</p>
+      </section>
       <CollectionFilterBar
         v-if="assets.length > 0"
         v-model:search="search"

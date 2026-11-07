@@ -9,9 +9,9 @@ withDefaults(defineProps<{ active: Section }>(), { active: "charts" });
 
 <template>
   <header class="app-header">
-    <h1 class="app-header__brand"><Icon name="chart" :size="20" /> <span>ChartForge 图表工作台</span></h1>
+    <h1 class="app-header__brand"><Icon name="chart" :size="20" /> <span>ChartForge 数据应用搭建器</span></h1>
 
-    <nav class="app-header__nav" aria-label="主导航">
+    <nav class="app-header__nav" aria-label="ChartForge 主导航">
       <RouterLink to="/charts" class="app-header__link" :class="{ active: active === 'charts' }" :aria-current="active === 'charts' ? 'page' : undefined">图表库</RouterLink>
       <RouterLink to="/screens" class="app-header__link" :class="{ active: active === 'screens' }" :aria-current="active === 'screens' ? 'page' : undefined">大屏库</RouterLink>
       <RouterLink to="/settings" class="app-header__link" :class="{ active: active === 'settings' }" :aria-current="active === 'settings' ? 'page' : undefined">接口设置</RouterLink>
@@ -35,8 +35,9 @@ withDefaults(defineProps<{ active: Section }>(), { active: "charts" });
   min-height: 68px;
   flex: 0 0 68px;
   padding: 0 24px;
-  background: var(--cf-panel);
-  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-shell-bg);
+  border-bottom: 1px solid var(--cf-shell-border);
+  color: var(--cf-shell-text);
 }
 
 .app-header__brand {
@@ -45,8 +46,8 @@ withDefaults(defineProps<{ active: Section }>(), { active: "charts" });
   gap: 8px;
   min-width: 0;
   margin: 0;
-  color: var(--cf-text);
-  font-size: 18px;
+  color: var(--cf-shell-text);
+  font-size: 17px;
   font-weight: 650;
   line-height: 1;
   white-space: nowrap;
@@ -73,10 +74,10 @@ withDefaults(defineProps<{ active: Section }>(), { active: "charts" });
   justify-content: center;
   height: 36px;
   padding: 0 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
-  color: var(--cf-text-2);
+  color: var(--cf-shell-muted);
   font-size: 13px;
   line-height: 1;
   text-decoration: none;
@@ -84,14 +85,14 @@ withDefaults(defineProps<{ active: Section }>(), { active: "charts" });
 }
 
 .app-header__link:hover {
-  background: color-mix(in srgb, var(--cf-primary) 7%, transparent);
-  color: var(--cf-text);
+  background: color-mix(in srgb, var(--cf-shell-accent) 10%, transparent);
+  color: var(--cf-shell-text);
 }
 
 .app-header__link.active {
-  border-color: color-mix(in srgb, var(--cf-primary) 52%, var(--cf-border));
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  color: var(--cf-primary);
+  border-color: color-mix(in srgb, var(--cf-shell-accent) 42%, var(--cf-shell-border));
+  background: color-mix(in srgb, var(--cf-shell-accent) 13%, transparent);
+  color: var(--cf-shell-accent);
   font-weight: 600;
 }
 

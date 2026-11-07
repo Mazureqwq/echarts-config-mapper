@@ -9,6 +9,52 @@
   --cf-canvas-bg: #e9ebf0;
   --cf-radius: 8px;
   --cf-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --cf-shell-bg: #151b26;
+  --cf-shell-panel: #1c2532;
+  --cf-shell-border: #303c4e;
+  --cf-shell-text: #e7edf5;
+  --cf-shell-muted: #a8b5c6;
+  --cf-shell-accent: #49b9f2;
+}
+
+.cf-page {
+  min-width: 0;
+  background: var(--cf-bg);
+}
+
+.cf-page__content {
+  min-width: 0;
+}
+
+.cf-page__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--cf-border);
+}
+
+.cf-page__eyebrow {
+  color: var(--cf-text-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.cf-page__title {
+  margin: 0;
+  color: var(--cf-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.cf-page__description {
+  margin: 2px 0 0;
+  color: var(--cf-text-2);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 html.dark {

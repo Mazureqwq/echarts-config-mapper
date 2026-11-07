@@ -20,6 +20,22 @@ const doc = useDocumentStore();
 const ui = useUiStore();
 const ws = useWorkspaceStore();
 const router = useRouter();
+const emit = defineEmits<{ (e: "collapse"): void }>();
+const activeTab = ref<"config" | "data" | "interaction">("config");
+const INSPECTOR_TABS = ["config", "data", "interaction"] as const;
+
+function onInspectorTabKeydown(event: KeyboardEvent): void {
+  const current = INSPECTOR_TABS.indexOf(activeTab.value);
+  let next = current;
+  if (event.key === "ArrowRight") next = (current + 1) % INSPECTOR_TABS.length;
+  else if (event.key === "ArrowLeft") next = (current + INSPECTOR_TABS.length - 1) % INSPECTOR_TABS.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = INSPECTOR_TABS.length - 1;
+  else return;
+  event.preventDefault();
+  activeTab.value = INSPECTOR_TABS[next];
+  requestAnimationFrame(() => document.getElementById(`inspector-tab-${INSPECTOR_TABS[next]}`)?.focus());
+}
 
 /** 大屏图表是图表库资产的独立副本，这里只做「来源」回溯 */
 function sourceAsset(item: ChartItem): { id: string; name: string } | null {
@@ -144,6 +160,36 @@ function confirmSaveAsset(): void {
 
 <template>
   <div class="inspector">
+    <div class="inspector__toolbar">
+      <div class="inspector__tabs" role="tablist" aria-label="属性面板" @keydown="onInspectorTabKeydown">
+        <button
+          v-for="tab in INSPECTOR_TABS"
+          :id="`inspector-tab-${tab}`"
+          :key="tab"
+          class="inspector__tab"
+          type="button"
+          role="tab"
+          :aria-label="tab === 'config' ? '配置' : tab === 'data' ? '数据' : '交互'"
+          aria-controls="inspector-panel"
+          :aria-selected="activeTab === tab"
+          :tabindex="activeTab === tab ? 0 : -1"
+          @click="activeTab = tab"
+        >
+          {{ tab === "config" ? "配置" : tab === "data" ? "数据" : "交互" }}
+        </button>
+      </div>
+      <button
+        class="inspector__collapse"
+        type="button"
+        aria-label="收起右侧属性面板"
+        title="收起属性面板"
+        @click="emit('collapse')"
+      >
+        <Icon name="close" :size="16" />
+      </button>
+    </div>
+
+    <div v-if="activeTab === 'config'" id="inspector-panel" class="inspector__tab-panel" role="tabpanel" aria-labelledby="inspector-tab-config">
     <!-- 聚焦编辑 -->
     <template v-if="focusItem">
       <div class="inspector__head">
@@ -182,13 +228,6 @@ function confirmSaveAsset(): void {
             :item="focusItem"
             @change-path="(path, value) => onChartPath(focusItem!.id, path, value)"
           />
-        </div>
-        <div class="inspector__section">
-          <DataTablePanel :item="focusItem" @change-data="(data) => onChartData(focusItem!.id, data)" />
-        </div>
-        <div class="inspector__section">
-          <div class="inspector__section-title">实时数据</div>
-          <LiveSourcePanel :item="focusItem" />
         </div>
       </div>
     </template>
@@ -278,13 +317,6 @@ function confirmSaveAsset(): void {
               @change-path="(path, value) => onChartPath(single!.id, path, value)"
             />
           </div>
-          <div class="inspector__section">
-            <DataTablePanel :item="single" @change-data="(data) => onChartData(single!.id, data)" />
-          </div>
-          <div class="inspector__section">
-            <div class="inspector__section-title">实时数据</div>
-            <LiveSourcePanel :item="single" />
-          </div>
         </template>
       </div>
     </template>
@@ -296,6 +328,46 @@ function confirmSaveAsset(): void {
         <div class="inspector__section"><ScreenPanel /></div>
       </div>
     </template>
+    </div>
+
+    <div v-else-if="activeTab === 'data'" id="inspector-panel" class="inspector__tab-panel inspector__tab-panel--data" role="tabpanel" aria-labelledby="inspector-tab-data">
+      <template v-if="focusItem">
+        <div class="inspector__section">
+          <div class="inspector__section-title">静态数据</div>
+          <DataTablePanel :item="focusItem" @change-data="(data) => onChartData(focusItem!.id, data)" />
+        </div>
+        <div class="inspector__section">
+          <div class="inspector__section-title">实时数据</div>
+          <LiveSourcePanel :item="focusItem" />
+        </div>
+      </template>
+      <template v-else-if="singleChart">
+        <div v-if="singleChart.sourceAssetId" class="inspector__source">
+          <span v-if="sourceAsset(singleChart)" class="inspector__source-label">来源：{{ sourceAsset(singleChart)!.name }}</span>
+          <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
+        </div>
+        <div class="inspector__section">
+          <div class="inspector__section-title">静态数据</div>
+          <DataTablePanel :item="singleChart" @change-data="(data) => onChartData(singleChart!.id, data)" />
+        </div>
+        <div class="inspector__section">
+          <div class="inspector__section-title">实时数据</div>
+          <LiveSourcePanel :item="singleChart" />
+        </div>
+      </template>
+      <div v-else class="inspector__empty">
+        <Icon name="chart" :size="22" />
+        <p>{{ single ? "当前元素暂无数据配置" : "选择图表以配置数据" }}</p>
+      </div>
+    </div>
+
+    <div v-else id="inspector-panel" class="inspector__tab-panel inspector__tab-panel--data" role="tabpanel" aria-labelledby="inspector-tab-interaction">
+      <div class="inspector__empty">
+        <Icon name="layers" :size="22" />
+        <strong>蓝图交互</strong>
+        <p>组件事件与动作将在蓝图编辑器中连接；首期仅支持声明式、受控的交互流程。</p>
+      </div>
+    </div>
 
     <ConfirmDialog
       v-if="pendingType"
@@ -339,8 +411,79 @@ function confirmSaveAsset(): void {
 .inspector {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100%;
+  min-width: 0;
+  color: var(--cf-text);
 }
+.inspector__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--cf-border);
+}
+.inspector__tabs {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-self: stretch;
+}
+.inspector__tab {
+  position: relative;
+  min-width: 0;
+  padding: 0 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--cf-text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.inspector__tab:hover { color: var(--cf-text); }
+.inspector__tab[aria-selected="true"] {
+  border-bottom-color: var(--cf-primary);
+  color: var(--cf-primary);
+  font-weight: 600;
+}
+.inspector__tab:focus-visible, .inspector__collapse:focus-visible {
+  outline: 2px solid var(--cf-primary);
+  outline-offset: -2px;
+}
+.inspector__collapse {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--cf-text-2);
+  cursor: pointer;
+}
+.inspector__collapse:hover { color: var(--cf-primary); background: color-mix(in srgb, var(--cf-primary) 10%, transparent); }
+.inspector__tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.inspector__tab-panel--data { padding: 12px; }
+.inspector__empty {
+  display: flex;
+  min-height: 180px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--cf-text-2);
+  text-align: center;
+}
+.inspector__empty strong { color: var(--cf-text); }
+.inspector__empty p { max-width: 230px; margin: 0; font-size: 12px; line-height: 1.6; }
 .inspector__source {
   display: flex;
   align-items: center;
@@ -383,8 +526,6 @@ function confirmSaveAsset(): void {
   cursor: pointer;
 }
 .inspector__body {
-  flex: 1;
-  overflow-y: auto;
   padding: 12px;
 }
 .inspector__section {
