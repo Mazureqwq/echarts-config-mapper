@@ -21,8 +21,8 @@ function onDragStart(event: DragEvent): void {
 <template>
   <article
     class="collection-card"
-    :class="{ 'collection-card--draggable': draggable }"
-    :draggable="draggable"
+    :class="{ 'collection-card--draggable': props.draggable }"
+    :draggable="props.draggable"
     @dragstart="onDragStart"
   >
     <div v-if="$slots.selection" class="collection-card__selection" @click.stop @mousedown.stop @dragstart.stop>
@@ -33,19 +33,19 @@ function onDragStart(event: DragEvent): void {
       class="collection-card__thumbnail"
       role="button"
       tabindex="0"
-      :aria-label="`打开${title}`"
+      :aria-label="`打开${props.title}`"
       @click="emit('open')"
       @keydown.enter.prevent="emit('open')"
       @keydown.space.prevent="emit('open')"
     >
-      <img v-if="thumbnail" :src="thumbnail" alt="" draggable="false" />
+      <img v-if="props.thumbnail" :src="props.thumbnail" alt="" draggable="false" />
       <div v-else class="collection-card__thumbnail-placeholder">
         <slot name="thumbnail-placeholder" />
       </div>
     </div>
 
-    <div class="collection-card__title" :title="title" @click="emit('open')">
-      {{ title }}
+    <div class="collection-card__title" :title="props.title" @click="emit('open')">
+      {{ props.title }}
     </div>
     <div v-if="$slots.metadata" class="collection-card__metadata">
       <slot name="metadata" />
@@ -101,6 +101,9 @@ function onDragStart(event: DragEvent): void {
 }
 
 .collection-card__thumbnail {
+  position: relative;
+  display: block;
+  width: 100%;
   overflow: hidden;
   aspect-ratio: 16 / 9;
   background: var(--cf-canvas-bg);
@@ -109,16 +112,18 @@ function onDragStart(event: DragEvent): void {
 }
 
 .collection-card__thumbnail img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .collection-card__thumbnail-placeholder {
+  position: absolute;
+  inset: 0;
   display: flex;
-  width: 100%;
-  height: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
