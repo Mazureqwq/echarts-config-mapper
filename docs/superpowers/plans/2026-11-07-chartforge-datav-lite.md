@@ -68,7 +68,7 @@
 - [x] **Step 3: Implement registry and model normalization** — add the contracts and immutable registry, register legacy-kind adapters without converting stored items, and add `ComponentItem` and `createComponentItem` without changing existing item discriminators; keep missing component instances so the view can show the placeholder. Until an export renderer contract is implemented in Task 6, reject component items in `snapshot.ts` rather than serializing them as shapes.
 - [x] **Step 4: Integrate registry resolution in `ItemView.vue`** — route old item kinds through their `legacy` adapter while preserving existing render branches; resolve generic component items by exact ID/version and render registered `renderer.view`, otherwise show the placeholder with component ID/version and no throw.
 - [x] **Step 5: Re-run focused tests and existing model/migration tests** — expect all PASS, including factory/default-copy, legacy item round-trip, placeholder rendering, and export rejection.
-- [ ] **Step 6: Commit** — `feat: add versioned component model and registry`.
+- [x] **Step 6: Commit** — `feat: add versioned component model and registry` (commit `27ce17d`).
 
 ## Task 2: Shared static/HTTP dataset runtime and workspace editing
 
