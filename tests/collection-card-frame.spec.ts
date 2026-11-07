@@ -19,7 +19,9 @@ describe("shared collection card and interaction primitives", () => {
     }
     expect(charts).toContain("<template #selection>");
     expect(charts).toContain("draggable");
-    expect(screens).toContain(':thumbnail="screen.thumbnail"');
+    expect(screens).toContain(':thumbnail="screen.items.length > 0 ? screen.thumbnail : null"');
+    expect(screens).toContain("空白大屏");
+    expect(screens).toContain("预览待生成");
     expect(screens).toContain("<template #actions>");
   });
 

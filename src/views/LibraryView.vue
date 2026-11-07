@@ -305,11 +305,12 @@ function exportWorkspace(): void {
           v-for="screen in filteredScreens"
           :key="screen.id"
           :title="screen.name"
-          :thumbnail="screen.thumbnail"
+          :thumbnail="screen.items.length > 0 ? screen.thumbnail : null"
           @open="openWorkbench(screen.id)"
         >
           <template #thumbnail-placeholder>
-            {{ screen.canvas.width }} × {{ screen.canvas.height }}
+            <span>{{ screen.items.length > 0 ? "预览待生成" : "空白大屏" }}</span>
+            <span>{{ screen.canvas.width }} × {{ screen.canvas.height }}</span>
           </template>
           <template #metadata>
             <span v-if="screen.category" class="collection-card__chip">{{ screen.category }}</span>
