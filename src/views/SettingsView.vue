@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import Icon from "@/shared/ui/Icon.vue";
+import AppHeader from "@/shared/ui/AppHeader.vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import {
   DEFAULT_TIMEOUT_MS,
@@ -14,7 +13,6 @@ import {
 } from "@/core/live/apiSettings";
 import { probeSource } from "@/core/live/probe";
 
-const router = useRouter();
 const ws = useWorkspaceStore();
 
 const api = computed(() => ws.settings.api);
@@ -137,28 +135,18 @@ async function testBaseUrl(): Promise<void> {
 /** 相对路径最终会拼成什么样，给用户一个直观对照 */
 const samplePreview = computed(() => previewUrl("/api/sales", { baseUrl: baseUrl.value.trim() }));
 
-function goCharts(): void {
-  router.push("/charts");
-}
-function goScreens(): void {
-  router.push("/screens");
-}
 </script>
 
 <template>
   <div class="settings">
-    <header class="settings__header">
-      <h1 class="settings__logo"><Icon name="chart" :size="20" /> ChartForge 图表工作台</h1>
-      <nav class="settings__nav">
-        <button class="settings__nav-btn" @click="goCharts">图表库</button>
-        <button class="settings__nav-btn" @click="goScreens">大屏库</button>
-        <button class="settings__nav-btn active">接口设置</button>
-      </nav>
-      <div class="settings__actions">
+    <AppHeader active="settings">
+      <template #actions>
+        <div class="settings__actions">
         <span v-if="savedAt" class="settings__saved">已保存</span>
         <span v-else-if="dirty" class="settings__dirty">有未保存的改动</span>
       </div>
-    </header>
+      </template>
+    </AppHeader>
 
     <main class="settings__body">
       <section class="settings__card">
@@ -258,42 +246,13 @@ function goScreens(): void {
   height: 100%;
   background: var(--cf-bg);
 }
-.settings__header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 14px 24px;
-  background: var(--cf-panel);
-  border-bottom: 1px solid var(--cf-border);
-}
-.settings__logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  margin: 0;
-}
-.settings__nav {
-  display: flex;
-  gap: 8px;
-}
-.settings__nav-btn {
-  padding: 6px 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text);
-  cursor: pointer;
-  font-size: 13px;
-}
-.settings__nav-btn.active {
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  border-color: var(--cf-primary);
-  color: var(--cf-primary);
-}
 .settings__actions {
-  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 168px;
   font-size: 12px;
+  white-space: nowrap;
 }
 .settings__saved {
   color: var(--cf-primary);

@@ -8,6 +8,7 @@ import { ASSET_DND_MIME } from "@/shared/dnd";
 import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
+import AppHeader from "@/shared/ui/AppHeader.vue";
 
 const router = useRouter();
 const ws = useWorkspaceStore();
@@ -152,6 +153,10 @@ function typeLabel(type: ChartType): string {
   return CHART_TYPE_LABELS[type] ?? type;
 }
 
+function goScreens(): void {
+  router.push("/screens");
+}
+
 function openCreate(): void {
   createName.value = `图表${ws.assets.length + 1}`;
   createType.value = "line";
@@ -229,30 +234,19 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   ev.dataTransfer.setData("text/plain", asset.name);
 }
 
-function goScreens(): void {
-  router.push("/screens");
-}
-
-function goSettings(): void {
-  router.push("/settings");
-}
 </script>
 
 <template>
   <div class="charts">
-    <header class="charts__header">
-      <h1 class="charts__logo"><Icon name="chart" :size="20" /> ChartForge 图表工作台</h1>
-      <nav class="charts__nav">
-        <button class="charts__nav-btn" @click="goScreens">大屏库</button>
-        <button class="charts__nav-btn active">图表库</button>
-        <button class="charts__nav-btn" @click="goSettings">接口设置</button>
-      </nav>
-      <div class="charts__actions">
+    <AppHeader active="charts">
+      <template #actions>
+        <div class="charts__actions">
         <button class="charts__btn charts__btn--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建图表
         </button>
       </div>
-    </header>
+      </template>
+    </AppHeader>
 
     <main class="charts__body">
       <div v-if="assets.length > 0" class="charts__filters">
@@ -455,44 +449,12 @@ function goSettings(): void {
   display: flex;
   flex-direction: column;
 }
-.charts__header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 14px 24px;
-  background: var(--cf-panel);
-  border-bottom: 1px solid var(--cf-border);
-}
-.charts__logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  margin: 0;
-}
-.charts__nav {
-  display: flex;
-  gap: 6px;
-}
-.charts__nav-btn {
-  padding: 6px 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  font-size: 13px;
-}
-.charts__nav-btn.active {
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  border-color: var(--cf-primary);
-  color: var(--cf-primary);
-  font-weight: 600;
-}
 .charts__actions {
-  margin-left: auto;
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  white-space: nowrap;
 }
 .charts__body {
   flex: 1;

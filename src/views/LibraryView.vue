@@ -10,6 +10,7 @@ import ExportPackageDialog from "@/shared/ui/ExportPackageDialog.vue";
 import { clampInterval, DEFAULT_INTERVAL_SEC } from "@/core/play/playlist";
 import { SCREEN_TEMPLATES, templateSlots } from "@/core/model/templates";
 import Icon from "@/shared/ui/Icon.vue";
+import AppHeader from "@/shared/ui/AppHeader.vue";
 
 const router = useRouter();
 const ws = useWorkspaceStore();
@@ -88,9 +89,6 @@ function openCharts(): void {
   router.push("/charts");
 }
 
-function goSettings(): void {
-  router.push("/settings");
-}
 
 // ---- 轮播演示 ----
 const playlistOpen = ref(false);
@@ -250,14 +248,9 @@ function exportWorkspace(): void {
 
 <template>
   <div class="library">
-    <header class="library__header">
-      <h1 class="library__logo"><Icon name="chart" :size="20" /> ChartForge 图表工作台</h1>
-      <nav class="library__nav">
-        <button class="library__nav-btn active">大屏库</button>
-        <button class="library__nav-btn" @click="openCharts">图表库</button>
-        <button class="library__nav-btn" @click="goSettings">接口设置</button>
-      </nav>
-      <div class="library__actions">
+    <AppHeader active="screens">
+      <template #actions>
+        <div class="library__actions">
         <button class="library__btn library__btn--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建大屏
         </button>
@@ -268,7 +261,8 @@ function exportWorkspace(): void {
           <Icon name="download" :size="14" /> 导出全部
         </button>
       </div>
-    </header>
+      </template>
+    </AppHeader>
 
     <main class="library__body">
       <div v-if="screens.length > 0" class="library__filters">
@@ -498,44 +492,12 @@ function exportWorkspace(): void {
   display: flex;
   flex-direction: column;
 }
-.library__header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 14px 24px;
-  background: var(--cf-panel);
-  border-bottom: 1px solid var(--cf-border);
-}
-.library__logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  margin: 0;
-}
-.library__nav {
-  display: flex;
-  gap: 6px;
-}
-.library__nav-btn {
-  padding: 6px 14px;
-  border: 1px solid var(--cf-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--cf-text-2);
-  cursor: pointer;
-  font-size: 13px;
-}
-.library__nav-btn.active {
-  background: color-mix(in srgb, var(--cf-primary) 12%, transparent);
-  border-color: var(--cf-primary);
-  color: var(--cf-primary);
-  font-weight: 600;
-}
 .library__actions {
-  margin-left: auto;
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  white-space: nowrap;
 }
 .library__btn {
   display: inline-flex;
