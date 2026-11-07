@@ -88,6 +88,12 @@ export type LiveFilterOp =
   | "in"
   | "notEmpty";
 
+export interface DatasetBinding {
+  datasetId: string;
+  fields?: { category?: string; value?: string; seriesField?: string };
+  filterBy?: { field: string; globalVariable: string };
+}
+
 export type ChartData =
   | { kind: "category"; categories: string[]; series: { name: string; values: number[] }[] }
   | { kind: "nameValue"; rows: { name: string; value: number }[] }
@@ -130,7 +136,15 @@ export interface ShapeItem extends BaseItem, ShapeSpec {
   kind: "shape";
 }
 
-export type ScreenItem = ChartItem | TextItem | ImageItem | ShapeItem;
+export interface ComponentItem extends BaseItem {
+  kind: "component";
+  componentId: string;
+  componentVersion: number;
+  props: Record<string, unknown>;
+  dataBinding?: DatasetBinding;
+}
+
+export type ScreenItem = ChartItem | TextItem | ImageItem | ShapeItem | ComponentItem;
 
 export type Background =
   | { kind: "color"; color: string }

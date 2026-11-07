@@ -1,0 +1,46 @@
+import type { Component } from "vue";
+import type { Frame } from "@/core/model/types";
+
+export type LegacyItemKind = "chart" | "text" | "image" | "shape";
+export type ComponentPayloadFieldType = "string" | "number" | "boolean" | "object";
+
+export interface ComponentProp {
+  readonly key: string;
+  readonly label: string;
+  readonly type: "string" | "number" | "boolean" | "select";
+  readonly defaultValue: unknown;
+  readonly options?: readonly string[];
+}
+
+export interface ComponentEvent {
+  readonly name: string;
+  readonly payloadFields: Readonly<Record<string, ComponentPayloadFieldType>>;
+}
+
+export interface ComponentAction {
+  readonly name: string;
+  readonly payloadFields: Readonly<Record<string, ComponentPayloadFieldType>>;
+}
+
+export type ComponentRenderer =
+  | { readonly kind: "vue"; readonly view: Component }
+  | { readonly kind: "legacy"; readonly itemKind: LegacyItemKind };
+
+export interface ComponentDefinition {
+  readonly id: string;
+  readonly version: number;
+  readonly name: string;
+  readonly category: string;
+  readonly defaultFrame: Frame;
+  readonly defaults: Record<string, unknown>;
+  readonly props: readonly ComponentProp[];
+  readonly events: readonly ComponentEvent[];
+  readonly actions: readonly ComponentAction[];
+  readonly renderer: ComponentRenderer;
+  readonly exportRendererId: string;
+}
+
+export interface ComponentRegistry {
+  get(id: string, version: number): ComponentDefinition | undefined;
+  list(): readonly ComponentDefinition[];
+}

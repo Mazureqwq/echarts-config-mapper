@@ -160,3 +160,56 @@ describe("model/schema 工厂与规范化", () => {
     expect(ws.assets[2].defaultSize).toBeUndefined();
   });
 });
+
+describe("model/component item factory", () => {
+  it("preserves a component instance even when its renderer is not registered", () => {
+    const component = {
+      id: "instance-1",
+      name: "Unknown widget",
+      kind: "component",
+      frame: { x: 10, y: 20, w: 300, h: 180, rotate: 0 },
+      componentId: "vendor.missing",
+      componentVersion: 7,
+      props: { title: "Keep me" },
+    };
+    const workspace = normalizeWorkspace({ version: 1, screens: [{ id: "screen-1", items: [component] }] });
+
+    expect(workspace.screens[0].items).toHaveLength(1);
+    expect(workspace.screens[0].items[0]).toMatchObject(component);
+  });
+
+  it("copies registered defaults and combines default, definition and caller frames", async () => {
+    const schema = await import("../src/core/model/schema");
+    const factory = (schema as unknown as {
+      createComponentItem?: (definition: {
+        id: string;
+        version: number;
+        name: string;
+        defaultFrame: { x: number; y: number; w: number; h: number; rotate: number };
+        defaults: Record<string, unknown>;
+      }, frame?: Partial<{ x: number; y: number; w: number; h: number; rotate: number }>) => {
+        componentId: string;
+        componentVersion: number;
+        frame: { x: number; y: number; w: number; h: number; rotate: number };
+        props: Record<string, unknown>;
+      };
+    }).createComponentItem;
+    expect(factory).toBeTypeOf("function");
+    if (!factory) return;
+
+    const definition = {
+      id: "chartforge.test",
+      version: 2,
+      name: "Test widget",
+      defaultFrame: { x: 1, y: 2, w: 300, h: 200, rotate: 0 },
+      defaults: { style: { color: "#fff" } },
+    };
+    const item = factory(definition, { x: 9 });
+    (item.props.style as { color: string }).color = "#000";
+
+    expect(item.componentId).toBe("chartforge.test");
+    expect(item.componentVersion).toBe(2);
+    expect(item.frame).toEqual({ x: 9, y: 2, w: 300, h: 200, rotate: 0 });
+    expect(definition.defaults.style.color).toBe("#fff");
+  });
+});

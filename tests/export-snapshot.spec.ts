@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPackagePayload, isSafeImageSrc, toPackageScreen } from "../src/core/export/snapshot";
 import { createWorkspace, createScreen, createChartAsset, createChartSpec } from "../src/core/model/schema";
-import type { ChartItem, ImageItem, ShapeItem, TextItem } from "../src/core/model/types";
+import type { ChartItem, ComponentItem, ImageItem, ShapeItem, TextItem } from "../src/core/model/types";
 
 function item<T>(kind: string, extra: Record<string, unknown>): T {
   return {
@@ -81,6 +81,18 @@ describe("export/snapshot 快照与白名单", () => {
     expect(isSafeImageSrc("data:text/html;base64,AAA")).toBe(false);
     expect(isSafeImageSrc("javascript:alert(1)")).toBe(false);
     expect(isSafeImageSrc("")).toBe(false);
+  });
+
+  it("组件尚无导出渲染器时拒绝生成离线产物", () => {
+    const { ws, screen } = seed();
+    screen.items.push(
+      item<ComponentItem>("component", {
+        componentId: "chartforge.future-widget",
+        componentVersion: 1,
+        props: {},
+      })
+    );
+    expect(() => buildPackagePayload(ws, [screen.id])).toThrow("无法生成离线产物");
   });
 
   it("保留令牌时要给出显式警告", () => {

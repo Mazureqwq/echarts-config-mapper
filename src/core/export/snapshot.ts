@@ -73,6 +73,9 @@ function toPackageItem(item: ScreenItem, warnings: string[]): PackageItem | null
     }
     return { ...base, kind: "image", src: item.src, fit: item.fit };
   }
+  if (item.kind === "component") {
+    throw new Error(`组件「${item.name || item.componentId}」尚未注册导出渲染器，无法生成离线产物`);
+  }
   return {
     ...base,
     kind: "shape",

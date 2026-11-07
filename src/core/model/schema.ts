@@ -6,6 +6,8 @@ import type {
   ChartItem,
   ChartSpec,
   ChartType,
+  ComponentItem,
+  DatasetBinding,
   Frame,
   ImageItem,
   ImageSpec,
@@ -18,6 +20,7 @@ import type {
   TextSpec,
   Workspace,
 } from "./types";
+import type { ComponentDefinition } from "../components/types";
 import { initialChartData } from "../chart/chartData";
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
@@ -79,7 +82,7 @@ export function createChartAsset(name: string, spec: ChartSpec): ChartAsset {
 }
 
 export function createItem(
-  kind: ScreenItem["kind"],
+  kind: Exclude<ScreenItem["kind"], "component">,
   frame: Partial<Frame> = {},
   spec?: ChartSpec
 ): ScreenItem {
@@ -116,6 +119,22 @@ export function createItem(
       return item;
     }
   }
+}
+
+export function createComponentItem(
+  definition: ComponentDefinition,
+  frame: Partial<Frame> = {}
+): ComponentItem {
+  const props = JSON.parse(JSON.stringify(definition.defaults)) as Record<string, unknown>;
+  return {
+    id: uuid(),
+    name: definition.name,
+    kind: "component",
+    componentId: definition.id,
+    componentVersion: definition.version,
+    frame: { ...DEFAULT_FRAME, ...definition.defaultFrame, ...frame },
+    props,
+  };
 }
 
 function normalizeFrame(raw: unknown): Frame {
@@ -295,10 +314,40 @@ function normalizeSpec(raw: unknown): ChartSpec {
   return source ? { type, option, data, source } : { type, option, data };
 }
 
+function normalizeDatasetBinding(raw: unknown): DatasetBinding | undefined {
+  if (!isRecord(raw)) return undefined;
+  const datasetId = str(raw.datasetId, "").trim();
+  if (!datasetId) return undefined;
+
+  let fields: DatasetBinding["fields"];
+  if (isRecord(raw.fields)) {
+    const normalized = {
+      ...(typeof raw.fields.category === "string" && raw.fields.category.trim()
+        ? { category: raw.fields.category.trim() }
+        : {}),
+      ...(typeof raw.fields.value === "string" && raw.fields.value.trim()
+        ? { value: raw.fields.value.trim() }
+        : {}),
+      ...(typeof raw.fields.seriesField === "string" && raw.fields.seriesField.trim()
+        ? { seriesField: raw.fields.seriesField.trim() }
+        : {}),
+    };
+    if (Object.keys(normalized).length) fields = normalized;
+  }
+
+  let filterBy: DatasetBinding["filterBy"];
+  if (isRecord(raw.filterBy)) {
+    const field = str(raw.filterBy.field, "").trim();
+    const globalVariable = str(raw.filterBy.globalVariable, "").trim();
+    if (field && globalVariable) filterBy = { field, globalVariable };
+  }
+  return { datasetId, ...(fields ? { fields } : {}), ...(filterBy ? { filterBy } : {}) };
+}
+
 function normalizeItem(raw: unknown): ScreenItem | null {
   if (!isRecord(raw)) return null;
   const kind = str(raw.kind, "");
-  if (!(ITEM_KINDS as readonly string[]).includes(kind)) return null;
+  if (kind !== "component" && !(ITEM_KINDS as readonly string[]).includes(kind)) return null;
   const base = {
     id: str(raw.id, uuid()),
     name: str(raw.name, ""),
@@ -308,6 +357,23 @@ function normalizeItem(raw: unknown): ScreenItem | null {
     ...(typeof raw.opacity === "number" ? { opacity: raw.opacity } : {}),
     ...(typeof raw.groupId === "string" ? { groupId: raw.groupId } : {}),
   };
+  if (kind === "component") {
+    const rawVersion = raw.componentVersion;
+    const componentVersion =
+      typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > 0
+        ? rawVersion
+        : 1;
+    const dataBinding = normalizeDatasetBinding(raw.dataBinding);
+    return {
+      ...base,
+      name: base.name || "组件",
+      kind: "component",
+      componentId: str(raw.componentId, "").trim(),
+      componentVersion,
+      props: isRecord(raw.props) ? { ...raw.props } : {},
+      ...(dataBinding ? { dataBinding } : {}),
+    } satisfies ComponentItem;
+  }
   switch (kind) {
     case "chart":
       return {

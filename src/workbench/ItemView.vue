@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import type { CSSProperties } from "vue";
 import type { ScreenItem } from "@/core/model/types";
+import { componentRegistry } from "@/core/components/builtins";
 import { buildOption } from "@/core/chart/optionBuilder";
 import { themeMode } from "@/shared/theme";
 import { useDocumentStore } from "@/stores/documentStore";
@@ -10,6 +11,33 @@ const doc = useDocumentStore();
 import EChartsView from "./EChartsView.vue";
 
 const props = defineProps<{ item: ScreenItem }>();
+
+const componentDefinition = computed(() => {
+  const item = props.item;
+  return item.kind === "component"
+    ? componentRegistry.get(item.componentId, item.componentVersion)
+    : undefined;
+});
+
+const componentView = computed(() => {
+  const renderer = componentDefinition.value?.renderer;
+  return renderer?.kind === "vue" ? renderer.view : null;
+});
+
+const componentFallback = computed(() => {
+  const item = props.item;
+  return item.kind === "component"
+    ? `组件未注册：${item.componentId}@${item.componentVersion}`
+    : "";
+});
+
+const legacyAdapterAvailable = computed(() => {
+  const item = props.item;
+  return (
+    item.kind !== "component" &&
+    componentRegistry.get(`legacy.${item.kind}`, 1)?.renderer.kind === "legacy"
+  );
+});
 
 const boxStyle = computed<CSSProperties>(() => {
   const f = props.item.frame;
@@ -94,17 +122,21 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
     >
       数据过期
     </div>
-    <template v-if="item.kind === 'text'">
+    <template v-if="item.kind === 'text' && legacyAdapterAvailable">
       <div :style="textStyle">{{ item.text }}</div>
     </template>
-    <template v-else-if="item.kind === 'image'">
+    <template v-else-if="item.kind === 'image' && legacyAdapterAvailable">
       <img v-if="item.src" :src="item.src" :style="imageStyle" alt="" draggable="false" />
       <div v-else class="item-view__img-empty">图片</div>
     </template>
-    <template v-else-if="item.kind === 'shape'">
+    <template v-else-if="item.kind === 'shape' && legacyAdapterAvailable">
       <div :style="shapeStyle" />
     </template>
-    <template v-else>
+    <template v-else-if="item.kind === 'component'">
+      <component v-if="componentView" :is="componentView" :item="item" v-bind="item.props" />
+      <div v-else class="item-view__missing">{{ componentFallback }}</div>
+    </template>
+    <template v-else-if="item.kind === 'chart' && legacyAdapterAvailable">
       <EChartsView v-if="chartOption" :option="chartOption" :theme="themeMode" />
     </template>
   </div>
@@ -132,5 +164,19 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
   border: 1px dashed var(--cf-border);
   color: var(--cf-text-2);
   font-size: 12px;
+}
+.item-view__missing {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border: 1px dashed var(--cf-border);
+  color: var(--cf-text-2);
+  font-size: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 </style>
