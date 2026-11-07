@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver the approved “经营概览” vertical slice: versioned built-in components, one shared static/HTTP dataset for a table and KPI, declarative blueprint interactions, a small design library, offline export, and legacy-workspace compatibility.
+**Goal:** Deliver the approved “经营概览” vertical slice with a DataV-inspired, application-wide low-code builder experience: versioned built-in components, one shared static/HTTP dataset for a table and KPI, declarative blueprint interactions, a small design library, offline export, and legacy-workspace compatibility. The approved application-wide UI/layout foundation (Task 1.5) is implemented before continuing to dataset Task 2.
 
-**Architecture:** Keep existing chart/text/image/shape item formats and renderers; add a versioned compile-time component registry for new widgets. Persist datasets at workspace scope and blueprints with each screen, feed all component consumers from a shared dataset runtime, and export data snapshots plus statically registered renderer behavior. The first release uses only allow-listed nodes and built-in code—no workspace-provided executable code.
+**Architecture:** Keep existing chart/text/image/shape item formats and renderers; add a versioned compile-time component registry for new widgets. Establish a shared application shell and DataV-inspired workbench information architecture before dataset editing; persist datasets at workspace scope and blueprints with each screen, feed all component consumers from a shared dataset runtime, and export data snapshots plus statically registered renderer behavior. The first release uses only allow-listed nodes and built-in code—no workspace-provided executable code.
 
 **Tech Stack:** Vue 3.5, TypeScript 5.9, Vite 8, Pinia 3, ECharts 6, Vitest 3; reuse the existing live-data pipeline, storage, image compression, and export infrastructure.
 
@@ -16,6 +16,7 @@
 - The product is for front-end/data developers and is an offline-deliverable, extensible low-code visualization builder.
 - First phase is DataV-lite; defer 3D, AI generation, collaboration, database connections, and a plugin market.
 - Components are registered and reused by developers; do not add per-screen arbitrary code.
+- Reference DataV for application information architecture and authoring workflow, not as an exact visual/brand clone; preserve ChartForge naming, existing data behavior, and offline constraints.
 - First-release components are statically/build-time registered and controlled; do not add runtime upload/installation of executable plugins.
 - First-release data sources are static data and HTTP API; reuse existing request settings, processing, and persistence where possible.
 - Keep editor, preview, presentation, and export behavior/version aligned; old workspaces must continue to open.
@@ -29,6 +30,7 @@
 3. Two consumers of one HTTP dataset cause one request per refresh; a later request failure reports stale/error while retaining the last good rows — pin in Task 2.
 4. A blueprint with unknown node kinds, dangling edges, or a cycle is rejected with a readable validation result and executes no partial side effects — pin in Task 4.
 5. User-controlled labels, cell values, asset content, and URLs cannot inject script or cause an external request in the exported artifact — pin in Tasks 5 and 6.
+6. The desktop builder keeps assets/layers discoverable on the left, the canvas central, and contextual configuration/data/interaction on the right; narrow layouts collapse panels cleanly and navigation exposes no dead links — pin in Task 1.5 and the owning feature tasks.
 
 ---
 
@@ -39,6 +41,7 @@
 - `src/core/data/datasetRuntime.ts`: static/HTTP dataset subscription, processing, snapshots, and consumer fan-out over existing `LiveExecutor`/pipeline.
 - `src/stores/workspaceStore.ts`, `src/stores/documentStore.ts`: component item creation/update, then dataset/design-resource persistence and screen-level blueprint/theme references in their owning tasks.
 - `src/workbench/ItemView.vue`, `CanvasStage.vue`, `ElementsPanel.vue`, `InspectorPanel.vue`, `LeftPanel.vue`, `WorkbenchView.vue`: integrate components, data binding, blueprints and design library with the existing workbench.
+- `src/shared/ui/AppHeader.vue`, `src/views/LibraryView.vue`, `ChartsView.vue`, `src/workbench/TopBar.vue`, `src/style/index.css`: establish the shared app shell, consistent resource-page navigation, and workbench design tokens in Task 1.5.
 - `src/workbench/components/DataTableWidget.vue`, `KpiWidget.vue`, `ComponentInspector.vue`: first registered widget implementations and schema-driven settings.
 - `src/core/blueprint/types.ts`, `validate.ts`, `runner.ts`: JSON graph, allow-listed node/action contracts, validation and deterministic execution.
 - `src/workbench/BlueprintEditor.vue`: node/edge editing UI backed only by the serializable blueprint model.
@@ -69,6 +72,29 @@
 - [x] **Step 4: Integrate registry resolution in `ItemView.vue`** — route old item kinds through their `legacy` adapter while preserving existing render branches; resolve generic component items by exact ID/version and render registered `renderer.view`, otherwise show the placeholder with component ID/version and no throw.
 - [x] **Step 5: Re-run focused tests and existing model/migration tests** — expect all PASS, including factory/default-copy, legacy item round-trip, placeholder rendering, and export rejection.
 - [x] **Step 6: Commit** — `feat: add versioned component model and registry` (commit `27ce17d`).
+
+## Task 1.5: DataV-inspired application shell and workbench information architecture (approved; complete in `57f9802`)
+
+This UI foundation is deliberately inserted between completed Task 1 and Task 2 without renumbering the approved feature tasks. It makes the whole application feel like a coherent low-code builder while leaving DataV branding/assets out of scope. Dataset, blueprint and design-library entries become active only when their owning tasks provide working views.
+
+**Files:**
+- Modify: `src/shared/ui/AppHeader.vue`, `src/views/LibraryView.vue`, `src/views/ChartsView.vue`, `src/views/WorkbenchView.vue`, `src/workbench/TopBar.vue`, `src/workbench/LeftPanel.vue`, `src/workbench/InspectorPanel.vue`, `src/style/index.css`
+- Test: `tests/workbench-layout.spec.ts`, `tests/app-header.spec.ts`, `tests/shared-collection-ui.spec.ts`
+
+**Layout contract:**
+- Shared application shell gives existing screen/chart/settings pages a consistent brand, active navigation, page header and resource controls; do not show links to unimplemented routes.
+- The workbench uses a compact top action bar, a narrow left tool rail with a contextual panel (components/assets/layers now; datasets and variables in their owning tasks), a centered canvas, and a right inspector with `配置 / 数据 / 交互` sections. Existing configuration and data controls remain reachable; no user capability is removed.
+- Blueprint editing later reuses the same shell and gets an explicit canvas/blueprint mode switch in Task 4. Dataset and design-library surfaces are attached to the established panel/navigation slots in Tasks 2 and 5.
+- Use dark neutral editor chrome and consistent tokens; keep the actual screen theme/background on the canvas. Resource pages may use a light content surface but share the same navigation, typography, cards and controls.
+- At desktop widths keep both side panels and the canvas usable; at narrower widths allow panels to collapse without covering or clipping the canvas. Preview/presentation hide editor chrome.
+
+- [x] **Step 1: Write failing UI-contract tests** — assert active top-level navigation, editor region landmarks, contextual panel tabs, resource-page header consistency, keyboard labels/focus, and collapsed-panel behavior at narrow widths.
+- [x] **Step 2: Run focused UI tests** — `npm test -- --run tests/workbench-layout.spec.ts tests/app-header.spec.ts tests/shared-collection-ui.spec.ts`; expect the new layout assertions to fail before the refactor.
+- [x] **Step 3: Implement the shared workbench shell** — refactor `WorkbenchView`, `TopBar`, `LeftPanel` and `InspectorPanel` into the layout contract while retaining existing interactions and keeping dataset/blueprint/design-library entries disabled or hidden until their routes/panels work.
+- [x] **Step 4: Align whole-app navigation and resource pages** — update `AppHeader`, `LibraryView` and `ChartsView` to use the same navigation hierarchy, page header, filter bar and responsive tokens; do not change collection CRUD semantics.
+- [x] **Step 5: Verify the existing editor flows** — check that chart/text/image/shape insertion, selection, frame/style editing, data editing, save, preview and export controls remain available; run focused UI and existing collection tests.
+- [x] **Step 6: Run `npm run typecheck`, `npm test -- --run` and `npm run build`** — expect all existing and new tests to pass.
+- [x] **Step 7: Commit** — `feat: establish DataV-inspired application layout` (commit `57f9802`).
 
 ## Task 2: Shared static/HTTP dataset runtime and workspace editing
 
