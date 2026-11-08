@@ -65,6 +65,9 @@ describe("export/artifact 单文件产物", () => {
     // 两个内联脚本各一个摘要
     expect(html.match(/sha256-/g)?.length).toBe(2);
     expect(html).not.toContain("unsafe-eval");
+    expect(html).toContain("img-src data:");
+    expect(html).toContain("connect-src 'none'");
+    expect(html).not.toMatch(/(?:src|href)=["']https?:\/\//i);
     expect(html).not.toContain("http-equiv=\"refresh\"");
   });
 
@@ -103,6 +106,7 @@ describe("export/artifact 单文件产物", () => {
     expect(/\beval\s*\(/.test(RUNTIME_CODE)).toBe(false);
     expect(/new\s+Function/.test(RUNTIME_CODE)).toBe(false);
     expect(RUNTIME_CODE).not.toContain("innerHTML");
+    expect(RUNTIME_CODE).not.toMatch(/\b(fetch|XMLHttpRequest|WebSocket)\b/);
   });
 });
 
@@ -132,6 +136,8 @@ describe("export/artifact 目录包", () => {
     expect(html).toContain("script-src 'self'");
     expect(html).toContain('integrity="sha384-');
     expect(html).toContain('src="assets/echarts.min.js"');
+    expect(html).toContain("connect-src 'none'");
+    expect(html).not.toMatch(/(?:src|href)=["']https?:\/\//i);
 
     const manifest = JSON.parse(out.files.find((f) => f.path === "manifest.json")!.content);
     expect(manifest.files.length).toBe(out.files.length - 1);

@@ -57,7 +57,7 @@ describe("export/snapshot 快照与白名单", () => {
     const { ws, screen } = seed();
     const payload = buildPackagePayload(ws, [screen.id]);
     expect(payload.screens[0].items.some((i) => i.kind === "image" && i.src.startsWith("javascript"))).toBe(false);
-    expect(payload.warnings.join()).toContain("白名单");
+    expect(payload.warnings.join()).toMatch(/离线|白名单/);
   });
 
   it("图表 option 在导出时就已算好（运行时不重复建图逻辑）", () => {
@@ -75,8 +75,8 @@ describe("export/snapshot 快照与白名单", () => {
     expect(JSON.stringify(payload)).not.toContain("THUMB");
   });
 
-  it("图片白名单只放行 http(s) 与 data:image", () => {
-    expect(isSafeImageSrc("https://a.test/x.png")).toBe(true);
+  it("离线图片白名单只放行内嵌 data:image", () => {
+    expect(isSafeImageSrc("https://a.test/x.png")).toBe(false);
     expect(isSafeImageSrc("data:image/png;base64,AAA")).toBe(true);
     expect(isSafeImageSrc("data:text/html;base64,AAA")).toBe(false);
     expect(isSafeImageSrc("javascript:alert(1)")).toBe(false);
@@ -92,10 +92,59 @@ describe("export/snapshot 快照与白名单", () => {
         props: {},
       })
     );
+    expect(() => buildPackagePayload(ws, [screen.id])).toThrow("chartforge.future-widget");
     expect(() => buildPackagePayload(ws, [screen.id])).toThrow("无法生成离线产物");
   });
 
-  it("保留令牌时要给出显式警告", () => {
+  it("仅打包选中屏幕引用的数据集行快照，不携带源配置或其它屏幕的数据集", () => {
+    const { ws, screen } = seed();
+    ws.datasets.push(
+      { id: "sales", name: "销售", source: { kind: "http", live: { url: "https://private.example/api", method: "POST", headers: { Authorization: "Bearer header-secret" }, body: "body-secret", query: { token: "query-secret" }, intervalSec: 30 } } } as never,
+      { id: "other", name: "未选数据", source: { kind: "http", live: { url: "https://unused.example/api", intervalSec: 30 } } } as never,
+    );
+    (screen.items.find((entry) => entry.kind === "chart") as ChartItem).dataBinding = { datasetId: "sales", fields: { category: "region", value: "amount" }, filterBy: { field: "region", globalVariable: "selectedRegion" } };
+    screen.items.push(item<ComponentItem>("component", { componentId: "chartforge.data-table", componentVersion: 1, props: { columns: [{ field: "region", label: "区域", format: "text" }] }, dataBinding: { datasetId: "sales" } }));
+    screen.blueprint = {
+      variables: [{ name: "selectedRegion", type: "string", initialValue: "North" }],
+      nodes: [{ id: "select", kind: "componentEvent", componentId: "chartforge.data-table", componentVersion: 1, event: "rowSelect" }, { id: "set", kind: "setVariable", name: "selectedRegion", value: { source: "event", path: "row.region" } }, { id: "live-params", kind: "datasetAction", action: "setParams", datasetId: "sales", params: { token: { source: "literal", value: "blueprint-secret" } } }],
+      edges: [{ id: "edge", from: { nodeId: "select", port: "next" }, to: { nodeId: "set", port: "next" } }],
+    };
+    const unselected = createScreen("未选择");
+    unselected.items.push(item<ComponentItem>("component", { componentId: "chartforge.data-table", componentVersion: 1, dataBinding: { datasetId: "other" }, props: {} }));
+    ws.screens.push(unselected);
+    const payload = buildPackagePayload(ws, [screen.id], { datasetSnapshots: new Map([["sales", { status: "success" as const, rows: [{ region: "North", amount: 7 }, { region: "South", amount: 11 }], updatedAt: 123 }]]) });
+    expect(payload.datasets).toEqual([{ id: "sales", rows: [{ region: "North", amount: 7 }, { region: "South", amount: 11 }] }]);
+    expect(payload.screens).toHaveLength(1);
+    expect(payload.screens[0]?.items.find((entry) => entry.kind === "component")).toMatchObject({ componentId: "chartforge.data-table", componentVersion: 1 });
+    expect(payload.screens[0]?.items.find((entry) => entry.kind === "chart")).toMatchObject({ dataBinding: { datasetId: "sales" }, dataTemplate: { kind: "category" } });
+    expect(payload.screens[0]?.blueprint?.nodes.find((node) => node.id === "live-params")).toMatchObject({ kind: "datasetAction", action: "setParams", params: {} });
+    expect(JSON.stringify(payload)).not.toContain("blueprint-secret");
+    expect(payload.screens[0]?.blueprint?.nodes.find((node) => node.id === "set")).toMatchObject({ id: "set", kind: "setVariable" });
+    const serialized = JSON.stringify(payload);
+    for (const secret of ["private.example", "unused.example", "header-secret", "body-secret", "query-secret"]) expect(serialized).not.toContain(secret);
+  });
+
+  it("exports stale dataset rows and warns that the last successful snapshot is stale", () => {
+    const { ws, screen } = seed();
+    ws.datasets.push({ id: "sales", name: "销售", source: { kind: "http", live: { url: "https://private.example/api", intervalSec: 30 } } } as never);
+    (screen.items.find((entry) => entry.kind === "chart") as ChartItem).dataBinding = { datasetId: "sales" };
+    const payload = buildPackagePayload(ws, [screen.id], { datasetSnapshots: new Map([["sales", { status: "stale" as const, rows: [{ region: "North", amount: 7 }] }]]) });
+    expect(payload.datasets).toEqual([{ id: "sales", rows: [{ region: "North", amount: 7 }] }]);
+    expect(payload.warnings.join(" ")).toMatch(/过期|过时|stale/i);
+  });
+
+  it("drops external HTTP image and background URLs from offline packages with warnings", () => {
+    const { ws, screen } = seed();
+    screen.canvas.background = { kind: "image", src: "https://private.example/background.png" };
+    screen.items.push(item<ImageItem>("image", { src: "http://private.example/image.png", fit: "cover" }));
+    const payload = buildPackagePayload(ws, [screen.id]);
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("private.example");
+    expect(payload.screens[0]?.canvas.background.kind).toBe("color");
+    expect(payload.warnings.join(" ")).toMatch(/离线|外部|data:image/i);
+  });
+
+  it("保留令牌选项仅产生安全警告，不会输出请求配置", () => {
     const { ws, screen } = seed();
     const payload = buildPackagePayload(ws, [screen.id], { keepHeaders: true });
     expect(payload.warnings.join()).toContain("令牌");

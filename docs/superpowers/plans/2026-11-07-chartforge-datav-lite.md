@@ -185,19 +185,19 @@ This UI foundation is deliberately inserted between completed Task 1 and Task 2 
 - Preserve the existing `buildPackagePayload(workspace: Workspace, screenIds: string[], options: ExportOptions = {}): PackagePayload` API; add `datasetSnapshots?: ReadonlyMap<string, DatasetSnapshot>` to `ExportOptions`. The builder rejects missing component renderer versions and records only referenced sanitized local assets (assets are embedded through the corresponding image item; unused workspace assets are omitted).
 - `RUNTIME_CODE` statically registers table/KPI renderers and blueprint actions; DOM output uses safe node creation and `textContent`, and runtime asset/data URLs are filtered. No request is made by an offline artifact.
 
-- [ ] **Step 1: Write failing export tests** — assert table selection in offline HTML updates KPI and bound-chart views through the same dataset snapshot; stale snapshot warning; no source URL/header/token/body is included; missing component version blocks export; unbound legacy chart/text/image/shape export remains unchanged; no external asset URL or executable user source.
-- [ ] **Step 2: Run focused export tests** — `npm test -- --run tests/export-snapshot.spec.ts tests/export-artifact.spec.ts tests/export-e2e.spec.ts`; expect failures for component/dataset packages.
-- [ ] **Step 3: Extend snapshot model and package builder** — serialize current component versions, datasets, blueprint state and only referenced sanitized assets; preserve existing export format handling and clear errors.
-- [ ] **Step 4: Implement static offline widget rendering** — add table/KPI rendering, bound-chart row filtering/mapping and allow-listed blueprint effects to `RUNTIME_CODE`; update charts with ECharts `setOption`; use DOM APIs and text nodes only, with no eval/new Function/innerHTML and no external requests.
-- [ ] **Step 5: Run full acceptance suite** — `npm run typecheck && npm test -- --run && npm run build`; expect clean type-check, all tests PASS and successful production build.
-- [ ] **Step 6: Verify exported artifacts** — run the E2E test against both zip and single-file HTML; assert rendering works without network access and output contains neither `eval(` nor `new Function` nor external resource references. For these offline modes, reject or replace external HTTP image/background URLs with a visible warning; do not retain an external URL even for legacy items.
-- [ ] **Step 7: Commit** — `feat: export DataV-lite screens for offline use`.
+- [x] **Step 1: Write failing export tests** — assert table selection in offline HTML updates KPI and bound-chart views through the same dataset snapshot; stale snapshot warning; no source URL/header/token/body is included; missing component version blocks export; unbound legacy chart/text/image/shape export remains unchanged; no external asset URL or executable user source.
+- [x] **Step 2: Run focused export tests** — `npm test -- --run tests/export-snapshot.spec.ts tests/export-artifact.spec.ts tests/export-e2e.spec.ts`; expect failures for component/dataset packages.
+- [x] **Step 3: Extend snapshot model and package builder** — serialize current component versions, datasets, blueprint state and only referenced sanitized assets; preserve existing export format handling and clear errors.
+- [x] **Step 4: Implement static offline widget rendering** — add table/KPI rendering, bound-chart row filtering/mapping and allow-listed blueprint effects to `RUNTIME_CODE`; update charts with ECharts `setOption`; use DOM APIs and text nodes only, with no eval/new Function/innerHTML and no external requests.
+- [x] **Step 5: Run full acceptance suite** — `npm run typecheck && npm test -- --run && npm run build`; expect clean type-check, all tests PASS and successful production build.
+- [x] **Step 6: Verify exported artifacts** — run the E2E test against both zip and single-file HTML; assert rendering works without network access and output contains neither `eval(` nor `new Function` nor external resource references. For these offline modes, reject or replace external HTTP image/background URLs with a visible warning; do not retain an external URL even for legacy items.
+- [x] **Step 7: Commit** — `feat: export DataV-lite screens for offline use`.
 
 ## Vertical-Slice Acceptance Checklist
 
-- [ ] Static and HTTP datasets can be created and previewed; one HTTP dataset is requested once and shared by the table, KPI and dataset-bound chart.
-- [ ] Table fields/formatting and KPI aggregation are configurable; selecting a table row changes a global variable and filters the KPI/chart through the blueprint.
-- [ ] The monitor-dark or business-light theme and one/two reusable blocks can be applied to the example screen.
-- [ ] Editing, preview, presentation, zip export and single-file HTML use the same component versions and data snapshot.
-- [ ] A legacy workspace containing chart/text/image/shape items opens and exports without data loss.
-- [ ] All five Review Focus cases have automated tests.
+- [x] Static and HTTP datasets can be created and previewed; one HTTP dataset is requested once and shared by the table, KPI and dataset-bound chart.
+- [x] Table fields/formatting and KPI aggregation are configurable; selecting a table row changes a global variable and filters the KPI/chart through the blueprint.
+- [x] The monitor-dark or business-light theme and one/two reusable blocks can be applied to the example screen.
+- [x] Editing, preview, presentation, zip export and single-file HTML use the same component versions and data snapshot.
+- [x] A legacy workspace containing chart/text/image/shape items opens and exports without data loss.
+- [x] All five Review Focus cases have automated tests.

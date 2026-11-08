@@ -46,6 +46,7 @@ export const RUNTIME_CODE = String.raw`
     return;
   }
   var screens = payload.screens || [];
+  var datasets = Array.isArray(payload.datasets) ? payload.datasets : [];
   if (!screens.length) { fail("这个大屏没有任何内容"); return; }
 
   if (payload.geo && payload.geo.china && window.echarts) {
@@ -67,6 +68,7 @@ export const RUNTIME_CODE = String.raw`
   var current = 0;
   var timer = null;
   var paused = false;
+  var stateByScreen = Object.create(null);
 
   function clearStage() {
     for (var i = 0; i < charts.length; i++) {
@@ -74,6 +76,25 @@ export const RUNTIME_CODE = String.raw`
     }
     charts = [];
     while (stage.firstChild) stage.removeChild(stage.firstChild);
+  }
+
+  function stateFor(screen) {
+    var state = stateByScreen[screen.id];
+    if (state) return state;
+    var variables = Object.create(null);
+    var graph = screen.blueprint || {};
+    (Array.isArray(graph.variables) ? graph.variables : []).forEach(function (variable) {
+      if (variable && typeof variable.name === "string" && safeKey(variable.name)) variables[variable.name] = cloneData(variable.initialValue);
+    });
+    state = { variables: variables, filters: Object.create(null), props: Object.create(null), visibility: Object.create(null) };
+    stateByScreen[screen.id] = state;
+    return state;
+  }
+
+  function themeTokens(screen) {
+    if (screen.themeId === "business-light") return { panel: "#ffffff", text: "#172b4d", muted: "#63758b", accent: "#3478f6", border: "#d8e1ed" };
+    if (screen.themeId === "monitor-dark") return { panel: "#0d2234", text: "#e8f4ff", muted: "#89a8be", accent: "#29d3ff", border: "#214258" };
+    return { panel: "#202a39", text: "#e8edf7", muted: "#a4afbf", accent: "#6c8cff", border: "#344054" };
   }
 
   function backgroundOf(screen) {
@@ -115,13 +136,17 @@ export const RUNTIME_CODE = String.raw`
     stage.appendChild(el);
   }
 
+  function safeImageData(value) {
+    return /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(String(value || ""));
+  }
+
   function addImage(item) {
+    if (!safeImageData(item.src)) return;
     var el = doc.createElement("img");
     el.className = "cf-item cf-image";
     place(el, item);
     el.src = item.src;
     el.alt = item.name || "图片";
-    el.setAttribute("referrerpolicy", "no-referrer");
     el.style.objectFit = item.fit || "contain";
     stage.appendChild(el);
   }
@@ -143,7 +168,157 @@ export const RUNTIME_CODE = String.raw`
     stage.appendChild(el);
   }
 
-  function addChart(item) {
+  function cloneData(value) {
+    if (value === undefined) return null;
+    try { return JSON.parse(JSON.stringify(value)); } catch (e) { return {}; }
+  }
+
+  function safeKey(key) { return key !== "__proto__" && key !== "prototype" && key !== "constructor"; }
+  function safeField(value, fallback) { return typeof value === "string" && value && safeKey(value) ? value : fallback; }
+  function safeMerge() {
+    var out = Object.create(null);
+    for (var i = 0; i < arguments.length; i++) {
+      var source = arguments[i];
+      if (!source || typeof source !== "object") continue;
+      Object.keys(source).forEach(function (key) { if (safeKey(key)) out[key] = source[key]; });
+    }
+    return out;
+  }
+
+  function datasetRows(binding, screen) {
+    if (!binding || !binding.datasetId) return [];
+    var entry = datasets.filter(function (dataset) { return dataset && dataset.id === binding.datasetId; })[0];
+    var rows = entry && Array.isArray(entry.rows) ? entry.rows.slice() : [];
+    var state = stateFor(screen);
+    var globalFilter = state.filters[binding.datasetId];
+    if (globalFilter && safeKey(globalFilter.field)) rows = rows.filter(function (row) { return String(row[globalFilter.field] == null ? "" : row[globalFilter.field]) === String(globalFilter.value == null ? "" : globalFilter.value); });
+    var filter = binding.filterBy;
+    if (filter && safeKey(filter.field) && Object.prototype.hasOwnProperty.call(state.variables, filter.globalVariable)) {
+      var expected = state.variables[filter.globalVariable];
+      rows = rows.filter(function (row) { return String(row[filter.field] == null ? "" : row[filter.field]) === String(expected == null ? "" : expected); });
+    }
+    return rows;
+  }
+
+  function asNumber(value) {
+    if (typeof value === "number" && isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && isFinite(Number(value))) return Number(value);
+    return null;
+  }
+
+  function chartOption(item, screen) {
+    var option = cloneData(item.option || {});
+    if (!item.dataBinding) return option;
+    var rows = datasetRows(item.dataBinding, screen);
+    var fields = item.dataBinding.fields || {};
+    var keys = rows.length ? Object.keys(rows[0]) : [];
+    var category = safeField(fields.category, keys[0] || "name");
+    var value = safeField(fields.value, keys[1] || "value");
+    var seriesField = safeField(fields.seriesField, "");
+    var seriesTemplate = Array.isArray(option.series) && option.series.length ? option.series[0] : {};
+    if (item.type === "pie" || item.type === "map") {
+      var points = rows.map(function (row) { return { name: row[category] == null ? "" : String(row[category]), value: asNumber(row[value]) || 0 }; });
+      option.series = [Object.assign({}, seriesTemplate, { data: points })];
+      return option;
+    }
+    if (item.type === "scatter") {
+      var pointsXY = rows.map(function (row) { return [asNumber(row[category]) || 0, asNumber(row[value]) || 0]; });
+      option.series = [Object.assign({}, seriesTemplate, { data: pointsXY })];
+      return option;
+    }
+    if (item.type === "radar") {
+      var radarCategories = []; var radarGroups = Object.create(null); var radarNames = [];
+      rows.forEach(function (row) {
+        var label = row[category] == null ? "" : String(row[category]);
+        if (radarCategories.indexOf(label) < 0) radarCategories.push(label);
+        var group = seriesField ? String(row[seriesField] == null ? "" : row[seriesField]) : (seriesTemplate.name || "数据");
+        if (!radarGroups[group]) { radarGroups[group] = Object.create(null); radarNames.push(group); }
+        radarGroups[group][label] = asNumber(row[value]) || 0;
+      });
+      var radarMax = rows.reduce(function (max, row) { return Math.max(max, asNumber(row[value]) || 0); }, 0);
+      option.radar = Object.assign({}, option.radar || {}, { indicators: radarCategories.map(function (name) { return { name: name, max: radarMax > 0 ? Math.ceil(radarMax * 1.2) : 100 }; }) });
+      option.series = [Object.assign({}, seriesTemplate, { type: "radar", data: radarNames.map(function (name) { return { name: name, value: radarCategories.map(function (label) { return radarGroups[name][label] || 0; }) }; }) })];
+      return option;
+    }
+    var categories = [];
+    var groups = Object.create(null);
+    var groupNames = [];
+    rows.forEach(function (row) {
+      var label = row[category] == null ? "" : String(row[category]);
+      if (categories.indexOf(label) < 0) categories.push(label);
+      var group = seriesField ? String(row[seriesField] == null ? "" : row[seriesField]) : (seriesTemplate.name || "数据");
+      if (!groups[group]) { groups[group] = Object.create(null); groupNames.push(group); }
+      groups[group][label] = asNumber(row[value]) || 0;
+    });
+    var templates = Array.isArray(option.series) ? option.series : [];
+    option.series = groupNames.map(function (name, index) {
+      var template = templates[index] || templates[0] || {};
+      return Object.assign({}, template, { name: name, data: categories.map(function (label) { return groups[name][label] || 0; }) });
+    });
+    if (!option.series.length) option.series = [Object.assign({}, seriesTemplate, { data: [] })];
+    if (!option.xAxis || typeof option.xAxis !== "object") option.xAxis = {};
+    option.xAxis.data = categories;
+    return option;
+  }
+
+  function formatWidget(value, format) {
+    if (value == null) return "—";
+    var number = asNumber(value);
+    if (format === "text" || number === null) {
+      if (typeof value === "object") { try { return JSON.stringify(value); } catch (e) { return "[对象]"; } }
+      return String(value);
+    }
+    try {
+      if (format === "percent") return new Intl.NumberFormat("zh-CN", { style: "percent", maximumFractionDigits: 2 }).format(number);
+      if (format === "currency") return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 2 }).format(number);
+      return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(number);
+    } catch (e) { return String(number); }
+  }
+
+  function addComponent(item, screen) {
+    var state = stateFor(screen);
+    var props = safeMerge(item.props || {}, state.props[item.componentId] || {});
+    var rows = datasetRows(item.dataBinding, screen);
+    var tokens = themeTokens(screen);
+    var rootEl = doc.createElement("div");
+    rootEl.className = "cf-item cf-component";
+    rootEl.style.color = tokens.text;
+    place(rootEl, item);
+    rootEl.setAttribute("data-component", item.componentId);
+    if (item.componentId === "chartforge.data-table" && item.componentVersion === 1) {
+      rootEl.className += " cf-data-table";
+      var columns = Array.isArray(props.columns) ? props.columns.filter(function (column) { return column && typeof column === "object" && safeField(column.field, ""); }) : [];
+      if (columns.length) {
+        var table = doc.createElement("table");
+        var thead = doc.createElement("thead");
+        var headRow = doc.createElement("tr");
+        columns.forEach(function (column) { var th = doc.createElement("th"); th.textContent = String(column.label || column.field || ""); th.style.backgroundColor = tokens.panel; th.style.color = tokens.text; th.style.borderBottom = "1px solid " + tokens.border; if (["left", "center", "right"].indexOf(column.align) >= 0) th.style.textAlign = column.align; if (typeof column.width === "number" && column.width > 0) th.style.width = column.width + "px"; headRow.appendChild(th); });
+        thead.appendChild(headRow); table.appendChild(thead);
+        var tbody = doc.createElement("tbody");
+        rows.forEach(function (row, index) {
+          var tr = doc.createElement("tr");
+          columns.forEach(function (column) { var td = doc.createElement("td"); td.textContent = formatWidget(row[column.field], column.format || "text"); td.style.borderBottom = "1px solid " + tokens.border; if (["left", "center", "right"].indexOf(column.align) >= 0) td.style.textAlign = column.align; if (typeof column.width === "number" && column.width > 0) td.style.width = column.width + "px"; tr.appendChild(td); });
+          tr.addEventListener("click", function () { runBlueprint(item, screen, "rowSelect", { row: row, index: index }); });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody); rootEl.appendChild(table);
+      } else { rootEl.textContent = "暂无可显示列"; }
+    } else if (item.componentId === "chartforge.kpi" && item.componentVersion === 1) {
+      rootEl.className += " cf-kpi";
+      rootEl.style.backgroundColor = tokens.panel;
+      rootEl.style.border = "1px solid " + tokens.border;
+      var valueField = safeField(props.valueField, "value");
+      var values = rows.map(function (row) { return asNumber(row[valueField]); }).filter(function (value) { return value !== null; });
+      var aggregate = 0;
+      if (values.length) aggregate = props.aggregation === "first" ? values[0] : values.reduce(function (sum, value) { return sum + value; }, 0) / (props.aggregation === "average" ? values.length : 1);
+      var label = doc.createElement("span"); label.className = "cf-kpi-label"; label.style.color = tokens.muted; label.textContent = String(props.label || "指标");
+      var valueEl = doc.createElement("strong"); valueEl.className = "cf-kpi-value"; valueEl.style.color = tokens.text; valueEl.textContent = formatWidget(aggregate, props.format || "number");
+      rootEl.appendChild(label); rootEl.appendChild(valueEl);
+    }
+    stage.appendChild(rootEl);
+  }
+
+  function addChart(item, screen) {
     var el = doc.createElement("div");
     el.className = "cf-item cf-chart";
     place(el, item);
@@ -152,7 +327,7 @@ export const RUNTIME_CODE = String.raw`
     stage.appendChild(el);
     if (!window.echarts) return;
     var chart = window.echarts.init(el, null, { renderer: "canvas" });
-    chart.setOption(item.option || {}, true);
+    chart.setOption(chartOption(item, screen), true);
     charts.push(chart);
   }
 
@@ -165,7 +340,7 @@ export const RUNTIME_CODE = String.raw`
     stage.style.height = screen.canvas.height + "px";
     stage.style.background = backgroundOf(screen);
     var bg = screen.canvas.background || {};
-    if (bg.kind === "image" && bg.src) {
+    if (bg.kind === "image" && safeImageData(bg.src)) {
       stage.style.backgroundImage = 'url("' + String(bg.src).replace(/"/g, "%22") + '")';
       stage.style.backgroundSize = "cover";
       stage.style.backgroundPosition = "center";
@@ -173,15 +348,97 @@ export const RUNTIME_CODE = String.raw`
     stage.setAttribute("aria-label", screen.name || "大屏");
 
     var items = screen.items || [];
+    var state = stateFor(screen);
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      if (item.kind === "chart") addChart(item);
+      if (item.hidden || state.visibility[item.componentId] === false) continue;
+      if (item.kind === "chart") addChart(item, screen);
+      else if (item.kind === "component") addComponent(item, screen);
       else if (item.kind === "text") addText(item);
       else if (item.kind === "image") addImage(item);
       else if (item.kind === "shape") addShape(item);
     }
     paintDots();
     fit();
+  }
+
+  function matchesVariable(screen, name, value) {
+    var variable = (screen.blueprint && Array.isArray(screen.blueprint.variables) ? screen.blueprint.variables : []).filter(function (entry) { return entry && entry.name === name; })[0];
+    if (!variable) return false;
+    if (variable.type === "string") return typeof value === "string";
+    if (variable.type === "number") return typeof value === "number" && isFinite(value);
+    if (variable.type === "boolean") return typeof value === "boolean";
+    return value === null || typeof value === "object";
+  }
+
+  function resolveRef(ref, payload, state) {
+    if (!ref || typeof ref !== "object") return { ok: false };
+    if (ref.source === "literal") return { ok: true, value: ref.value };
+    if (ref.source === "variable") return Object.prototype.hasOwnProperty.call(state.variables, ref.name) ? { ok: true, value: state.variables[ref.name] } : { ok: false };
+    if (ref.source === "event") {
+      var value = payload;
+      var parts = String(ref.path || "").split(".");
+      for (var i = 0; i < parts.length; i++) {
+        if (!parts[i] || parts[i] === "__proto__" || parts[i] === "prototype" || parts[i] === "constructor" || value == null || !Object.prototype.hasOwnProperty.call(value, parts[i])) return { ok: false };
+        value = value[parts[i]];
+      }
+      return { ok: true, value: value };
+    }
+    return { ok: false };
+  }
+
+  function compareValue(op, left, right) {
+    if (op === "eq") return left === right;
+    if (op === "ne") return left !== right;
+    if (op === "contains") return typeof left === "string" && typeof right === "string" ? left.indexOf(right) >= 0 : Array.isArray(left) ? left.indexOf(right) >= 0 : false;
+    if (typeof left !== typeof right || (typeof left !== "number" && typeof left !== "string")) return false;
+    if (op === "gt") return left > right; if (op === "gte") return left >= right; if (op === "lt") return left < right; if (op === "lte") return left <= right;
+    return false;
+  }
+
+  function runBlueprint(item, screen, eventName, eventPayload) {
+    var graph = screen.blueprint;
+    if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return;
+    var state = stateFor(screen);
+    var roots = graph.nodes.filter(function (node) { return node.kind === "componentEvent" && node.componentId === item.componentId && node.componentVersion === item.componentVersion && node.event === eventName; });
+    var queue = roots.map(function (node) { return { id: node.id, event: true }; });
+    var byId = Object.create(null); graph.nodes.forEach(function (node) { if (node && typeof node.id === "string") byId[node.id] = node; });
+    var visited = Object.create(null);
+    var changed = false;
+    while (queue.length && Object.keys(visited).length < 200) {
+      var currentNode = queue.shift();
+      if (!currentNode || visited[currentNode.id]) continue;
+      visited[currentNode.id] = true;
+      var node = byId[currentNode.id]; if (!node) continue;
+      var port = "next";
+      if (node.kind === "setVariable") {
+        var resolved = resolveRef(node.value, eventPayload, state);
+        if (resolved.ok && safeKey(node.name) && Object.prototype.hasOwnProperty.call(state.variables, node.name) && matchesVariable(screen, node.name, resolved.value)) { state.variables[node.name] = cloneData(resolved.value); changed = true; }
+      } else if (node.kind === "condition") {
+        var left = resolveRef(node.left, eventPayload, state); var right = resolveRef(node.right, eventPayload, state);
+        port = left.ok && right.ok && compareValue(node.op, left.value, right.value) ? "true" : "false";
+      } else if (node.kind === "fieldTransform") {
+        var input = resolveRef(node.input, eventPayload, state); var value = input.value;
+        if (input.ok && node.outputVariable && node.outputVariable !== "__proto__" && node.outputVariable !== "constructor") {
+          if (node.op === "toString") value = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+          else if (node.op === "toNumber") value = asNumber(value);
+          else if (node.op === "uppercase" && typeof value === "string") value = value.toUpperCase();
+          else if (node.op === "lowercase" && typeof value === "string") value = value.toLowerCase();
+          if (value !== null && Object.prototype.hasOwnProperty.call(state.variables, node.outputVariable) && matchesVariable(screen, node.outputVariable, value)) { state.variables[node.outputVariable] = value; changed = true; }
+        }
+      } else if (node.kind === "datasetAction" && node.action === "filter") {
+        state.filters[node.datasetId] = { field: node.field, value: state.variables[node.globalVariable] }; changed = true;
+      } else if (node.kind === "componentAction") {
+        if (node.action === "setVisibility") state.visibility[node.componentId] = node.visible;
+        else if (node.action === "setProps") state.props[node.componentId] = safeMerge(state.props[node.componentId] || {}, node.props || {});
+        changed = true;
+      } else if (node.kind === "navigateScreen") {
+        var targetIndex = screens.findIndex(function (entry) { return entry.id === node.screenId; });
+        if (targetIndex >= 0) current = targetIndex;
+      }
+      graph.edges.forEach(function (edge) { if (edge.from && edge.from.nodeId === node.id && edge.from.port === port && edge.to) queue.push({ id: edge.to.nodeId }); });
+    }
+    if (changed || current !== screens.indexOf(screen)) render(current);
   }
 
   function paintDots() {

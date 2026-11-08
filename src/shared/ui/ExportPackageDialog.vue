@@ -14,26 +14,30 @@ const emit = defineEmits<{ (e: "close"): void }>();
 const ws = useWorkspaceStore();
 
 const mode = ref<ArtifactMode>("folder");
-const keepHeaders = ref(false);
 const busy = ref(false);
 const error = ref("");
 const done = ref<{ fileName: string; size: string; warnings: string[] } | null>(null);
 
-const hasLive = computed(() => screenHasLiveSource(props.screen));
-const chartCount = computed(
-  () => props.screen.items.filter((i) => i.kind === "chart").length
-);
+const hasLive = computed(() => {
+  if (screenHasLiveSource(props.screen)) return true;
+  const boundIds = new Set(props.screen.items.flatMap((item) =>
+    "dataBinding" in item && item.dataBinding ? [item.dataBinding.datasetId] : []
+  ));
+  return ws.workspace.datasets.some((dataset) => boundIds.has(dataset.id) && dataset.source.kind === "http");
+});
 
 async function run(): Promise<void> {
   busy.value = true;
   error.value = "";
   done.value = null;
   try {
+    const datasetRuntime = ws.getDatasetRuntime();
+    const datasetSnapshots = new Map(ws.workspace.datasets.map((dataset) => [dataset.id, datasetRuntime.getSnapshot(dataset.id)]));
     const result = await exportScreenPackage({
       workspace: ws.workspace,
       screenIds: [props.screen.id],
       mode: mode.value,
-      options: { keepHeaders: keepHeaders.value },
+      options: { datasetSnapshots },
     });
     saveBlob(result.blob, result.fileName);
     done.value = {
@@ -84,23 +88,17 @@ async function run(): Promise<void> {
         <div class="export-dialog__field">
           <span class="export-dialog__label">数据</span>
           <div class="export-dialog__note">
-            当前导出为<strong>静态快照</strong>：{{ chartCount }} 个图表按此刻的数据固化，产物完全离线、不含任何密钥
-            {{ hasLive ? "（这块大屏配了实时数据源，产物里不会自动刷新）" : "" }}。
+            当前导出为<strong>离线数据快照</strong>：图表、数据表格和指标卡使用共同的数据集快照；产物不会自动请求接口
+            {{ hasLive ? "（已有成功或过期快照会随包导出；无快照时会在警告中提示）" : "" }}。
           </div>
-          <label class="export-dialog__check">
-            <input v-model="keepHeaders" type="checkbox" />
-            <span>
-              保留请求头里的令牌值
-              <em>默认剔除；勾选后产物可被任何人直接调用你的接口</em>
-            </span>
-          </label>
         </div>
 
         <div class="export-dialog__field">
           <span class="export-dialog__label">安全与标准</span>
           <ul class="export-dialog__list">
             <li>严格 CSP（<code>default-src 'none'</code>），零外部脚本、零 CDN</li>
-            <li>用户文本全部转义，图片地址只放行 http(s) / data:image</li>
+            <li>用户文本以 textContent 写入；仅嵌入图片可导出，不保留外部图片 URL</li>
+            <li>数据源 URL、请求头、请求体和令牌不会写入产物</li>
             <li>目录包内脚本带 SRI 完整性校验，<code>manifest.json</code> 记录每份文件的 SHA-256</li>
             <li>保留 ECharts 的 Apache-2.0 声明（<code>NOTICE-ECHARTS.txt</code>）</li>
           </ul>

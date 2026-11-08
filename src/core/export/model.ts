@@ -1,4 +1,7 @@
-import type { Background, ChartSpec, ChartType, DesignAsset, Frame } from "@/core/model/types";
+import type {
+  Background, ChartData, ChartSpec, ChartType, DatasetBinding, DatasetSnapshot, DesignAsset, Frame,
+} from "@/core/model/types";
+import type { BlueprintGraph } from "@/core/blueprint/types";
 
 /** 产物格式标识（写进 payload 与 manifest，便于第三方与未来版本识别） */
 export const PACKAGE_FORMAT = "chartforge/screen-package";
@@ -21,6 +24,10 @@ export interface PackageChartItem {
   option: Record<string, unknown>;
   /** 可访问性描述 */
   alt: string;
+  /** Optional workspace dataset binding; option is the retained chart style/config template. */
+  dataBinding?: DatasetBinding;
+  /** Design-time data retained as a safe fallback/template for offline remapping. */
+  dataTemplate?: ChartData;
 }
 
 export interface PackageTextItem {
@@ -49,6 +56,24 @@ export interface PackageImageItem {
   sourceDesignAssetId?: string;
 }
 
+export interface PackageComponentItem {
+  kind: "component";
+  id: string;
+  name: string;
+  frame: Frame;
+  opacity: number;
+  componentId: string;
+  componentVersion: number;
+  props: Record<string, unknown>;
+  dataBinding?: DatasetBinding;
+}
+
+export interface PackageDataset {
+  id: string;
+  /** Normalized rows only; source configuration and credentials are never packaged. */
+  rows: Array<Record<string, unknown>>;
+}
+
 export interface PackageShapeItem {
   kind: "shape";
   id: string;
@@ -66,13 +91,15 @@ export type PackageItem =
   | PackageChartItem
   | PackageTextItem
   | PackageImageItem
-  | PackageShapeItem;
+  | PackageShapeItem
+  | PackageComponentItem;
 
 export interface PackageScreen {
   id: string;
   name: string;
   canvas: { width: number; height: number; background: Background };
   themeId?: string;
+  blueprint?: BlueprintGraph;
   items: PackageItem[];
 }
 
@@ -85,6 +112,8 @@ export interface PackagePayload {
   screens: PackageScreen[];
   /** Only assets referenced by the exported screens. */
   designAssets?: DesignAsset[];
+  /** Selected-screen referenced normalized row snapshots, with no source configuration. */
+  datasets: PackageDataset[];
   /** 仅当地图图表存在时携带，避免白白多 54 KB */
   geo?: { china: unknown };
   /** 导出过程中的取舍记录（被丢掉的非法 URL、被剔除的令牌等），同时写进 manifest */
@@ -122,10 +151,12 @@ export interface PackageManifest {
 }
 
 export interface ExportOptions {
-  /** 是否保留请求头里的令牌（默认 false → 值被剔除） */
+  /** Deprecated compatibility option; offline exports never include request headers or secrets. */
   keepHeaders?: boolean;
   /** 是否携带实时数据源配置（V1 默认 false：纯快照最稳） */
   includeLive?: boolean;
+  /** Successful/stale workspace runtime snapshots to use for referenced datasets. */
+  datasetSnapshots?: ReadonlyMap<string, DatasetSnapshot>;
   /** 导出时间（测试注入用） */
   now?: () => number;
 }

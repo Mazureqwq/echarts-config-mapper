@@ -57,4 +57,6 @@ export async function exportScreenPackage(params: ExportPackageParams): Promise<
 export { buildPackagePayload } from "./snapshot";
 export { buildArtifact } from "./artifact";
 export { createZip, crc32 } from "./zip";
-export type { ArtifactMode, ExportOptions, PackagePayload } from "./model";
+export type {
+  ArtifactMode, ExportOptions, PackageChartItem, PackageComponentItem, PackageDataset, PackageItem, PackagePayload, PackageScreen,
+} from "./model";

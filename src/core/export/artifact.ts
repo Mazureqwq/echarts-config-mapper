@@ -72,6 +72,15 @@ body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica 
 .cf-text { white-space: pre-wrap; overflow: hidden; }
 .cf-image { display: block; }
 .cf-chart { overflow: hidden; }
+.cf-component { overflow: auto; color: #e8edf7; font: 12px/1.45 system-ui, sans-serif; }
+.cf-data-table { width: 100%; border-collapse: collapse; }
+.cf-data-table th, .cf-data-table td { padding: 7px 9px; border-bottom: 1px solid #344054; text-align: left; }
+.cf-data-table th { position: sticky; top: 0; background: #202a39; }
+.cf-data-table tbody tr { cursor: pointer; }
+.cf-data-table tbody tr:hover { background: rgba(108, 140, 255, 0.18); }
+.cf-kpi { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 18px; border: 1px solid #344054; border-radius: 8px; background: #202a39; }
+.cf-kpi-label { color: #a4afbf; font-size: 13px; }
+.cf-kpi-value { font-size: 32px; line-height: 1.1; }
 .cf-dots { position: fixed; left: 0; right: 0; bottom: 14px; display: flex; gap: 8px; justify-content: center; pointer-events: none; }
 .cf-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.28); }
 .cf-dot--on { background: rgba(255, 255, 255, 0.92); }
@@ -104,7 +113,7 @@ function readmeText(payload: PackagePayload, mode: ArtifactMode): string {
   const lines = [
     `# ${payload.title}`,
     "",
-    "这是由 ChartForge 导出的可直接使用的大屏产物，不依赖 ChartForge、不依赖联网（除非使用实时数据）。",
+    "这是由 ChartForge 导出的离线大屏产物，不依赖 ChartForge，也不会发起网络请求。",
     "",
     "## 打开方式",
     mode === "inline"
@@ -122,7 +131,7 @@ function readmeText(payload: PackagePayload, mode: ArtifactMode): string {
     "- 系统开启「减少动态效果」时不自动轮播",
     "",
     "## 安全说明",
-    "- 产物默认是静态快照，不含任何密钥；已在导出时清除请求头里的令牌",
+    "- 产物仅包含已引用的数据快照，不包含数据源地址、请求头、请求体或令牌",
     "- 页面内联了严格的 CSP（default-src 'none'），不加载任何外部脚本",
     "- manifest.json 记录了每份文件的 SHA-256，可用于校验产物是否被改动",
   ];
@@ -138,10 +147,10 @@ function cspPolicy(scriptSrc: string): string {
     "default-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-    "img-src data: https: http:",
+    "img-src data:",
     "style-src 'unsafe-inline'",
     `script-src ${scriptSrc}`,
-    "connect-src https: http:",
+    "connect-src 'none'",
   ].join("; ");
 }
 
