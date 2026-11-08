@@ -83,6 +83,27 @@ describe("export/snapshot 快照与白名单", () => {
     expect(isSafeImageSrc("")).toBe(false);
   });
 
+  it("只允许进度条组、标题栏和装饰边框的精确离线版本", () => {
+    const { screen } = seed();
+    const supported: ComponentItem[] = [
+      { id: "progress", name: "进度", kind: "component", componentId: "chartforge.progress-list", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 180, rotate: 0 }, props: { labelField: "region", valueField: "amount" }, dataBinding: { datasetId: "sales" } },
+      { id: "title", name: "标题", kind: "component", componentId: "chartforge.section-title", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 72, rotate: 0 }, props: { title: "<script>literal</script>" } },
+      { id: "frame", name: "边框", kind: "component", componentId: "chartforge.corner-frame", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 180, rotate: 0 }, props: { variant: "double" } },
+    ];
+    screen.items.push(...supported);
+
+    const components = toPackageScreen(screen, []).items.filter((entry) => entry.kind === "component");
+    expect(components.map((entry) => entry.kind === "component" ? [entry.componentId, entry.componentVersion] : null)).toEqual([
+      ["chartforge.progress-list", 1],
+      ["chartforge.section-title", 1],
+      ["chartforge.corner-frame", 1],
+    ]);
+    expect(components[0]).toMatchObject({ props: { labelField: "region", valueField: "amount" }, dataBinding: { datasetId: "sales" } });
+
+    screen.items.push({ ...supported[0]!, id: "unsupported-version", name: "component", componentVersion: 2 });
+    expect(() => toPackageScreen(screen, [])).toThrow("chartforge.progress-list");
+  });
+
   it("组件尚无导出渲染器时拒绝生成离线产物", () => {
     const { ws, screen } = seed();
     screen.items.push(
@@ -128,8 +149,15 @@ describe("export/snapshot 快照与白名单", () => {
     const { ws, screen } = seed();
     ws.datasets.push({ id: "sales", name: "销售", source: { kind: "http", live: { url: "https://private.example/api", intervalSec: 30 } } } as never);
     (screen.items.find((entry) => entry.kind === "chart") as ChartItem).dataBinding = { datasetId: "sales" };
+    screen.items.push(item<ComponentItem>("component", {
+      componentId: "chartforge.progress-list",
+      componentVersion: 1,
+      props: { labelField: "region", valueField: "amount" },
+      dataBinding: { datasetId: "sales" },
+    }));
     const payload = buildPackagePayload(ws, [screen.id], { datasetSnapshots: new Map([["sales", { status: "stale" as const, rows: [{ region: "North", amount: 7 }] }]]) });
     expect(payload.datasets).toEqual([{ id: "sales", rows: [{ region: "North", amount: 7 }] }]);
+    expect(payload.screens[0]?.items.find((entry) => entry.kind === "component")).toMatchObject({ componentId: "chartforge.progress-list", componentVersion: 1, dataBinding: { datasetId: "sales" } });
     expect(payload.warnings.join(" ")).toMatch(/过期|过时|stale/i);
   });
 

@@ -121,7 +121,7 @@ function toPackageItem(item: ScreenItem, warnings: string[], themeId: string | u
   }
   if (item.kind === "component") {
     const definition = componentRegistry.get(item.componentId, item.componentVersion);
-    const supported = definition && ["chartforge-data-table-v1", "chartforge-kpi-v1"].includes(definition.exportRendererId);
+    const supported = definition && ["chartforge-data-table-v1", "chartforge-kpi-v1", "chartforge-progress-list-v1", "chartforge-section-title-v1", "chartforge-corner-frame-v1"].includes(definition.exportRendererId);
     const label = item.name && item.name !== "component" && item.name !== "组件" ? item.name : item.componentId;
     if (!supported) throw new Error(`组件「${label}」的导出渲染器版本缺失或不受支持，无法生成离线产物`);
     return {

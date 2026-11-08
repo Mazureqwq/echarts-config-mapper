@@ -127,11 +127,11 @@
 - Offline progress mapping uses only `PackageDataset.rows`, applies the existing dataset/global-variable filter, and rerenders after allow-listed blueprint variable changes.
 - Static renderers use `createElement`, `textContent`, validated colors, and local CSS classes; they accept no user-authored HTML/CSS.
 
-- [ ] **Step 1: Write failing offline export tests** — extend E2E payload with all three components; assert progress rows respond to a blueprint filter using one snapshot; stale snapshots keep last-successful rows and warn; hostile titles/labels remain text; unknown component renderer still blocks export; ZIP and inline HTML contain no external resources or executable source.
-- [ ] **Step 2: Run focused export tests and confirm failure** — run separately: `npm test -- --run tests/export-snapshot.spec.ts`, `npm test -- --run tests/export-artifact.spec.ts`, and `npm test -- --run tests/export-e2e.spec.ts`; expect unsupported new renderers/behavior.
-- [ ] **Step 3: Implement the three static renderers in `RUNTIME_CODE`** — reuse existing package datasets, safe field handling, theme tokens, and blueprint rerender flow; preserve the restrictive CSP and existing `buildPackagePayload` API.
-- [ ] **Step 4: Run all focused export tests** — run the three focused commands above; expect PASS for stale warnings, unsafe input, ZIP and inline artifacts.
-- [ ] **Step 5: Commit** — `feat: export progress and decoration components offline`.
+- [x] **Step 1: Write failing offline export tests** — extend E2E payload with all three components; assert progress rows respond to a blueprint filter using one snapshot; stale snapshots keep last-successful rows and warn; hostile titles/labels remain text; unknown component renderer still blocks export; ZIP and inline HTML contain no external resources or executable source.
+- [x] **Step 2: Run focused export tests and confirm failure** — run separately: `npm test -- --run tests/export-snapshot.spec.ts`, `npm test -- --run tests/export-artifact.spec.ts`, and `npm test -- --run tests/export-e2e.spec.ts`; expect unsupported new renderers/behavior.
+- [x] **Step 3: Implement the three static renderers in `RUNTIME_CODE`** — reuse existing package datasets, safe field handling, theme tokens, and blueprint rerender flow; preserve the restrictive CSP and existing `buildPackagePayload` API.
+- [x] **Step 4: Run all focused export tests** — run the three focused commands above; expect PASS for stale warnings, unsafe input, ZIP and inline artifacts.
+- [x] **Step 5: Commit** — `feat: export progress and decoration components offline`.
 
 ## Task 6: Full acceptance and plan close-out
 

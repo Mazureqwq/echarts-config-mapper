@@ -81,6 +81,26 @@ body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica 
 .cf-kpi { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 18px; border: 1px solid #344054; border-radius: 8px; background: #202a39; }
 .cf-kpi-label { color: #a4afbf; font-size: 13px; }
 .cf-kpi-value { font-size: 32px; line-height: 1.1; }
+.cf-progress-list { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.cf-progress-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cf-progress-heading { display: flex; min-width: 0; justify-content: space-between; gap: 10px; color: #a4afbf; font-size: 12px; }
+.cf-progress-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-progress-value { flex: 0 0 auto; color: #e8edf7; font-variant-numeric: tabular-nums; }
+.cf-progress-track { height: 9px; overflow: hidden; border-radius: 999px; }
+.cf-progress-fill { display: block; height: 100%; border-radius: inherit; transition: width 160ms ease; }
+.cf-section-title { position: relative; overflow: hidden; box-sizing: border-box; width: 100%; height: 100%; color: #e8edf7; font-family: system-ui, sans-serif; }
+.cf-section-title__body { min-width: 0; }
+.cf-section-title__title { overflow: hidden; margin: 0; color: inherit; font-size: 18px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.cf-section-title__subtitle { overflow: hidden; margin: 4px 0 0; color: #a4afbf; font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.cf-section-title__mark { display: block; }
+.cf-section-title--underline .cf-section-title__mark { position: absolute; bottom: 0; left: 18px; width: 56px; height: 2px; }
+.cf-section-title--bar .cf-section-title__mark { position: static; flex: 0 0 3px; align-self: stretch; width: 3px; margin-right: 12px; }
+.cf-section-title--bracket .cf-section-title__mark, .cf-section-title--bracket .cf-section-title__bracket-end { position: absolute; box-sizing: border-box; width: 14px; height: 14px; background: transparent; border-style: solid; }
+.cf-section-title--bracket .cf-section-title__mark { top: 5px; left: 5px; }
+.cf-section-title--bracket .cf-section-title__bracket-end { right: 5px; bottom: 5px; }
+.cf-corner-frame { overflow: visible; pointer-events: none; }
+.cf-corner-frame__corner, .cf-corner-frame__outline { position: absolute; box-sizing: border-box; }
+.cf-corner-frame__corner { width: 22px; height: 22px; border-style: solid; }
 .cf-dots { position: fixed; left: 0; right: 0; bottom: 14px; display: flex; gap: 8px; justify-content: center; pointer-events: none; }
 .cf-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.28); }
 .cf-dot--on { background: rgba(255, 255, 255, 0.92); }

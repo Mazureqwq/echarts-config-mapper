@@ -102,6 +102,21 @@ describe("export/artifact 单文件产物", () => {
     expect(() => new Script(RUNTIME_CODE)).not.toThrow();
   });
 
+  it("内联产物包含三种静态组件的本地样式与白名单派发", async () => {
+    const out = await buildArtifact({ payload: payloadWith("大屏"), echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "inline" });
+    const html = out.files.find((file) => file.path === "index.html")!.content;
+    for (const marker of ["cf-progress-list", "cf-progress-track", "cf-section-title", "cf-corner-frame"]) {
+      expect(html).toContain(marker);
+    }
+    for (const id of ["chartforge.progress-list", "chartforge.section-title", "chartforge.corner-frame"]) {
+      expect(RUNTIME_CODE).toContain(id);
+    }
+    expect(html).toContain("connect-src 'none'");
+    expect(html).not.toMatch(/(?:src|href)=["']https?:\/\//i);
+    expect(RUNTIME_CODE).not.toContain("innerHTML");
+    expect(RUNTIME_CODE).not.toMatch(/\b(fetch|XMLHttpRequest|WebSocket)\b/);
+  });
+
   it("运行时不含 eval / new Function（CSP 与安全要求）", () => {
     expect(/\beval\s*\(/.test(RUNTIME_CODE)).toBe(false);
     expect(/new\s+Function/.test(RUNTIME_CODE)).toBe(false);

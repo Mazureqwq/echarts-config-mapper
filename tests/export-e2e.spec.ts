@@ -127,6 +127,9 @@ describe("export 端到端：产物 → zip → 回读", () => {
     screen.items.push(
       { id: "table", name: "销售表", kind: "component", componentId: "chartforge.data-table", componentVersion: 1, frame: { x: 0, y: 0, w: 400, h: 220, rotate: 0 }, props: { columns: [{ field: "region", label: "区域 <img src=x onerror=alert(1)>", format: "text" }, { field: "amount", label: "金额", format: "number" }] }, dataBinding: { datasetId: "sales" } } as ComponentItem,
       { id: "kpi", name: "销售额", kind: "component", componentId: "chartforge.kpi", componentVersion: 1, frame: { x: 420, y: 0, w: 240, h: 150, rotate: 0 }, props: { valueField: "amount", label: "<script>alert(1)</script>", format: "number", aggregation: "sum" }, dataBinding: { datasetId: "sales", filterBy: { field: "region", globalVariable: "selectedRegion" } } } as ComponentItem,
+      { id: "progress", name: "区域进度", kind: "component", componentId: "chartforge.progress-list", componentVersion: 1, frame: { x: 680, y: 0, w: 240, h: 160, rotate: 0 }, props: { labelField: "region", valueField: "amount", maxValue: 100, showValue: true, trackColor: "url(javascript:alert(1))", fillColor: "red; background:url(javascript:alert(1))" }, dataBinding: { datasetId: "sales", filterBy: { field: "region", globalVariable: "selectedRegion" } } } as ComponentItem,
+      { id: "title", name: "安全标题", kind: "component", componentId: "chartforge.section-title", componentVersion: 1, frame: { x: 680, y: 170, w: 240, h: 72, rotate: 0 }, props: { title: "<script>alert(1)</script>", subtitle: "<img src=x onerror=alert(1)>", variant: "bracket", accentColor: "red; background:url(javascript:alert(1))" } } as ComponentItem,
+      { id: "frame", name: "装饰", kind: "component", componentId: "chartforge.corner-frame", componentVersion: 1, frame: { x: 680, y: 250, w: 240, h: 180, rotate: 0 }, props: { variant: "double", color: "url(javascript:alert(1))", thickness: 99, inset: -3 } } as ComponentItem,
       { id: "chart", name: "趋势", kind: "chart", frame: { x: 0, y: 240, w: 500, h: 300, rotate: 0 }, spec: createChartSpec("bar"), dataBinding: { datasetId: "sales", fields: { category: "region", value: "amount" }, filterBy: { field: "region", globalVariable: "selectedRegion" } } } as ChartItem,
     );
     screen.blueprint = {
@@ -150,6 +153,8 @@ describe("export 端到端：产物 → zip → 回读", () => {
       expect(html).not.toMatch(/(?:src|href)=["']https?:\/\//i);
       expect(html).not.toContain("eval(");
       expect(html).not.toContain("new Function");
+      expect(html).not.toContain("<script>alert(1)</script>");
+      expect(html).not.toMatch(/(?:src|href)=["']https?:\/\//i);
     }
     const packageZip = await createZip(filesToEntries(folderArtifact.files));
     expect(packageZip.length).toBeGreaterThan(0);
@@ -172,6 +177,30 @@ describe("export 端到端：产物 → zip → 回读", () => {
     const { runInNewContext } = await import("node:vm");
     runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
     const initialKpi = findItem(root, "kpi");
+    const initialProgress = findItem(root, "progress");
+    const titleItem = findItem(root, "title");
+    const frameItem = findItem(root, "frame");
+    expect(initialProgress?.textContent).toContain("North");
+    expect(initialProgress?.textContent).not.toContain("South");
+    const progressElements = collectElements(initialProgress!);
+    const progressTrack = progressElements.find((element) => element.attributes.role === "progressbar");
+    const progressFill = progressElements.find((element) => element.className.includes("cf-progress-fill"));
+    expect(progressTrack?.attributes["aria-valuenow"]).toBe("7");
+    expect(progressTrack?.style.backgroundColor).toBe("#d8e1ed");
+    expect(progressFill?.style.backgroundColor).toBe("#3478f6");
+    expect(progressFill?.style.width).toBe("7%");
+    expect(progressElements.some((element) => element.tagName.toLowerCase() === "img")).toBe(false);
+    expect(titleItem?.textContent).toContain("<script>alert(1)</script>");
+    expect(titleItem?.textContent).toContain("<img src=x onerror=alert(1)>");
+    const titleElements = collectElements(titleItem!);
+    const titleAccent = titleElements.find((element) => element.className.includes("section-title__mark"));
+    expect(titleAccent?.style.borderColor).toBe("#3478f6");
+    expect(titleElements.some((element) => element.tagName.toLowerCase() === "script" || element.tagName.toLowerCase() === "img")).toBe(false);
+    expect(frameItem?.className).toContain("cf-corner-frame");
+    const frameOutlines = collectElements(frameItem!).filter((element) => element.className.includes("cf-corner-frame__outline"));
+    expect(frameOutlines[0]?.style.borderColor).toBe("#3478f6");
+    expect(frameOutlines[0]?.style.borderWidth).toBe("8px");
+    expect(frameOutlines.every((element) => !String(element.style.borderColor || "").includes("url("))).toBe(true);
     expect(initialKpi?.style.backgroundColor).toBe("#ffffff");
     expect(initialKpi?.textContent).toContain("7");
     expect(initialKpi?.textContent).toContain("<script>alert(1)</script>");
@@ -184,6 +213,8 @@ describe("export 端到端：产物 → zip → 回读", () => {
     const tableBody = table.children[0]!.children[1]!;
     tableBody.children[1]!.click();
     expect(findItem(root, "kpi")?.textContent).toContain("11");
+    expect(findItem(root, "progress")?.textContent).toContain("South");
+    expect(findItem(root, "progress")?.textContent).not.toContain("North");
     expect(chartOptions.at(-1)?.series[0]?.data).toEqual([11]);
   });
 });

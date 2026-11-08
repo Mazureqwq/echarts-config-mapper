@@ -275,6 +275,123 @@ export const RUNTIME_CODE = String.raw`
     } catch (e) { return String(number); }
   }
 
+  function safeWidgetColor(value, fallback) {
+    return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+  }
+
+  function boundedWidgetNumber(value, fallback, minimum, maximum) {
+    if (typeof value !== "number" || !isFinite(value)) return fallback;
+    return Math.min(maximum, Math.max(minimum, value));
+  }
+
+  function widgetText(value, fallback) {
+    if (value === null || value === undefined) return fallback;
+    var text = formatWidget(value, "text");
+    return text && text.trim() ? text : fallback;
+  }
+
+  function addProgressList(rootEl, props, rows, tokens) {
+    rootEl.className += " cf-progress-list";
+    var labelField = safeField(props.labelField, "name");
+    var valueField = safeField(props.valueField, "value");
+    var maximum = asNumber(props.maxValue);
+    if (maximum === null || maximum <= 0) maximum = 100;
+    var trackColor = safeWidgetColor(props.trackColor, tokens.border);
+    var fillColor = safeWidgetColor(props.fillColor, tokens.accent);
+    var progressRows = [];
+    rows.forEach(function (row) {
+      if (!row || typeof row !== "object") return;
+      var value = asNumber(row[valueField]);
+      if (value === null) return;
+      var labelValue = row[labelField];
+      var label = labelValue === null || labelValue === undefined || (typeof labelValue === "string" && !labelValue.trim())
+        ? "—" : widgetText(labelValue, "—").trim() || "—";
+      var percent = Math.round(Math.min(100, Math.max(0, value / maximum * 100)) * 100) / 100;
+      progressRows.push({ label: label, value: value, percent: percent });
+    });
+    if (!progressRows.length) { rootEl.textContent = "暂无可展示的数据"; return; }
+    progressRows.forEach(function (row) {
+      var rowEl = doc.createElement("div"); rowEl.className = "cf-progress-row";
+      var heading = doc.createElement("div"); heading.className = "cf-progress-heading";
+      var label = doc.createElement("span"); label.className = "cf-progress-label"; label.textContent = row.label;
+      heading.appendChild(label);
+      if (props.showValue !== false) {
+        var valueEl = doc.createElement("span"); valueEl.className = "cf-progress-value"; valueEl.textContent = formatWidget(row.value, "number"); heading.appendChild(valueEl);
+      }
+      var track = doc.createElement("div"); track.className = "cf-progress-track";
+      track.setAttribute("role", "progressbar"); track.setAttribute("aria-label", row.label);
+      track.setAttribute("aria-valuemin", "0"); track.setAttribute("aria-valuemax", "100");
+      track.setAttribute("aria-valuenow", String(row.percent)); track.setAttribute("aria-valuetext", formatWidget(row.value, "number"));
+      track.style.backgroundColor = trackColor;
+      var fill = doc.createElement("span"); fill.className = "cf-progress-fill";
+      fill.style.width = row.percent + "%"; fill.style.backgroundColor = fillColor;
+      track.appendChild(fill); rowEl.appendChild(heading); rowEl.appendChild(track); rootEl.appendChild(rowEl);
+    });
+  }
+
+  function addSectionTitle(rootEl, props, tokens) {
+    var variants = ["underline", "bar", "bracket"];
+    var variant = variants.indexOf(props.variant) >= 0 ? props.variant : "underline";
+    var accent = safeWidgetColor(props.accentColor, tokens.accent);
+    rootEl.className += " cf-section-title cf-section-title--" + variant;
+    rootEl.style.display = "flex"; rootEl.style.alignItems = "center"; rootEl.style.padding = "10px 18px";
+    rootEl.style.overflow = "hidden";
+    rootEl.style.borderBottom = variant === "underline" ? "1px solid " + safeWidgetColor(tokens.border, "#344054") : "none";
+    var mark = doc.createElement("span"); mark.className = "cf-section-title__mark"; mark.setAttribute("aria-hidden", "true");
+    mark.style.backgroundColor = variant === "bracket" ? "transparent" : accent;
+    if (variant === "bracket") { mark.style.borderColor = accent; mark.style.borderStyle = "solid"; mark.style.borderWidth = "2px 0 0 2px"; }
+    rootEl.appendChild(mark);
+    var body = doc.createElement("div"); body.className = "cf-section-title__body";
+    var title = doc.createElement("h2"); title.className = "cf-section-title__title"; title.textContent = widgetText(props.title, "分区标题");
+    body.appendChild(title);
+    if (typeof props.subtitle === "string" && props.subtitle) {
+      var subtitle = doc.createElement("p"); subtitle.className = "cf-section-title__subtitle"; subtitle.textContent = props.subtitle; body.appendChild(subtitle);
+    }
+    rootEl.appendChild(body);
+    if (variant === "bracket") {
+      var endMark = doc.createElement("span"); endMark.className = "cf-section-title__bracket-end"; endMark.setAttribute("aria-hidden", "true");
+      endMark.style.borderColor = accent; endMark.style.borderStyle = "solid"; endMark.style.borderWidth = "0 2px 2px 0"; rootEl.appendChild(endMark);
+    }
+  }
+
+  function addCornerFrame(rootEl, props, tokens) {
+    var variants = ["corner", "outline", "double"];
+    var variant = variants.indexOf(props.variant) >= 0 ? props.variant : "corner";
+    var color = safeWidgetColor(props.color, tokens.accent);
+    var thickness = boundedWidgetNumber(props.thickness, 2, 1, 8);
+    var inset = boundedWidgetNumber(props.inset, 8, 0, 32);
+    rootEl.className += " cf-corner-frame cf-corner-frame--" + variant;
+    rootEl.style.overflow = "visible"; rootEl.style.pointerEvents = "none"; rootEl.setAttribute("aria-hidden", "true");
+    if (variant === "corner") {
+      var positions = [
+        { name: "top-left", top: inset, left: inset, width: thickness + "px 0 0 " + thickness + "px" },
+        { name: "top-right", top: inset, right: inset, width: thickness + "px " + thickness + "px 0 0" },
+        { name: "bottom-left", bottom: inset, left: inset, width: "0 0 " + thickness + "px " + thickness + "px" },
+        { name: "bottom-right", right: inset, bottom: inset, width: "0 " + thickness + "px " + thickness + "px 0" },
+      ];
+      positions.forEach(function (position) {
+        var corner = doc.createElement("span"); corner.className = "cf-corner-frame__corner cf-corner-frame__corner--" + position.name;
+        corner.style.position = "absolute"; corner.style.boxSizing = "border-box"; corner.style.width = "22px"; corner.style.height = "22px";
+        if (position.top !== undefined) corner.style.top = position.top + "px";
+        if (position.right !== undefined) corner.style.right = position.right + "px";
+        if (position.bottom !== undefined) corner.style.bottom = position.bottom + "px";
+        if (position.left !== undefined) corner.style.left = position.left + "px";
+        corner.style.borderStyle = "solid"; corner.style.borderColor = color; corner.style.borderWidth = position.width;
+        rootEl.appendChild(corner);
+      });
+      return;
+    }
+    function appendOutline(offset, lineWidth) {
+      var outline = doc.createElement("div"); outline.className = "cf-corner-frame__outline";
+      outline.style.position = "absolute"; outline.style.boxSizing = "border-box";
+      outline.style.top = offset + "px"; outline.style.right = offset + "px"; outline.style.bottom = offset + "px"; outline.style.left = offset + "px";
+      outline.style.borderStyle = "solid"; outline.style.borderColor = color; outline.style.borderWidth = lineWidth + "px";
+      rootEl.appendChild(outline);
+    }
+    appendOutline(variant === "outline" ? inset : 0, thickness);
+    if (variant === "double") appendOutline(inset + 8, 1);
+  }
+
   function addComponent(item, screen) {
     var state = stateFor(screen);
     var props = safeMerge(item.props || {}, state.props[item.componentId] || {});
@@ -314,6 +431,12 @@ export const RUNTIME_CODE = String.raw`
       var label = doc.createElement("span"); label.className = "cf-kpi-label"; label.style.color = tokens.muted; label.textContent = String(props.label || "指标");
       var valueEl = doc.createElement("strong"); valueEl.className = "cf-kpi-value"; valueEl.style.color = tokens.text; valueEl.textContent = formatWidget(aggregate, props.format || "number");
       rootEl.appendChild(label); rootEl.appendChild(valueEl);
+    } else if (item.componentId === "chartforge.progress-list" && item.componentVersion === 1) {
+      addProgressList(rootEl, props, rows, tokens);
+    } else if (item.componentId === "chartforge.section-title" && item.componentVersion === 1) {
+      addSectionTitle(rootEl, props, tokens);
+    } else if (item.componentId === "chartforge.corner-frame" && item.componentVersion === 1) {
+      addCornerFrame(rootEl, props, tokens);
     }
     stage.appendChild(rootEl);
   }
