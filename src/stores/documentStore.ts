@@ -27,6 +27,7 @@ import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates"
 import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
 import { BUILT_IN_BLOCKS, applyThemeToScreen, getThemeById, instantiateComponentBlock } from "@/core/design/library";
+import { createLayoutAssetItems, createLayoutBackgroundItems } from "@/core/design/layoutBackgrounds";
 
 // Pinia 响应式 Proxy 无法被 structuredClone 克隆，统一走 JSON 深克隆（数据均为纯 JSON）
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -222,6 +223,62 @@ export const useDocumentStore = defineStore("document", {
       item.sourceDesignAssetId = asset.id;
       this.addItem(item);
       return item.id;
+    },
+    insertLayoutBackground(id: string): string[] {
+      const screen = this.currentScreen;
+      if (!screen) return [];
+      const items = createLayoutBackgroundItems(id, screen.canvas);
+      if (!items.length || items.some((item) =>
+        ![item.frame.x, item.frame.y, item.frame.w, item.frame.h, item.frame.rotate].every(Number.isFinite) ||
+        item.frame.w <= 0 || item.frame.h <= 0
+      )) return [];
+
+      const groupId = newId();
+      const usedIds = new Set(screen.items.map((item) => item.id));
+      for (const item of items) {
+        let itemId = newId();
+        while (usedIds.has(itemId)) itemId = newId();
+        usedIds.add(itemId);
+        item.id = itemId;
+        item.groupId = groupId;
+        Object.assign(item.frame, clampFrameToCanvas(item.frame, screen.canvas.width, screen.canvas.height));
+      }
+      if (items.some((item) =>
+        ![item.frame.x, item.frame.y, item.frame.w, item.frame.h, item.frame.rotate].every(Number.isFinite) ||
+        item.frame.w <= 0 || item.frame.h <= 0
+      )) return [];
+
+      screen.items.unshift(...items);
+      this.selectedIds = items.map((item) => item.id);
+      this.commit();
+      return this.selectedIds;
+    },
+    insertLayoutAsset(id: string, position?: { x: number; y: number }): string[] {
+      const screen = this.currentScreen;
+      if (!screen) return [];
+      const items = createLayoutAssetItems(id, screen.canvas, position);
+      if (!items.length || items.some((item) =>
+        ![item.frame.x, item.frame.y, item.frame.w, item.frame.h, item.frame.rotate].every(Number.isFinite) ||
+        item.frame.w <= 0 || item.frame.h <= 0
+      )) return [];
+
+      const usedIds = new Set(screen.items.map((item) => item.id));
+      for (const item of items) {
+        let itemId = newId();
+        while (usedIds.has(itemId)) itemId = newId();
+        usedIds.add(itemId);
+        item.id = itemId;
+        Object.assign(item.frame, clampFrameToCanvas(item.frame, screen.canvas.width, screen.canvas.height));
+      }
+      if (items.some((item) =>
+        ![item.frame.x, item.frame.y, item.frame.w, item.frame.h, item.frame.rotate].every(Number.isFinite) ||
+        item.frame.w <= 0 || item.frame.h <= 0
+      )) return [];
+
+      screen.items.unshift(...items);
+      this.selectedIds = items.map((item) => item.id);
+      this.commit();
+      return this.selectedIds;
     },
     /** 图表落位时清掉被压住的模板占位框 */
     clearPlaceholdersUnder(item: ScreenItem): void {
