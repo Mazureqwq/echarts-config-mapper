@@ -182,6 +182,8 @@ describe("export/snapshot 快照与白名单", () => {
   it("layout and asset recipes remain supported local shapes and registered components in package snapshots", () => {
     const workspace = createWorkspace();
     const screen = createScreen("深色布局快照", { width: 1280, height: 720 });
+    screen.canvas.background = { kind: "color", color: "#12161d" };
+    const originalBackground = structuredClone(screen.canvas.background);
     const sourceItems = [
       ...createLayoutBackgroundItems("monitor-main-side", screen.canvas),
       ...createLayoutBackgroundItems("monitor-grid-2x2", screen.canvas),
@@ -209,7 +211,7 @@ describe("export/snapshot 快照与白名单", () => {
     expect(layoutItems.filter((entry) => entry.kind === "component").map((entry) => entry.kind === "component" ? entry.componentId : "")).toEqual(
       expect.arrayContaining(["chartforge.section-title", "chartforge.corner-frame"])
     );
-    expect(payload.screens[0]?.canvas.background).toEqual({ kind: "color", color: "#12161d" });
+    expect(payload.screens[0]?.canvas.background).toEqual(originalBackground);
     expect(JSON.stringify(payload)).not.toMatch(/https?:\/\//i);
   });
 });
