@@ -139,8 +139,8 @@
 - Modify: `docs/superpowers/plans/2026-10-30-datav-lite-component-library.md`
 - Verify: catalog, widget, registry, migration, export and full Vitest suites
 
-- [ ] **Step 1: Run typecheck** — `npm run typecheck`; expect no TypeScript errors.
-- [ ] **Step 2: Run full tests** — `npm test -- --run`; expect all test files and tests PASS, including legacy migration and existing table/KPI/export behavior.
-- [ ] **Step 3: Run production build** — `npm run build`; expect successful Vite production output.
-- [ ] **Step 4: Review security and diff** — run `git diff --check`; confirm new renderers have no `eval`, `new Function`, `innerHTML`, external URLs or runtime fetches.
-- [ ] **Step 5: Mark acceptance checks complete and commit** — `feat: polish DataV-lite component library`.
+- [x] **Step 1: Run typecheck** — `npm run typecheck` passes.
+- [x] **Step 2: Run full tests** — `npm test -- --run` passes: 42 files, 373 tests; includes legacy migration and existing table/KPI/export behavior.
+- [x] **Step 3: Run production build** — `npm run build` succeeds (807 modules transformed).
+- [x] **Step 4: Review security and diff** — `git diff --check 1c455686be5a5fcc246837b697ebf65f39691b6f..HEAD` passes; static renderer scan found no executable use of `eval`, `new Function`, `innerHTML`, external URLs, or network APIs (the only keyword hit is the runtime's policy comment). Manual review confirms text-node rendering, validated colors/bounded props, exact runtime ID/version dispatch, and fail-closed export renderer allow-list. Independent reviewer dispatch was attempted but blocked by provider authorization failures; no review report was returned.
+- [x] **Step 5: Mark acceptance checks complete and commit** — `feat: polish DataV-lite component library`.
