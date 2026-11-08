@@ -1,7 +1,7 @@
 import { ImportError, StorageQuotaError } from "../model/errors";
 import { migrate } from "../model/migrate";
 import { createWorkspace, normalizeWorkspace } from "../model/schema";
-import type { ChartAsset, Screen, Workspace } from "../model/types";
+import type { ChartAsset, Screen, ScreenItem, Workspace } from "../model/types";
 
 export const STORAGE_KEY = "chartforge.workspace.v1";
 
@@ -25,7 +25,7 @@ function newId(): string {
 }
 
 function targetKind(target: ExportTarget): TargetKind {
-  if ("version" in target && (target as Workspace).version === 1 && "settings" in target) {
+  if ("version" in target && (target as Workspace).version === 2 && "settings" in target) {
     return "workspace";
   }
   if ("spec" in target && "createdAt" in target) {
@@ -90,6 +90,20 @@ export function scrubSecrets(target: ExportTarget): ExportTarget {
           it.kind === "chart" ? { ...it, spec: scrubSpec(it.spec) as typeof it.spec } : it
         ),
       })),
+      datasets: ws.datasets.map((dataset) =>
+        dataset.source.kind === "http" && dataset.source.live.headers
+          ? {
+              ...dataset,
+              source: {
+                ...dataset.source,
+                live: {
+                  ...dataset.source.live,
+                  headers: maskHeaders(dataset.source.live.headers) as Record<string, string>,
+                },
+              },
+            }
+          : dataset
+      ),
       settings: {
         ...ws.settings,
         ...(api ? { api: { ...api, ...(api.headers ? { headers: maskHeaders(api.headers) as Record<string, string> } : {}) } } : {}),
@@ -127,13 +141,22 @@ function detectKind(raw: unknown): TargetKind {
 }
 
 function freshIds(ws: Workspace): Workspace {
+  const datasetIds = new Map(ws.datasets.map((dataset) => [dataset.id, newId()]));
   return {
     ...ws,
     assets: ws.assets.map((a) => ({ ...a, id: newId() })),
+    datasets: ws.datasets.map((dataset) => ({ ...dataset, id: datasetIds.get(dataset.id)! })),
     screens: ws.screens.map((s) => ({
       ...s,
       id: newId(),
-      items: s.items.map((it) => ({ ...it, id: newId() })),
+      items: s.items.map((it): ScreenItem => {
+        const next = { ...it, id: newId() };
+        if (next.kind === "component" && next.dataBinding) {
+          const datasetId = datasetIds.get(next.dataBinding.datasetId);
+          if (datasetId) next.dataBinding = { ...next.dataBinding, datasetId };
+        }
+        return next;
+      }),
     })),
   };
 }
@@ -169,9 +192,10 @@ export function importJson(text: string, mode: "merge" | "replace"): Workspace {
   const current = mode === "merge" ? loadWorkspace() : createWorkspace();
   const merged = freshIds(incoming);
   const result: Workspace = {
-    version: 1,
+    version: 2,
     assets: [...current.assets, ...merged.assets],
     screens: [...current.screens, ...merged.screens],
+    datasets: [...current.datasets, ...merged.datasets],
     settings: { ...current.settings },
   };
   saveWorkspace(result);

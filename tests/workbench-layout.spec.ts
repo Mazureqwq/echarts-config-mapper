@@ -41,6 +41,17 @@ describe("DataV-inspired workbench layout", () => {
     expect(leftPanel).toContain("left-panel__content");
   });
 
+  it("exposes the workspace dataset editor from the resource rail", () => {
+    expect(leftPanel).toContain('{ key: "datasets", label: "数据集"');
+    expect(leftPanel).toContain('import DatasetPanel from "./panels/DatasetPanel.vue"');
+    expect(leftPanel).toContain(`<DatasetPanel v-else-if="tab === 'datasets'" />`);
+    const datasetPanel = read("workbench/panels/DatasetPanel.vue");
+    expect(datasetPanel).toContain("ws.createDataset");
+    expect(datasetPanel).toContain("ws.updateDataset");
+    expect(datasetPanel).toContain("ws.removeDataset");
+    expect(datasetPanel).toContain("数据预览");
+  });
+
   it("separates configuration, data and interaction while retaining existing editors", () => {
     expect(inspector).toContain('role="tablist"');
     expect(inspector).toContain('aria-label="属性面板"');

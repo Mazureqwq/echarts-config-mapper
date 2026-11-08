@@ -2,14 +2,16 @@
 import { computed, ref } from "vue";
 import ElementsPanel from "./ElementsPanel.vue";
 import LayersPanel from "./LayersPanel.vue";
+import DatasetPanel from "./panels/DatasetPanel.vue";
 import AssetLibraryPanel from "./panels/AssetLibraryPanel.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
 const emit = defineEmits<{ (e: "collapse"): void }>();
-const tab = ref<"charts" | "assets" | "materials" | "layers">("charts");
+const tab = ref<"charts" | "datasets" | "assets" | "materials" | "layers">("charts");
 
 const TABS = [
   { key: "charts", label: "组件", icon: "chart" },
+  { key: "datasets", label: "数据集", icon: "package" },
   { key: "assets", label: "图表库", icon: "package" },
   { key: "materials", label: "素材", icon: "image" },
   { key: "layers", label: "图层", icon: "layers" },
@@ -78,6 +80,7 @@ function onRailKeydown(event: KeyboardEvent, current: (typeof TABS)[number]["key
       </header>
       <div class="left-panel__body">
         <ElementsPanel v-if="tab === 'charts'" section="charts" />
+        <DatasetPanel v-else-if="tab === 'datasets'" />
         <AssetLibraryPanel v-else-if="tab === 'assets'" />
         <ElementsPanel v-else-if="tab === 'materials'" section="materials" />
         <LayersPanel v-else />

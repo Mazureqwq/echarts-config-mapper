@@ -8,6 +8,8 @@ import type {
   ChartType,
   ComponentItem,
   DatasetBinding,
+  DatasetDefinition,
+  DatasetPipeline,
   Frame,
   ImageItem,
   ImageSpec,
@@ -55,7 +57,7 @@ function initialDataFor(type: ChartType): ChartData {
 }
 
 export function createWorkspace(): Workspace {
-  return { version: 1, assets: [], screens: [], settings: { autosave: true } };
+  return { version: 2, assets: [], screens: [], datasets: [], settings: { autosave: true } };
 }
 
 export function createScreen(name: string, canvas?: { width: number; height: number }): Screen {
@@ -470,16 +472,53 @@ function normalizeAsset(raw: unknown): ChartAsset | null {
   };
 }
 
+function normalizeDatasetPipeline(raw: unknown): DatasetPipeline | undefined {
+  if (!isRecord(raw)) return undefined;
+  const normalized = normalizeLiveSource({ ...raw, url: "/dataset-pipeline" });
+  if (!normalized) return undefined;
+  const pipeline: DatasetPipeline = {};
+  if (normalized.filter?.length) pipeline.filter = normalized.filter;
+  if (normalized.select?.length) pipeline.select = normalized.select;
+  if (normalized.sort) pipeline.sort = normalized.sort;
+  if (normalized.limit) pipeline.limit = normalized.limit;
+  return Object.keys(pipeline).length ? pipeline : undefined;
+}
+
+function normalizeDataset(raw: unknown): DatasetDefinition | null {
+  if (!isRecord(raw) || !isRecord(raw.source)) return null;
+  const sourceRaw = raw.source;
+  const parameters = stringMap(raw.parameters);
+  const pipeline = normalizeDatasetPipeline(raw.pipeline);
+  const base = {
+    id: str(raw.id, uuid()),
+    name: str(raw.name, "未命名数据集").trim() || "未命名数据集",
+    ...(parameters ? { parameters } : {}),
+    ...(pipeline ? { pipeline } : {}),
+  };
+  if (sourceRaw.kind === "static") {
+    return { ...base, source: { kind: "static", data: sourceRaw.data ?? [] } };
+  }
+  if (sourceRaw.kind === "http") {
+    const normalized = normalizeLiveSource(sourceRaw.live);
+    if (!normalized) return null;
+    const { filter: _filter, select: _select, sort: _sort, limit: _limit, map: _map, ...live } = normalized;
+    return { ...base, source: { kind: "http", live } };
+  }
+  return null;
+}
+
 export function normalizeWorkspace(raw: unknown): Workspace {
   if (!isRecord(raw)) return createWorkspace();
   const assetsRaw = Array.isArray(raw.assets) ? raw.assets : [];
   const screensRaw = Array.isArray(raw.screens) ? raw.screens : [];
+  const datasetsRaw = Array.isArray(raw.datasets) ? raw.datasets : [];
   const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
   const api = normalizeApiSettings(settingsRaw.api);
   return {
-    version: 1,
+    version: 2,
     assets: assetsRaw.map((a) => normalizeAsset(a)).filter((a): a is ChartAsset => a !== null),
     screens: screensRaw.map((s) => normalizeScreen(s)).filter((s): s is Screen => s !== null),
+    datasets: datasetsRaw.map((d) => normalizeDataset(d)).filter((d): d is DatasetDefinition => d !== null),
     settings: {
       autosave: settingsRaw.autosave !== false,
       ...(api ? { api } : {}),

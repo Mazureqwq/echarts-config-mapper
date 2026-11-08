@@ -23,12 +23,32 @@ describe("model/schema 工厂与规范化", () => {
     expect(ws.assets[1].thumbnailVersion).toBeUndefined();
   });
 
-  it("createWorkspace 返回 version:1 空库且默认开启自动保存", () => {
+  it("createWorkspace 返回 version:2 空库并默认初始化数据集容器", () => {
     const ws = createWorkspace();
-    expect(ws.version).toBe(1);
+    expect(ws.version).toBe(2);
     expect(ws.assets).toEqual([]);
     expect(ws.screens).toEqual([]);
+    expect(ws.datasets).toEqual([]);
     expect(ws.settings.autosave).toBe(true);
+  });
+
+  it("规范化静态与 HTTP 数据集，并拒绝缺少地址的 HTTP 数据源", () => {
+    const ws = normalizeWorkspace({
+      version: 2,
+      datasets: [
+        { id: "static", name: "静态", source: { kind: "static", data: [{ value: 1 }] } },
+        { id: "http", name: "HTTP", source: { kind: "http", live: { url: "", path: "/sales", intervalSec: 2, query: { q: "1" } } }, parameters: { tenant: "x" }, pipeline: { select: ["value"], limit: 3 } },
+        { id: "bad", name: "Bad", source: { kind: "http", live: { url: "", path: "", intervalSec: 30 } } },
+      ],
+    });
+    expect(ws.version).toBe(2);
+    expect(ws.datasets).toHaveLength(2);
+    expect(ws.datasets[0]).toMatchObject({ id: "static", source: { kind: "static", data: [{ value: 1 }] } });
+    expect(ws.datasets[1]).toMatchObject({ id: "http", parameters: { tenant: "x" }, pipeline: { select: ["value"], limit: 3 }, source: { kind: "http", live: { path: "/sales", intervalSec: 2, query: { q: "1" } } } });
+    if (ws.datasets[1].source.kind === "http") {
+      expect(ws.datasets[1].source.live).not.toHaveProperty("select");
+      expect(ws.datasets[1].source.live).not.toHaveProperty("limit");
+    }
   });
 
   it("createItem('chart') 默认 frame 与 line 类型", () => {

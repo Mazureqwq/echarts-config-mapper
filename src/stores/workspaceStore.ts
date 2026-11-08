@@ -7,6 +7,8 @@ import type {
   ChartData,
   ChartSpec,
   ChartType,
+  DatasetDefinition,
+  DatasetPipeline,
   Workspace,
 } from "@/core/model/types";
 import {
@@ -30,6 +32,7 @@ export const useWorkspaceStore = defineStore("workspace", {
   getters: {
     screens: (s) => s.workspace.screens,
     assets: (s) => s.workspace.assets,
+    datasets: (s) => s.workspace.datasets,
     settings: (s) => s.workspace.settings,
   },
   actions: {
@@ -191,6 +194,54 @@ export const useWorkspaceStore = defineStore("workspace", {
         touched = true;
       }
       if (touched) this.save();
+    },
+    createDataset(
+      name: string,
+      source: DatasetDefinition["source"] = { kind: "static", data: [] }
+    ): string {
+      const id = this.assetId();
+      const dataset: DatasetDefinition = {
+        id,
+        name: name.trim() || "未命名数据集",
+        source: JSON.parse(JSON.stringify(source)) as DatasetDefinition["source"],
+      };
+      this.workspace.datasets.push(dataset);
+      this.save();
+      return id;
+    },
+    updateDataset(
+      id: string,
+      patch: {
+        name?: string;
+        source?: DatasetDefinition["source"];
+        parameters?: Record<string, string> | null;
+        pipeline?: DatasetPipeline | null;
+      }
+    ): void {
+      const dataset = this.workspace.datasets.find((entry) => entry.id === id);
+      if (!dataset) return;
+      if (patch.name !== undefined) dataset.name = patch.name.trim() || dataset.name;
+      if (patch.source !== undefined) {
+        dataset.source = JSON.parse(JSON.stringify(patch.source)) as DatasetDefinition["source"];
+      }
+      if (patch.parameters !== undefined) {
+        const parameters = Object.fromEntries(
+          Object.entries(patch.parameters ?? {}).filter(([key]) => key.trim() !== "")
+        );
+        if (Object.keys(parameters).length) dataset.parameters = parameters;
+        else delete dataset.parameters;
+      }
+      if (patch.pipeline !== undefined) {
+        if (patch.pipeline) dataset.pipeline = JSON.parse(JSON.stringify(patch.pipeline)) as DatasetPipeline;
+        else delete dataset.pipeline;
+      }
+      this.save();
+    },
+    removeDataset(id: string): void {
+      const index = this.workspace.datasets.findIndex((entry) => entry.id === id);
+      if (index === -1) return;
+      this.workspace.datasets.splice(index, 1);
+      this.save();
     },
     /** 更新全局接口设置（baseUrl / 公共头 / 公共 query / 超时） */
     updateApiSettings(patch: Partial<ApiSettings>): void {

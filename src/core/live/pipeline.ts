@@ -1,4 +1,4 @@
-import type { ChartData, ChartType, LiveFilterOp, LiveSource } from "@/core/model/types";
+import type { ChartData, ChartType, DatasetPipeline, LiveFilterOp, LiveSource } from "@/core/model/types";
 import { toChartData } from "./payload";
 
 export type Row = Record<string, unknown>;
@@ -235,7 +235,7 @@ function isWrapperRecord(raw: unknown): boolean {
 }
 
 /** 纯内存加工链：过滤 → 选列 → 排序 → 取前 N */
-export function runPipeline(raw: unknown, source: LiveSource | undefined): PipelineResult {
+export function runPipeline(raw: unknown, source: DatasetPipeline | undefined): PipelineResult {
   if (isRow(raw) && !isWrapperRecord(raw)) {
     return {
       ok: false,

@@ -88,6 +88,25 @@ export type LiveFilterOp =
   | "in"
   | "notEmpty";
 
+export type DatasetPipeline = Pick<LiveSource, "filter" | "select" | "sort" | "limit">;
+
+export interface DatasetDefinition {
+  id: string;
+  name: string;
+  source:
+    | { kind: "static"; data: unknown }
+    | { kind: "http"; live: Omit<LiveSource, "filter" | "select" | "sort" | "limit" | "map"> };
+  parameters?: Record<string, string>;
+  pipeline?: DatasetPipeline;
+}
+
+export interface DatasetSnapshot {
+  status: "idle" | "loading" | "success" | "stale" | "error";
+  rows: Array<Record<string, unknown>>;
+  error?: string;
+  updatedAt?: number;
+}
+
 export interface DatasetBinding {
   datasetId: string;
   fields?: { category?: string; value?: string; seriesField?: string };
@@ -180,8 +199,9 @@ export interface ChartAsset {
 }
 
 export interface Workspace {
-  version: 1;
+  version: 2;
   assets: ChartAsset[];
   screens: Screen[];
+  datasets: DatasetDefinition[];
   settings: { autosave: boolean; api?: ApiSettings };
 }

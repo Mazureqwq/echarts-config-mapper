@@ -58,6 +58,23 @@ describe("stores/workspaceStore", () => {
     expect(ws2.workspace.screens).toHaveLength(1);
   });
 
+  it("数据集 CRUD 会保存名称、源与加工配置", () => {
+    const ws = useWorkspaceStore();
+    ws.load();
+    const id = ws.createDataset("销售数据", { kind: "static", data: [{ city: "Berlin", sales: 8 }] });
+    expect(ws.workspace.datasets).toHaveLength(1);
+    expect(ws.workspace.datasets[0]).toMatchObject({ id, name: "销售数据", source: { kind: "static", data: [{ city: "Berlin", sales: 8 }] } });
+
+    ws.updateDataset(id, { name: "修订数据", pipeline: { select: ["city", "sales"], limit: 10 } });
+    expect(ws.workspace.datasets[0]).toMatchObject({ name: "修订数据", pipeline: { select: ["city", "sales"], limit: 10 } });
+    const stored = JSON.parse(store._map.get("chartforge.workspace.v1")!);
+    expect(stored.datasets[0].name).toBe("修订数据");
+
+    ws.removeDataset(id);
+    expect(ws.workspace.datasets).toEqual([]);
+    expect(JSON.parse(store._map.get("chartforge.workspace.v1")!).datasets).toEqual([]);
+  });
+
   it("scheduleSave 500ms 防抖只落盘一次", () => {
     vi.useFakeTimers();
     const ws = useWorkspaceStore();

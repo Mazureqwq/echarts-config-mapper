@@ -87,9 +87,14 @@ describe("storage/workspaceRepo", () => {
     const ws = createWorkspace();
     ws.screens.push(createScreen("S1"));
     ws.assets.push(createChartAsset("A1", createChartSpec("pie")));
+    ws.datasets.push({ id: "sales", name: "Sales", source: { kind: "static", data: [{ count: 1 }] } });
     const result = importJson(exportJson(ws), "replace");
     expect(result.screens.map((s) => s.name)).toEqual(["S1"]);
     expect(result.assets.map((a) => a.name)).toEqual(["A1"]);
+    expect(result.datasets).toHaveLength(1);
+    expect(result.datasets[0].id).not.toBe("sales");
+    expect(result.datasets[0].source).toEqual({ kind: "static", data: [{ count: 1 }] });
+    expect(loadWorkspace().datasets).toHaveLength(1);
     expect(loadWorkspace().screens).toHaveLength(1);
     expect(loadWorkspace().assets).toHaveLength(1);
   });
