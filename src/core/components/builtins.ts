@@ -30,6 +30,12 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
     version: 1,
     name: "数据表格",
     category: "data",
+    catalog: {
+      group: "data",
+      description: "以行列形式展示绑定数据，支持列配置与斑马纹。",
+      tags: ["表格", "明细", "数据"],
+      previewKey: "data-table",
+    },
     defaultFrame: { x: 100, y: 100, w: 520, h: 300, rotate: 0 },
     defaults: {
       columns: [
@@ -57,6 +63,12 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
     version: 1,
     name: "指标卡",
     category: "data",
+    catalog: {
+      group: "data",
+      description: "突出展示绑定数据的汇总指标，支持数字、货币与百分比格式。",
+      tags: ["指标", "KPI", "汇总"],
+      previewKey: "kpi",
+    },
     defaultFrame: { x: 100, y: 100, w: 300, h: 170, rotate: 0 },
     defaults: { valueField: "value", label: "指标", format: "number", aggregation: "sum" },
     props: [
