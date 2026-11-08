@@ -73,11 +73,11 @@
 - `catalogDragPayload(entry: ComponentCatalogEntry): { mime: string; data: string }` uses the existing item MIME for chart/basic entries and `DESIGN_DND_MIME` with `{ kind: "component", id, version }` for registered components.
 - `ComponentCatalogPanel` accepts no persisted filter state; search/category state is local to the panel.
 
-- [ ] **Step 1: Write failing catalog UI/action tests** — assert semantic search/category controls and grouped cards render; literal hostile-looking labels remain text; insertion maps chart/component/basic entries to the correct action; drag payloads match the existing canvas MIME contracts; empty results have an accessible message.
-- [ ] **Step 2: Run the focused UI/action test and confirm failure** — `npm test -- --run tests/component-catalog-ui.spec.ts`; expect the new panel/helper to be missing.
-- [ ] **Step 3: Implement the panel and route existing flows** — replace the Components/Charts panel body in `LeftPanel.vue` with the new catalog; preserve the Materials shortcut; remove the duplicate registered-component section from `DesignLibraryPanel.vue`; implement click/drag using the helper and allow-listed local preview keys.
-- [ ] **Step 4: Run focused catalog UI, left-panel, and design-library tests** — run `npm test -- --run tests/component-catalog-ui.spec.ts`, `npm test -- --run tests/workbench-layout.spec.ts`, and `npm test -- --run tests/design-library.spec.ts` separately; assert the Design Library no longer renders a registered-components section; expect PASS.
-- [ ] **Step 5: Commit** — `feat: add searchable component catalog`.
+- [x] **Step 1: Write failing catalog UI/action tests** — assert semantic search/category controls and grouped cards render; literal hostile-looking labels remain text; insertion maps chart/component/basic entries to the correct action; drag payloads match the existing canvas MIME contracts; empty results have an accessible message.
+- [x] **Step 2: Run the focused UI/action test and confirm failure** — `npm test -- --run tests/component-catalog-ui.spec.ts`; expect the new panel/helper to be missing.
+- [x] **Step 3: Implement the panel and route existing flows** — replace the Components/Charts panel body in `LeftPanel.vue` with the new catalog; preserve the Materials shortcut; remove the duplicate registered-component section from `DesignLibraryPanel.vue`; implement click/drag using the helper and allow-listed local preview keys.
+- [x] **Step 4: Run focused catalog UI, left-panel, and design-library tests** — run `npm test -- --run tests/component-catalog-ui.spec.ts`, `npm test -- --run tests/workbench-layout.spec.ts`, and `npm test -- --run tests/design-library.spec.ts` separately; assert the Design Library no longer renders a registered-components section; expect PASS.
+- [x] **Step 5: Commit** — `feat: add searchable component catalog`.
 
 ## Task 3: Safe color inheritance and data-bound progress-list widget
 

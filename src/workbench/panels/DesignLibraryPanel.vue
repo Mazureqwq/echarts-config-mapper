@@ -4,7 +4,6 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { BUILT_IN_BLOCKS, BUILT_IN_THEMES } from "@/core/design/library";
 import { compressDesignImageFile, getDesignAssetTotalBytes } from "@/core/design/assets";
-import { componentRegistry } from "@/core/components/builtins";
 import { DESIGN_DND_MIME } from "@/shared/dnd";
 import type { DesignAsset } from "@/core/model/types";
 
@@ -15,7 +14,6 @@ const error = ref("");
 const notice = ref("");
 const assets = computed(() => ws.designAssets);
 const usedMiB = computed(() => (getDesignAssetTotalBytes(assets.value) / 1024 / 1024).toFixed(1));
-const registeredComponents = computed(() => componentRegistry.list().filter((entry) => entry.renderer.kind === "vue"));
 const activeTheme = computed(() => doc.currentScreen?.themeId ?? "");
 
 function requireScreen(): boolean {
@@ -24,10 +22,6 @@ function requireScreen(): boolean {
   return false;
 }
 
-function addComponent(id: string, version: number): void {
-  error.value = "";
-  if (requireScreen()) doc.addComponent(id, version);
-}
 function addBlock(id: string): void {
   error.value = "";
   if (requireScreen()) doc.insertBlock(id);
@@ -43,10 +37,10 @@ function applyTheme(id: string): void {
   notice.value = "主题已应用；现有元素位置与显式样式保持不变。";
 }
 
-function startDrag(event: DragEvent, kind: "component" | "block" | "design-asset", id: string, version?: number): void {
+function startDrag(event: DragEvent, kind: "block" | "design-asset", id: string): void {
   if (!event.dataTransfer) return;
   event.dataTransfer.effectAllowed = "copy";
-  event.dataTransfer.setData(DESIGN_DND_MIME, JSON.stringify({ kind, id, ...(version ? { version } : {}) }));
+  event.dataTransfer.setData(DESIGN_DND_MIME, JSON.stringify({ kind, id }));
   event.dataTransfer.setData("text/plain", id);
 }
 
@@ -105,23 +99,6 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
         </span>
         <span class="theme-copy"><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small></span>
         <span class="theme-check">{{ activeTheme === theme.id ? "已应用" : "应用" }}</span>
-      </button>
-    </section>
-
-    <section class="library-section">
-      <header class="section-head">
-        <div><h3>注册组件</h3><p>受控的内置组件，可点击或拖入画布</p></div>
-      </header>
-      <button
-        v-for="component in registeredComponents"
-        :key="`${component.id}@${component.version}`"
-        class="resource-row"
-        type="button"
-        draggable="true"
-        @dragstart="startDrag($event, 'component', component.id, component.version)"
-        @click="addComponent(component.id, component.version)"
-      >
-        <span class="resource-icon">▦</span><span class="resource-copy"><strong>{{ component.name }}</strong><small>{{ component.category }} · v{{ component.version }}</small></span><span class="insert-mark">＋</span>
       </button>
     </section>
 

@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { createItem } from "@/core/model/schema";
+import { useDocumentStore } from "@/stores/documentStore";
+import type { ComponentCatalogEntry } from "@/core/components/types";
+import { insertCatalogEntry } from "./catalogActions";
+import ComponentCatalogPanel from "./components/ComponentCatalogPanel.vue";
 import ElementsPanel from "./ElementsPanel.vue";
 import LayersPanel from "./LayersPanel.vue";
 import DatasetPanel from "./panels/DatasetPanel.vue";
@@ -8,6 +13,7 @@ import DesignLibraryPanel from "./panels/DesignLibraryPanel.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
 const emit = defineEmits<{ (e: "collapse"): void }>();
+const doc = useDocumentStore();
 const tab = ref<"charts" | "datasets" | "assets" | "materials" | "design" | "layers">("charts");
 
 const TABS = [
@@ -20,6 +26,14 @@ const TABS = [
 ] as const;
 
 const activeLabel = computed(() => TABS.find((entry) => entry.key === tab.value)?.label ?? "组件");
+
+function onCatalogSelect(entry: ComponentCatalogEntry): void {
+  insertCatalogEntry(entry, {
+    addChart: (type) => { doc.addChart(type); },
+    addComponent: (id, version) => { doc.addComponent(id, version); },
+    addBasic: (kind) => { doc.addItem(createItem(kind)); },
+  });
+}
 
 function onRailKeydown(event: KeyboardEvent, current: (typeof TABS)[number]["key"]): void {
   const currentIndex = TABS.findIndex((entry) => entry.key === current);
@@ -81,7 +95,7 @@ function onRailKeydown(event: KeyboardEvent, current: (typeof TABS)[number]["key
         </button>
       </header>
       <div class="left-panel__body">
-        <ElementsPanel v-if="tab === 'charts'" section="charts" />
+        <ComponentCatalogPanel v-if="tab === 'charts'" @select="onCatalogSelect" />
         <DatasetPanel v-else-if="tab === 'datasets'" />
         <AssetLibraryPanel v-else-if="tab === 'assets'" />
         <ElementsPanel v-else-if="tab === 'materials'" section="materials" />
