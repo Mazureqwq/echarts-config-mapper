@@ -4,11 +4,13 @@ import { renderToString } from "vue/server-renderer";
 import { describe, expect, it, vi } from "vitest";
 import DataTableWidget from "../src/workbench/components/DataTableWidget.vue";
 import KpiWidget from "../src/workbench/components/KpiWidget.vue";
+import ProgressListWidget from "../src/workbench/components/ProgressListWidget.vue";
 import ItemView from "../src/workbench/ItemView.vue";
 import { useWorkspaceStore } from "../src/stores/workspaceStore";
 import { componentRegistry } from "../src/core/components/builtins";
 import {
   aggregateKpi,
+  buildProgressRows,
   emitDataTableRowSelect,
   filterRowsByBinding,
 } from "../src/core/components/dataWidgets";
@@ -159,6 +161,61 @@ describe("DataV-lite registered data widgets", () => {
       kind: "category", categories: ["二月"], series: [{ name: "华南", values: [200] }],
     });
     expect(kpiValue.value).toBe(200);
+  });
+
+  it("maps numeric values to progress rows and skips unusable data", () => {
+    expect(buildProgressRows([
+      { name: "订单 A", value: 25 },
+      { name: "订单 B", value: "75" },
+      { value: 50 },
+      { name: "空值", value: "" },
+      { name: "无穷", value: Number.POSITIVE_INFINITY },
+      { name: "非数字", value: "not-a-number" },
+    ], "name", "value", 100)).toEqual([
+      { label: "订单 A", value: 25, percent: 25 },
+      { label: "订单 B", value: 75, percent: 75 },
+      { label: "—", value: 50, percent: 50 },
+    ]);
+  });
+
+  it("returns an empty list when there are no dataset rows", () => {
+    expect(buildProgressRows([], "name", "value", 100)).toEqual([]);
+  });
+
+  it("clamps negative and above-maximum values while normalizing an invalid maximum", () => {
+    expect(buildProgressRows([
+      { name: "负数", value: -12 },
+      { name: "超上限", value: 150 },
+    ], "name", "value", 100)).toEqual([
+      { label: "负数", value: -12, percent: 0 },
+      { label: "超上限", value: 150, percent: 100 },
+    ]);
+    expect(buildProgressRows([{ value: 50 }], "name", "value", 0)).toEqual([
+      { label: "—", value: 50, percent: 50 },
+    ]);
+  });
+
+  it("renders safe progress rows with semantic progressbar values and optional value labels", async () => {
+    const html = await renderToString(createSSRApp(ProgressListWidget, {
+      item: item("chartforge.progress-list", { labelField: "name", valueField: "value" }),
+      snapshot,
+      rows: [{ name: '<img src=x onerror="run()">', value: 30 }],
+      variables: {},
+      emitEvent: vi.fn(),
+      labelField: "name",
+      valueField: "value",
+      maxValue: 100,
+      showValue: true,
+      trackColor: "#112233",
+      fillColor: "#abcdef",
+    }));
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain('aria-valuenow="30"');
+    expect(html).toContain("#112233");
+    expect(html).toContain("#abcdef");
+    expect(html).toContain("&lt;img");
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain("30");
   });
 
   it("registers versioned table/KPI widgets and only declared rowSelect actions", () => {

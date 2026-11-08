@@ -136,6 +136,16 @@ describe("safe declarative blueprints", () => {
     expect(ctx.refreshDataset).toHaveBeenCalledWith("sales");
   });
 
+  it("accepts only six-digit hex values for registered component color props", () => {
+    const graph = (fillColor: string): BlueprintGraph => ({
+      variables: [],
+      nodes: [{ id: "set-color", kind: "componentAction", action: "setProps", componentId: "chartforge.progress-list", componentVersion: 1, props: { fillColor } }],
+      edges: [],
+    });
+    expect(validateBlueprint(graph("#112233"), componentRegistry).ok).toBe(true);
+    expect(validateBlueprint(graph("url(https://evil.example/a.svg)"), componentRegistry).ok).toBe(false);
+  });
+
   it("runs declared component visibility and property actions only", async () => {
     const ctx = context();
     const graph: BlueprintGraph = {

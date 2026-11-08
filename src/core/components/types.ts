@@ -3,6 +3,7 @@ import type { ChartType, ComponentItem, DatasetSnapshot, Frame } from "@/core/mo
 
 export type LegacyItemKind = "chart" | "text" | "image" | "shape";
 export type ComponentCatalogGroup = "chart" | "data" | "decoration" | "basic";
+export type ComponentThemeToken = "panel" | "text" | "muted" | "accent" | "border";
 export type ComponentPayloadFieldType = "string" | "number" | "boolean" | "object";
 
 export interface ComponentCatalogMetadata {
@@ -30,8 +31,9 @@ export type ComponentCatalogEntry = ComponentCatalogEntryBase & (
 export interface ComponentProp {
   readonly key: string;
   readonly label: string;
-  readonly type: "string" | "number" | "boolean" | "select" | "json";
+  readonly type: "string" | "number" | "boolean" | "select" | "json" | "color";
   readonly defaultValue: unknown;
+  readonly themeToken?: ComponentThemeToken;
   readonly options?: readonly string[];
 }
 

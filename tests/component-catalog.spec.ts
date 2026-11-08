@@ -11,10 +11,12 @@ describe("component catalog projection", () => {
 
     expect(charts.map((entry) => entry.chartType).sort()).toEqual(Object.keys(chartRegistry).sort());
     expect(new Set(charts.map((entry) => entry.key)).size).toBe(Object.keys(chartRegistry).length);
-    expect(components.map((entry) => `${entry.componentId}@${entry.componentVersion}`)).toEqual([
-      "chartforge.data-table@1",
-      "chartforge.kpi@1",
-    ]);
+    expect(components.map((entry) => `${entry.componentId}@${entry.componentVersion}`)).toEqual(
+      componentRegistry.list().filter((definition) => definition.renderer.kind === "vue").map((definition) => `${definition.id}@${definition.version}`)
+    );
+    expect(components.map((entry) => `${entry.componentId}@${entry.componentVersion}`)).toContain("chartforge.data-table@1");
+    expect(components.map((entry) => `${entry.componentId}@${entry.componentVersion}`)).toContain("chartforge.kpi@1");
+    expect(components.map((entry) => `${entry.componentId}@${entry.componentVersion}`)).toContain("chartforge.progress-list@1");
     expect(components.every((entry) => entry.key === `${entry.componentId}@${entry.componentVersion}`)).toBe(true);
   });
 

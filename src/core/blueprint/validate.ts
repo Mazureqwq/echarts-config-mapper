@@ -1,4 +1,5 @@
 import type { ComponentDefinition, ComponentRegistry, ComponentProp } from "@/core/components/types";
+import { sanitizeHexColor } from "@/core/components/props";
 import type { BlueprintGraph, BlueprintNode, BlueprintValidationResult, BlueprintVariable } from "./types";
 
 const MAX_NODES = 200;
@@ -39,6 +40,7 @@ function propValueMatches(prop: ComponentProp, value: unknown): boolean {
     case "boolean": return typeof value === "boolean";
     case "select": return typeof value === "string" && !!prop.options?.includes(value);
     case "json": return isSafeJson(value);
+    case "color": return sanitizeHexColor(value) !== undefined;
   }
 }
 function definitionFor(node: { componentId?: unknown; componentVersion?: unknown }, registry: ComponentRegistry): ComponentDefinition | undefined {

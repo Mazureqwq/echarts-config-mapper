@@ -5,6 +5,24 @@ export type KpiFormat = "number" | "currency" | "percent";
 export type KpiAggregation = "first" | "sum" | "average";
 export type DataRow = Record<string, unknown>;
 
+export function buildProgressRows(
+  rows: readonly DataRow[],
+  labelField: string,
+  valueField: string,
+  maxValue: number
+): Array<{ label: string; value: number; percent: number }> {
+  const normalizedMax = Number.isFinite(maxValue) && maxValue > 0 ? maxValue : 100;
+  return rows.flatMap((row) => {
+    const value = asFiniteNumber(row[valueField]);
+    if (value === null) return [];
+    const rawLabel = row[labelField];
+    const label = rawLabel === null || rawLabel === undefined || (typeof rawLabel === "string" && !rawLabel.trim())
+      ? "—"
+      : asText(rawLabel).trim() || "—";
+    return [{ label, value, percent: Math.min(100, Math.max(0, (value / normalizedMax) * 100)) }];
+  });
+}
+
 function asFiniteNumber(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string" && value.trim()) {

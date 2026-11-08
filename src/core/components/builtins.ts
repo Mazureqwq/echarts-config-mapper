@@ -1,5 +1,6 @@
 import DataTableWidget from "@/workbench/components/DataTableWidget.vue";
 import KpiWidget from "@/workbench/components/KpiWidget.vue";
+import ProgressListWidget from "@/workbench/components/ProgressListWidget.vue";
 import { createComponentRegistry } from "./registry";
 import type { ComponentAction, ComponentDefinition, LegacyItemKind } from "./types";
 
@@ -81,6 +82,32 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
     actions: BASE_ACTIONS,
     renderer: { kind: "vue", view: KpiWidget },
     exportRendererId: "chartforge-kpi-v1",
+  },
+  {
+    id: "chartforge.progress-list",
+    version: 1,
+    name: "进度条组",
+    category: "data",
+    catalog: {
+      group: "data",
+      description: "将数据行映射为进度条",
+      tags: ["进度", "比例", "数据"],
+      previewKey: "progress-list",
+    },
+    defaultFrame: { x: 100, y: 100, w: 520, h: 280, rotate: 0 },
+    defaults: { labelField: "name", valueField: "value", maxValue: 100, showValue: true, trackColor: "", fillColor: "" },
+    props: [
+      { key: "labelField", label: "名称字段", type: "string", defaultValue: "name" },
+      { key: "valueField", label: "数值字段", type: "string", defaultValue: "value" },
+      { key: "maxValue", label: "最大值", type: "number", defaultValue: 100 },
+      { key: "showValue", label: "显示数值", type: "boolean", defaultValue: true },
+      { key: "trackColor", label: "轨道颜色", type: "color", defaultValue: "", themeToken: "border" },
+      { key: "fillColor", label: "填充颜色", type: "color", defaultValue: "", themeToken: "accent" },
+    ],
+    events: [],
+    actions: BASE_ACTIONS,
+    renderer: { kind: "vue", view: ProgressListWidget },
+    exportRendererId: "chartforge-progress-list-v1",
   },
 ];
 
