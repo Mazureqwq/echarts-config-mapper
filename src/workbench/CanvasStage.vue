@@ -15,6 +15,7 @@ import TransformHandles from "./TransformHandles.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import { ASSET_DND_MIME, DESIGN_DND_MIME } from "@/shared/dnd";
 import { getThemeById, themeCssVariables } from "@/core/design/library";
+import { parseLayoutBackgroundDragPayload } from "@/workbench/layoutBackgroundActions";
 import type { AlignMode } from "@/stores/documentStore";
 
 const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
@@ -430,6 +431,16 @@ interface DropPayload {
 function onDrop(ev: DragEvent): void {
   const designRaw = ev.dataTransfer?.getData(DESIGN_DND_MIME);
   if (designRaw) {
+    const backgroundPayload = parseLayoutBackgroundDragPayload(designRaw);
+    if (backgroundPayload) {
+      if (backgroundPayload.kind === "layout-background") {
+        doc.insertLayoutBackground(backgroundPayload.id);
+      } else {
+        doc.insertLayoutAsset(backgroundPayload.id, canvasPoint(ev));
+      }
+      return;
+    }
+
     try {
       const payload = JSON.parse(designRaw) as { kind?: string; id?: string; version?: number };
       const position = canvasPoint(ev);

@@ -6,6 +6,9 @@ import { BUILT_IN_BLOCKS, BUILT_IN_THEMES } from "@/core/design/library";
 import { compressDesignImageFile, getDesignAssetTotalBytes } from "@/core/design/assets";
 import { DESIGN_DND_MIME } from "@/shared/dnd";
 import type { DesignAsset } from "@/core/model/types";
+import type { LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
+import { insertLayoutBackgroundEntry } from "@/workbench/layoutBackgroundActions";
+import LayoutBackgroundCatalog from "@/workbench/components/LayoutBackgroundCatalog.vue";
 
 const doc = useDocumentStore();
 const ws = useWorkspaceStore();
@@ -29,6 +32,14 @@ function addBlock(id: string): void {
 function addAsset(asset: DesignAsset): void {
   error.value = "";
   if (requireScreen()) doc.addDesignAssetImage(asset.id);
+}
+function addLayoutBackground(entry: LayoutBackgroundEntry): void {
+  error.value = "";
+  if (!requireScreen()) return;
+  insertLayoutBackgroundEntry(entry, {
+    insertLayoutBackground: (id) => doc.insertLayoutBackground(id),
+    insertLayoutAsset: (id, position) => doc.insertLayoutAsset(id, position),
+  });
 }
 function applyTheme(id: string): void {
   error.value = "";
@@ -81,6 +92,8 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
 
 <template>
   <div class="design-library">
+    <LayoutBackgroundCatalog @select="addLayoutBackground" />
+
     <section class="library-section">
       <header class="section-head">
         <div><h3>主题</h3><p>为当前大屏设置默认画布与图表色板</p></div>
