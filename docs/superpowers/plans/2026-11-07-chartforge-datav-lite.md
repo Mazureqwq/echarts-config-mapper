@@ -115,7 +115,7 @@ This UI foundation is deliberately inserted between completed Task 1 and Task 2 
 - [x] **Step 3: Implement dataset model and `DatasetRuntime`** — bump persisted workspace format to 2, migrate v1 and v2 inputs while preserving old items, default missing datasets to `[]`, adapt existing `LiveExecutor` updates into one dataset snapshot, and use the existing pipeline for filtering/select/sort/limit. Keep one runtime per workspace/presentation session and dispose it at teardown.
 - [x] **Step 4: Add workspace-store dataset CRUD and `DatasetPanel.vue`** — create/edit/delete static and HTTP datasets, reuse request settings and live-source validation, show response preview plus loading/success/stale/error state, and persist through existing workspace save/import/export.
 - [x] **Step 5: Run focused and regression tests** — `npm test -- --run tests/dataset-runtime.spec.ts tests/data-hub.spec.ts tests/pipeline.spec.ts tests/stores.spec.ts`; expect PASS with no regressions.
-- [ ] **Step 6: Commit** — `feat: add reusable workspace datasets`.
+- [x] **Step 6: Commit** — `feat: add reusable workspace datasets` (`f200e78`).
 
 ## Task 3: Registered table/KPI widgets and field bindings
 
