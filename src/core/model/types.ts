@@ -153,6 +153,8 @@ export interface TextItem extends BaseItem, TextSpec {
 
 export interface ImageItem extends BaseItem, ImageSpec {
   kind: "image";
+  /** Optional link back to a workspace design-library asset; src remains self-contained. */
+  sourceDesignAssetId?: string;
 }
 
 export interface ShapeItem extends BaseItem, ShapeSpec {
@@ -180,6 +182,8 @@ export interface Screen {
   canvas: { width: number; height: number; background: Background };
   items: ScreenItem[];
   blueprint?: BlueprintGraph;
+  /** Built-in design theme selected for this screen. */
+  themeId?: string;
   updatedAt: number;
   thumbnail?: string;
   category?: string;
@@ -203,9 +207,22 @@ export interface ChartAsset {
   updatedAt: number;
 }
 
+export type DesignAssetMime = "image/svg+xml" | "image/png" | "image/webp";
+
+export interface DesignAsset {
+  id: string;
+  name: string;
+  mime: DesignAssetMime;
+  /** Sanitized SVG or self-contained PNG/WebP data URL. */
+  dataUrl: string;
+  /** Actual stored payload size, excluding the data URL prefix. */
+  bytes: number;
+}
+
 export interface Workspace {
   version: 2;
   assets: ChartAsset[];
+  designAssets: DesignAsset[];
   screens: Screen[];
   datasets: DatasetDefinition[];
   settings: { autosave: boolean; api?: ApiSettings };

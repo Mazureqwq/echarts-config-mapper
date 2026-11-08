@@ -26,6 +26,7 @@ import type { BlueprintGraph, BlueprintNode } from "../blueprint/types";
 import type { ComponentDefinition } from "../components/types";
 import { componentRegistry } from "../components/builtins";
 import { initialChartData } from "../chart/chartData";
+import { normalizeDesignAssets } from "../design/assets";
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
 export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#FFFFFF" };
@@ -59,7 +60,7 @@ function initialDataFor(type: ChartType): ChartData {
 }
 
 export function createWorkspace(): Workspace {
-  return { version: 2, assets: [], screens: [], datasets: [], settings: { autosave: true } };
+  return { version: 2, assets: [], designAssets: [], screens: [], datasets: [], settings: { autosave: true } };
 }
 
 export function createScreen(name: string, canvas?: { width: number; height: number }): Screen {
@@ -463,6 +464,7 @@ function normalizeItem(raw: unknown): ScreenItem | null {
         kind: "image",
         src: str(raw.src, ""),
         fit: raw.fit === "cover" || raw.fit === "fill" ? raw.fit : "contain",
+        ...(typeof raw.sourceDesignAssetId === "string" ? { sourceDesignAssetId: raw.sourceDesignAssetId } : {}),
       } satisfies ImageItem;
     default:
       return {
@@ -516,6 +518,7 @@ function normalizeScreen(raw: unknown): Screen | null {
       .map((it) => normalizeItem(it))
       .filter((it): it is ScreenItem => it !== null),
     blueprint: normalizeBlueprint(raw.blueprint),
+    ...(typeof raw.themeId === "string" && raw.themeId.trim() ? { themeId: raw.themeId.trim() } : {}),
     updatedAt: num(raw.updatedAt, 0),
     ...(typeof raw.thumbnail === "string" ? { thumbnail: raw.thumbnail } : {}),
     ...(typeof raw.category === "string" ? { category: raw.category } : {}),
@@ -590,6 +593,7 @@ function normalizeDataset(raw: unknown): DatasetDefinition | null {
 export function normalizeWorkspace(raw: unknown): Workspace {
   if (!isRecord(raw)) return createWorkspace();
   const assetsRaw = Array.isArray(raw.assets) ? raw.assets : [];
+  const designAssetsRaw = Array.isArray(raw.designAssets) ? raw.designAssets : [];
   const screensRaw = Array.isArray(raw.screens) ? raw.screens : [];
   const datasetsRaw = Array.isArray(raw.datasets) ? raw.datasets : [];
   const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
@@ -597,6 +601,7 @@ export function normalizeWorkspace(raw: unknown): Workspace {
   return {
     version: 2,
     assets: assetsRaw.map((a) => normalizeAsset(a)).filter((a): a is ChartAsset => a !== null),
+    designAssets: normalizeDesignAssets(designAssetsRaw),
     screens: screensRaw.map((s) => normalizeScreen(s)).filter((s): s is Screen => s !== null),
     datasets: datasetsRaw.map((d) => normalizeDataset(d)).filter((d): d is DatasetDefinition => d !== null),
     settings: {

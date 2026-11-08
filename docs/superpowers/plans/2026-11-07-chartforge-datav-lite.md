@@ -167,12 +167,12 @@ This UI foundation is deliberately inserted between completed Task 1 and Task 2 
 - Persist design assets in the normalized workspace; inserting one creates an `ImageItem` with `src` set to its sanitized data URL and `sourceDesignAssetId` set to the library ID. Add optional `ImageItem.sourceDesignAssetId?: string`. Define `ComponentBlock` as `{ id: string; name: string; version: number; items: ScreenItem[] }`; inserting a block clones item IDs and offsets frames; it does not overwrite existing items.
 - Ship two built-in themes (`monitor-dark`, `business-light`) and two blocks (a title/panel block and a KPI group). Package only assets referenced by the exported screen; no external URLs.
 
-- [ ] **Step 1: Write failing design-library tests** — assert both theme IDs/tokens exist, block insertion creates unique IDs, oversized/unsupported assets are rejected, SVG script/event attributes, `foreignObject`, external href/src and CSS `url()` references are removed, and unreferenced assets are not packaged.
-- [ ] **Step 2: Run `npm test -- --run tests/design-library.spec.ts`** — expect missing library APIs.
-- [ ] **Step 3: Implement library types, built-ins, asset sanitizer and quota validation** — add the workspace `designAssets` default without another schema-version bump; use data URLs for workspace-local assets and existing compression utilities for raster images.
-- [ ] **Step 4: Add design library UI** — expose assets, registered components, blocks and themes; apply a theme to the selected screen, insert a block, and drag/click assets or components into the canvas through existing item-creation flows.
-- [ ] **Step 5: Run design tests and existing image/storage tests** — expect PASS; invalid assets fail with a user-readable message without altering workspace state.
-- [ ] **Step 6: Commit** — `feat: add themes and reusable design blocks`.
+- [x] **Step 1: Write failing design-library tests** — assert both theme IDs/tokens exist, block insertion creates unique IDs, oversized/unsupported assets are rejected, SVG script/event attributes, `foreignObject`, external href/src and CSS `url()` references are removed, and unreferenced assets are not packaged.
+- [x] **Step 2: Run `npm test -- --run tests/design-library.spec.ts`** — expect missing library APIs.
+- [x] **Step 3: Implement library types, built-ins, asset sanitizer and quota validation** — add the workspace `designAssets` default without another schema-version bump; use data URLs for workspace-local assets and existing compression utilities for raster images.
+- [x] **Step 4: Add design library UI** — expose assets, registered components, blocks and themes; apply a theme to the selected screen, insert a block, and drag/click assets or components into the canvas through existing item-creation flows.
+- [x] **Step 5: Run design tests and existing image/storage tests** — expect PASS; invalid assets fail with a user-readable message without altering workspace state.
+- [x] **Step 6: Commit** — `feat: add themes and reusable design blocks`.
 
 ## Task 6: Offline package/runtime integration and vertical-slice acceptance
 

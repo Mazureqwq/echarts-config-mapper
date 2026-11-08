@@ -1,4 +1,5 @@
-import type { Background, ChartItem, Screen, ScreenItem, Workspace } from "@/core/model/types";
+import type { Background, ChartItem, DesignAsset, Screen, ScreenItem, Workspace } from "@/core/model/types";
+import { applyThemeChartPalette, getThemeById } from "@/core/design/library";
 import { buildOption } from "@/core/chart/optionBuilder";
 import { isPlaceholder } from "@/core/model/templates";
 import {
@@ -36,7 +37,7 @@ function chartAlt(item: ChartItem): string {
   return `${item.name || "图表"}（${kind}）`;
 }
 
-function toPackageItem(item: ScreenItem, warnings: string[]): PackageItem | null {
+function toPackageItem(item: ScreenItem, warnings: string[], themeId: string | undefined, designAssets: readonly DesignAsset[]): PackageItem | null {
   const base = {
     id: item.id,
     name: item.name || "",
@@ -50,7 +51,7 @@ function toPackageItem(item: ScreenItem, warnings: string[]): PackageItem | null
       kind: "chart",
       type: item.spec.type,
       // 导出时就把 option 算好：产物运行时只做 setOption，避免把建图逻辑复制一份
-      option: buildOption(item.spec) as Record<string, unknown>,
+      option: buildOption(applyThemeChartPalette(item.spec, getThemeById(themeId)?.tokens.chartPalette ?? [])) as Record<string, unknown>,
       alt: chartAlt(item),
     };
   }
@@ -67,11 +68,15 @@ function toPackageItem(item: ScreenItem, warnings: string[]): PackageItem | null
     };
   }
   if (item.kind === "image") {
-    if (!isSafeImageSrc(item.src)) {
-      warnings.push(`图片「${item.name || item.id}」的地址不在白名单内，已跳过`);
+    const linkedAsset = item.sourceDesignAssetId
+      ? designAssets.find((asset) => asset.id === item.sourceDesignAssetId)
+      : undefined;
+    const src = linkedAsset?.dataUrl ?? item.src;
+    if (!isSafeImageSrc(src)) {
+      warnings.push(`图片「${item.name || item.id}」的本地素材缺失或地址不在白名单内，已跳过`);
       return null;
     }
-    return { ...base, kind: "image", src: item.src, fit: item.fit };
+    return { ...base, kind: "image", src, fit: item.fit, ...(item.sourceDesignAssetId ? { sourceDesignAssetId: item.sourceDesignAssetId } : {}) };
   }
   if (item.kind === "component") {
     throw new Error(`组件「${item.name || item.componentId}」尚未注册导出渲染器，无法生成离线产物`);
@@ -88,12 +93,12 @@ function toPackageItem(item: ScreenItem, warnings: string[]): PackageItem | null
 }
 
 /** 大屏 → 产物里的屏幕（剔除隐藏项、模板占位、非法图片；缩略图一律不带） */
-export function toPackageScreen(screen: Screen, warnings: string[]): PackageScreen {
+export function toPackageScreen(screen: Screen, warnings: string[], designAssets: readonly DesignAsset[] = []): PackageScreen {
   const items: PackageItem[] = [];
   for (const item of screen.items) {
     if (item.hidden) continue;
     if (isPlaceholder(item)) continue;
-    const pack = toPackageItem(item, warnings);
+    const pack = toPackageItem(item, warnings, screen.themeId, designAssets);
     if (pack) items.push(pack);
   }
   return {
@@ -104,6 +109,7 @@ export function toPackageScreen(screen: Screen, warnings: string[]): PackageScre
       height: screen.canvas.height,
       background: cleanBackground(screen.canvas.background, warnings),
     },
+    ...(screen.themeId ? { themeId: screen.themeId } : {}),
     items,
   };
 }
@@ -112,6 +118,18 @@ export function toPackageScreen(screen: Screen, warnings: string[]): PackageScre
  * 组装产物 payload（纯函数，不碰 DOM）。
  * 只带被选中的大屏；不导出图表库、缩略图、localStorage 全库，也不含其它屏。
  */
+export function collectReferencedDesignAssets(
+  workspace: Workspace,
+  screens: readonly import("./model").PackageScreen[],
+) {
+  const referenced = new Set(
+    screens.flatMap((screen) => screen.items.flatMap((item) =>
+      item.kind === "image" && item.sourceDesignAssetId ? [item.sourceDesignAssetId] : []
+    )),
+  );
+  return workspace.designAssets.filter((asset) => referenced.has(asset.id));
+}
+
 export function buildPackagePayload(
   workspace: Workspace,
   screenIds: string[],
@@ -120,10 +138,11 @@ export function buildPackagePayload(
   const warnings: string[] = [];
   const screens = workspace.screens
     .filter((s) => screenIds.includes(s.id))
-    .map((s) => toPackageScreen(s, warnings));
+    .map((s) => toPackageScreen(s, warnings, workspace.designAssets));
 
   if (!screens.length) warnings.push("没有找到要导出的大屏");
 
+  const designAssets = collectReferencedDesignAssets(workspace, screens);
   const payload: PackagePayload = {
     format: PACKAGE_FORMAT,
     schemaVersion: PACKAGE_SCHEMA_VERSION,
@@ -131,6 +150,7 @@ export function buildPackagePayload(
     exportedAt: new Date(options.now ? options.now() : Date.now()).toISOString(),
     title: screens[0]?.name || "大屏",
     screens,
+    ...(designAssets.length ? { designAssets } : {}),
     warnings,
   };
 

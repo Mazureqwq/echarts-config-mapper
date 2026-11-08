@@ -4,16 +4,18 @@ import ElementsPanel from "./ElementsPanel.vue";
 import LayersPanel from "./LayersPanel.vue";
 import DatasetPanel from "./panels/DatasetPanel.vue";
 import AssetLibraryPanel from "./panels/AssetLibraryPanel.vue";
+import DesignLibraryPanel from "./panels/DesignLibraryPanel.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
 const emit = defineEmits<{ (e: "collapse"): void }>();
-const tab = ref<"charts" | "datasets" | "assets" | "materials" | "layers">("charts");
+const tab = ref<"charts" | "datasets" | "assets" | "materials" | "design" | "layers">("charts");
 
 const TABS = [
   { key: "charts", label: "组件", icon: "chart" },
   { key: "datasets", label: "数据集", icon: "package" },
   { key: "assets", label: "图表库", icon: "package" },
   { key: "materials", label: "素材", icon: "image" },
+  { key: "design", label: "设计库", icon: "layers" },
   { key: "layers", label: "图层", icon: "layers" },
 ] as const;
 
@@ -83,6 +85,7 @@ function onRailKeydown(event: KeyboardEvent, current: (typeof TABS)[number]["key
         <DatasetPanel v-else-if="tab === 'datasets'" />
         <AssetLibraryPanel v-else-if="tab === 'assets'" />
         <ElementsPanel v-else-if="tab === 'materials'" section="materials" />
+        <DesignLibraryPanel v-else-if="tab === 'design'" />
         <LayersPanel v-else />
       </div>
     </section>

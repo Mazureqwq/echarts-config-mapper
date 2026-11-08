@@ -19,6 +19,8 @@ import {
 } from "@/core/storage/workspaceRepo";
 import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import { DatasetRuntime } from "@/core/data/datasetRuntime";
+import { addDesignAssetToWorkspace, createDesignAsset, getDesignAssetTotalBytes, MAX_DESIGN_ASSETS_TOTAL_BYTES, normalizeDesignAssets, type DesignAssetInput, type DesignAssetResult } from "@/core/design/assets";
+import { loadDesignAssets, saveDesignAssets } from "@/core/storage/designAssetRepo";
 
 export const SAVE_DEBOUNCE_MS = 500;
 
@@ -34,15 +36,38 @@ export const useWorkspaceStore = defineStore("workspace", {
   getters: {
     screens: (s) => s.workspace.screens,
     assets: (s) => s.workspace.assets,
+    designAssets: (s) => s.workspace.designAssets,
     datasets: (s) => s.workspace.datasets,
     settings: (s) => s.workspace.settings,
   },
   actions: {
-    load() {
+    async load(): Promise<void> {
       this.workspace = loadWorkspace();
-      this.loaded = true;
+      this.loaded = false;
       this.saveState = "idle";
+      const legacyAssets = [...this.workspace.designAssets];
+      try {
+        const storedAssets = await loadDesignAssets();
+        if (storedAssets !== null) this.workspace.designAssets = storedAssets;
+        else if (legacyAssets.length) await saveDesignAssets(legacyAssets);
+      } catch {
+        // Keep the normalized legacy snapshot available even if browser IDB is unavailable.
+        this.saveState = "error";
+      }
+      this.hydrateDesignAssetSources();
+      this.loaded = true;
       this.syncDatasetRuntime();
+    },
+    hydrateDesignAssetSources(): void {
+      const assets = new Map(this.workspace.designAssets.map((asset) => [asset.id, asset.dataUrl]));
+      for (const screen of this.workspace.screens) {
+        for (const item of screen.items) {
+          if (item.kind === "image" && item.sourceDesignAssetId) {
+            const src = assets.get(item.sourceDesignAssetId);
+            if (src) item.src = src;
+          }
+        }
+      }
     },
     getDatasetRuntime(): DatasetRuntime {
       let runtime = datasetRuntimeByStore.get(this);
@@ -85,6 +110,54 @@ export const useWorkspaceStore = defineStore("workspace", {
           /* saveState 已置 error，顶栏提示并可重试 */
         }
       }, SAVE_DEBOUNCE_MS);
+    },
+    async addDesignAsset(input: DesignAssetInput): Promise<DesignAssetResult> {
+      const result = createDesignAsset({ ...input, id: input.id ?? this.assetId() });
+      if (!result.ok) return result;
+      const staged = { ...this.workspace, designAssets: [...this.workspace.designAssets] };
+      const added = addDesignAssetToWorkspace(staged, result.asset);
+      if (!added.ok) return added;
+      try {
+        await saveDesignAssets(staged.designAssets);
+      } catch (cause) {
+        return { ok: false, error: cause instanceof Error ? cause.message : "素材无法保存到本地存储。" };
+      }
+      const previous = this.workspace.designAssets;
+      this.workspace.designAssets = staged.designAssets;
+      try {
+        this.save();
+      } catch (cause) {
+        this.workspace.designAssets = previous;
+        await saveDesignAssets(previous).catch(() => undefined);
+        return { ok: false, error: cause instanceof Error ? cause.message : "工作区保存失败，素材未提交。" };
+      }
+      return added;
+    },
+    async removeDesignAsset(id: string): Promise<{ ok: boolean; error?: string }> {
+      const asset = this.workspace.designAssets.find((entry) => entry.id === id);
+      if (!asset) return { ok: false, error: "未找到此素材。" };
+      const linkedScreens = this.workspace.screens.filter((screen) =>
+        screen.items.some((item) => item.kind === "image" && item.sourceDesignAssetId === id)
+      );
+      if (linkedScreens.length) {
+        return { ok: false, error: `素材仍被「${linkedScreens[0]!.name}」引用，请先删除画布中的对应图片项。` };
+      }
+      const previous = this.workspace.designAssets;
+      const assets = previous.filter((entry) => entry.id !== id);
+      try {
+        await saveDesignAssets(assets);
+      } catch (cause) {
+        return { ok: false, error: cause instanceof Error ? cause.message : "无法保存素材变更。" };
+      }
+      this.workspace.designAssets = assets;
+      try {
+        this.save();
+      } catch (cause) {
+        this.workspace.designAssets = previous;
+        await saveDesignAssets(previous).catch(() => undefined);
+        return { ok: false, error: cause instanceof Error ? cause.message : "工作区保存失败，素材未移除。" };
+      }
+      return { ok: true };
     },
     duplicateScreen(id: string) {
       const src = this.workspace.screens.find((s) => s.id === id);
@@ -300,11 +373,32 @@ export const useWorkspaceStore = defineStore("workspace", {
     exportAll(): string {
       return exportJson(this.workspace);
     },
-    importFrom(text: string, mode: "merge" | "replace") {
-      this.workspace = importJson(text, mode);
-      this.loaded = true;
-      this.saveState = "saved";
-      this.syncDatasetRuntime();
+    async importFrom(text: string, mode: "merge" | "replace"): Promise<void> {
+      const previous = this.workspace;
+      try {
+        const imported = importJson(text, mode);
+        const combined = mode === "merge"
+          ? [...previous.designAssets, ...imported.designAssets]
+          : imported.designAssets;
+        const unique = [...new Map(combined.map((asset) => [asset.id, asset])).values()];
+        if (getDesignAssetTotalBytes(unique) > MAX_DESIGN_ASSETS_TOTAL_BYTES) {
+          throw new Error("导入后的设计素材总量超过 20 MiB，未替换当前工作区。");
+        }
+        const assets = normalizeDesignAssets(unique);
+        if (assets.length !== unique.length) throw new Error("导入中包含不支持或无效的设计素材，未替换当前工作区。");
+        await saveDesignAssets(assets);
+        this.workspace = { ...imported, designAssets: assets };
+        this.hydrateDesignAssetSources();
+        this.loaded = true;
+        this.saveState = "saved";
+        this.save();
+        this.syncDatasetRuntime();
+      } catch (cause) {
+        this.workspace = previous;
+        await saveDesignAssets(previous.designAssets).catch(() => undefined);
+        this.save();
+        throw cause;
+      }
     },
   },
 });

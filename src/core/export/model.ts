@@ -1,4 +1,4 @@
-import type { Background, ChartSpec, ChartType, Frame } from "@/core/model/types";
+import type { Background, ChartSpec, ChartType, DesignAsset, Frame } from "@/core/model/types";
 
 /** 产物格式标识（写进 payload 与 manifest，便于第三方与未来版本识别） */
 export const PACKAGE_FORMAT = "chartforge/screen-package";
@@ -46,6 +46,7 @@ export interface PackageImageItem {
   /** 只允许 data:image/* 或 http(s):（导出时已过滤） */
   src: string;
   fit: "contain" | "cover" | "fill";
+  sourceDesignAssetId?: string;
 }
 
 export interface PackageShapeItem {
@@ -71,6 +72,7 @@ export interface PackageScreen {
   id: string;
   name: string;
   canvas: { width: number; height: number; background: Background };
+  themeId?: string;
   items: PackageItem[];
 }
 
@@ -81,6 +83,8 @@ export interface PackagePayload {
   exportedAt: string;
   title: string;
   screens: PackageScreen[];
+  /** Only assets referenced by the exported screens. */
+  designAssets?: DesignAsset[];
   /** 仅当地图图表存在时携带，避免白白多 54 KB */
   geo?: { china: unknown };
   /** 导出过程中的取舍记录（被丢掉的非法 URL、被剔除的令牌等），同时写进 manifest */

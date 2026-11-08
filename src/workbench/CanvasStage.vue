@@ -13,7 +13,8 @@ import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
 import Icon from "@/shared/ui/Icon.vue";
-import { ASSET_DND_MIME } from "@/shared/dnd";
+import { ASSET_DND_MIME, DESIGN_DND_MIME } from "@/shared/dnd";
+import { getThemeById, themeCssVariables } from "@/core/design/library";
 import type { AlignMode } from "@/stores/documentStore";
 
 const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
@@ -51,6 +52,7 @@ const items = computed<ScreenItem[]>(() => doc.items);
 const selectedItems = computed<ScreenItem[]>(() =>
   doc.items.filter((i) => doc.selectedIds.includes(i.id))
 );
+const designThemeStyle = computed(() => themeCssVariables(getThemeById(doc.currentScreen?.themeId)));
 
 
 const canvasStyle = computed<Record<string, string>>(() => ({
@@ -426,6 +428,19 @@ interface DropPayload {
 }
 
 function onDrop(ev: DragEvent): void {
+  const designRaw = ev.dataTransfer?.getData(DESIGN_DND_MIME);
+  if (designRaw) {
+    try {
+      const payload = JSON.parse(designRaw) as { kind?: string; id?: string; version?: number };
+      const position = canvasPoint(ev);
+      if (payload.kind === "component" && payload.id) doc.addComponent(payload.id, payload.version ?? 1, position);
+      else if (payload.kind === "block" && payload.id) doc.insertBlock(payload.id, position);
+      else if (payload.kind === "design-asset" && payload.id) doc.addDesignAssetImage(payload.id, position);
+    } catch {
+      // Ignore invalid design-library drag payloads.
+    }
+    return;
+  }
   // 图表资产（图表库拖拽源）→ 以落点为中心放置副本
   const assetId = ev.dataTransfer?.getData(ASSET_DND_MIME);
   if (assetId) {
@@ -501,7 +516,7 @@ defineExpose({ canvasPoint, DROP_MIME });
       <span class="canvas-stage__pan-hint">灰色区域也可拖动平移</span>
     </div>
     <div class="canvas-stage__canvas" :style="canvasStyle">
-      <div class="canvas-stage__content">
+      <div class="canvas-stage__content" :style="designThemeStyle">
         <div class="canvas-stage__bg" :style="bgStyle" title="拖动空白画布以平移视图" @mousedown.stop="onCanvasBackgroundDown" />
         <ItemView
           v-for="item in items"

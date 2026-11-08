@@ -11,6 +11,7 @@ import {
   DEFAULT_INTERVAL_SEC,
 } from "@/core/play/playlist";
 import { isPlaceholder } from "@/core/model/templates";
+import { getThemeById, themeCssVariables } from "@/core/design/library";
 import ItemView from "@/workbench/ItemView.vue";
 
 const props = defineProps<{ id: string }>();
@@ -191,6 +192,7 @@ onBeforeUnmount(() => {
       <div
         class="play-view__canvas"
         :style="{
+          ...themeCssVariables(getThemeById(screen.themeId)),
           width: `${screen.canvas.width}px`,
           height: `${screen.canvas.height}px`,
           background:

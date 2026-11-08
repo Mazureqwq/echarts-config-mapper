@@ -26,6 +26,7 @@ import { setPath } from "@/core/model/path";
 import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
+import { BUILT_IN_BLOCKS, applyThemeToScreen, getThemeById, instantiateComponentBlock } from "@/core/design/library";
 
 // Pinia 响应式 Proxy 无法被 structuredClone 克隆，统一走 JSON 深克隆（数据均为纯 JSON）
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -98,6 +99,8 @@ function restoreWorkspace(target: Workspace, source: Workspace): void {
       }
       existing.items = src.items;
       existing.blueprint = src.blueprint;
+      if (src.themeId !== undefined) existing.themeId = src.themeId;
+      else delete existing.themeId;
       result.push(existing);
     } else {
       result.push(src);
@@ -162,14 +165,61 @@ export const useDocumentStore = defineStore("document", {
       this.addItem(item);
       return item.id;
     },
-    addComponent(componentId: string, componentVersion = 1): string {
+    addComponent(componentId: string, componentVersion = 1, position?: { x: number; y: number }): string {
       const screen = this.currentScreen;
       const definition = componentRegistry.get(componentId, componentVersion);
       if (!screen || !definition || definition.renderer.kind !== "vue") return "";
       const item = createComponentItem(definition);
       const offset = (screen.items.length % 8) * 18;
-      item.frame.x = Math.round((screen.canvas.width - item.frame.w) / 2) + offset;
-      item.frame.y = Math.round((screen.canvas.height - item.frame.h) / 2) + offset;
+      item.frame.x = position ? Math.round(position.x - item.frame.w / 2) : Math.round((screen.canvas.width - item.frame.w) / 2) + offset;
+      item.frame.y = position ? Math.round(position.y - item.frame.h / 2) : Math.round((screen.canvas.height - item.frame.h) / 2) + offset;
+      this.addItem(item);
+      return item.id;
+    },
+    applyTheme(themeId: string): void {
+      const screen = this.currentScreen;
+      const theme = getThemeById(themeId);
+      if (!screen || !theme) return;
+      applyThemeToScreen(screen, theme);
+      this.commit();
+    },
+    insertBlock(blockId: string, position?: { x: number; y: number }): string[] {
+      const screen = this.currentScreen;
+      const block = BUILT_IN_BLOCKS.find((entry) => entry.id === blockId);
+      if (!screen || !block) return [];
+      const xs = block.items.map((item) => item.frame.x);
+      const ys = block.items.map((item) => item.frame.y);
+      const maxX = Math.max(...block.items.map((item) => item.frame.x + item.frame.w));
+      const maxY = Math.max(...block.items.map((item) => item.frame.y + item.frame.h));
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const stagger = (screen.items.length % 7) * 24;
+      const targetX = position?.x ?? screen.canvas.width / 2 + stagger;
+      const targetY = position?.y ?? screen.canvas.height / 2 + stagger;
+      const items = instantiateComponentBlock(block, { x: targetX - centerX, y: targetY - centerY }, () => newId());
+      for (const item of items) {
+        Object.assign(item.frame, clampFrameToCanvas(item.frame, screen.canvas.width, screen.canvas.height));
+        screen.items.push(item);
+      }
+      this.selectedIds = items.map((item) => item.id);
+      this.commit();
+      return this.selectedIds;
+    },
+    addDesignAssetImage(assetId: string, position?: { x: number; y: number }): string {
+      const screen = this.currentScreen;
+      const asset = useWorkspaceStore().designAssets.find((entry) => entry.id === assetId);
+      if (!screen || !asset) return "";
+      const item = createItem("image", {
+        x: position ? position.x - 200 : (screen.canvas.width - 400) / 2,
+        y: position ? position.y - 150 : (screen.canvas.height - 300) / 2,
+        w: 400, h: 300,
+      });
+      if (item.kind !== "image") return "";
+      item.name = asset.name;
+      item.src = asset.dataUrl;
+      item.sourceDesignAssetId = asset.id;
       this.addItem(item);
       return item.id;
     },

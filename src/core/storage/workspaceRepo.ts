@@ -47,7 +47,18 @@ export function loadWorkspace(): Workspace {
 
 export function saveWorkspace(ws: Workspace): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ws));
+    // Large binary assets are stored in IndexedDB; also avoid duplicating them per image item.
+    const snapshot: Workspace = {
+      ...ws,
+      designAssets: [],
+      screens: ws.screens.map((screen) => ({
+        ...screen,
+        items: screen.items.map((item) =>
+          item.kind === "image" && item.sourceDesignAssetId ? { ...item, src: "" } : item
+        ),
+      })),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {
     throw new StorageQuotaError("保存失败：本地存储空间不足或不可用");
   }
@@ -142,18 +153,24 @@ function detectKind(raw: unknown): TargetKind {
 
 function freshIds(ws: Workspace): Workspace {
   const datasetIds = new Map(ws.datasets.map((dataset) => [dataset.id, newId()]));
+  const designAssetIds = new Map(ws.designAssets.map((asset) => [asset.id, newId()]));
   return {
     ...ws,
     assets: ws.assets.map((a) => ({ ...a, id: newId() })),
+    designAssets: ws.designAssets.map((asset) => ({ ...asset, id: designAssetIds.get(asset.id)! })),
     datasets: ws.datasets.map((dataset) => ({ ...dataset, id: datasetIds.get(dataset.id)! })),
     screens: ws.screens.map((s) => ({
       ...s,
       id: newId(),
       items: s.items.map((it): ScreenItem => {
         const next = { ...it, id: newId() };
-        if (next.kind === "component" && next.dataBinding) {
+        if ((next.kind === "component" || next.kind === "chart") && next.dataBinding) {
           const datasetId = datasetIds.get(next.dataBinding.datasetId);
           if (datasetId) next.dataBinding = { ...next.dataBinding, datasetId };
+        }
+        if (next.kind === "image" && next.sourceDesignAssetId) {
+          const assetId = designAssetIds.get(next.sourceDesignAssetId);
+          if (assetId) next.sourceDesignAssetId = assetId;
         }
         return next;
       }),
@@ -194,6 +211,7 @@ export function importJson(text: string, mode: "merge" | "replace"): Workspace {
   const result: Workspace = {
     version: 2,
     assets: [...current.assets, ...merged.assets],
+    designAssets: [...current.designAssets, ...merged.designAssets],
     screens: [...current.screens, ...merged.screens],
     datasets: [...current.datasets, ...merged.datasets],
     settings: { ...current.settings },

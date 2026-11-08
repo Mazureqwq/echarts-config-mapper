@@ -6,6 +6,7 @@ import type { ComponentRenderProps } from "@/core/components/types";
 import { componentRegistry } from "@/core/components/builtins";
 import { filterRowsByBinding } from "@/core/components/dataWidgets";
 import { buildOption } from "@/core/chart/optionBuilder";
+import { applyThemeChartPalette, getThemeById } from "@/core/design/library";
 import { buildChartDataFromRows } from "@/core/live/payload";
 import { themeMode } from "@/shared/theme";
 import { useDocumentStore } from "@/stores/documentStore";
@@ -78,6 +79,14 @@ const textStyle = computed<CSSProperties>(() => {
     height: "100%",
     overflow: "hidden",
   };
+});
+
+const imageSrc = computed(() => {
+  const item = props.item;
+  if (item.kind !== "image") return "";
+  return item.sourceDesignAssetId
+    ? ws.designAssets.find((asset) => asset.id === item.sourceDesignAssetId)?.dataUrl ?? item.src
+    : item.src;
 });
 
 const imageStyle = computed<CSSProperties>(() => {
@@ -170,12 +179,16 @@ const chartDataError = computed(() => {
   return result.ok ? "" : result.message;
 });
 
+const chartPalette = computed(() => getThemeById(doc.currentScreen?.themeId)?.tokens.chartPalette ?? []);
+
 const chartOption = computed<Record<string, unknown> | null>(() => {
   const it = props.item;
   if (it.kind !== "chart") return null;
-  if (!it.dataBinding) return buildOption(it.spec);
+  if (!it.dataBinding) return buildOption(applyThemeChartPalette(it.spec, chartPalette.value));
   const result = buildChartDataFromRows(boundRows.value, it.dataBinding.fields, it.spec.type);
-  return result.ok ? buildOption({ ...it.spec, data: result.data }) : null;
+  return result.ok
+    ? buildOption(applyThemeChartPalette({ ...it.spec, data: result.data }, chartPalette.value))
+    : null;
 });
 </script>
 
@@ -193,7 +206,7 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
       <div :style="textStyle">{{ item.text }}</div>
     </template>
     <template v-else-if="item.kind === 'image' && legacyAdapterAvailable">
-      <img v-if="item.src" :src="item.src" :style="imageStyle" alt="" draggable="false" />
+      <img v-if="imageSrc" :src="imageSrc" :style="imageStyle" alt="" draggable="false" />
       <div v-else class="item-view__img-empty">图片</div>
     </template>
     <template v-else-if="item.kind === 'shape' && legacyAdapterAvailable">
