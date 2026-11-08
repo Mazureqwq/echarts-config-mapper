@@ -1,6 +1,8 @@
 import DataTableWidget from "@/workbench/components/DataTableWidget.vue";
 import KpiWidget from "@/workbench/components/KpiWidget.vue";
 import ProgressListWidget from "@/workbench/components/ProgressListWidget.vue";
+import SectionTitleWidget from "@/workbench/components/SectionTitleWidget.vue";
+import CornerFrameWidget from "@/workbench/components/CornerFrameWidget.vue";
 import { createComponentRegistry } from "./registry";
 import type { ComponentAction, ComponentDefinition, LegacyItemKind } from "./types";
 
@@ -111,4 +113,59 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
   },
 ];
 
-export const componentRegistry = createComponentRegistry([...legacyComponentDefinitions, ...dataWidgetDefinitions]);
+const decorationWidgetDefinitions: readonly ComponentDefinition[] = [
+  {
+    id: "chartforge.section-title",
+    version: 1,
+    name: "标题栏",
+    category: "decoration",
+    catalog: {
+      group: "decoration",
+      description: "大屏分区标题",
+      tags: ["标题", "分区", "装饰"],
+      previewKey: "section-title",
+    },
+    defaultFrame: { x: 100, y: 100, w: 520, h: 72, rotate: 0 },
+    defaults: { title: "分区标题", subtitle: "", variant: "underline", accentColor: "" },
+    props: [
+      { key: "title", label: "标题", type: "string", defaultValue: "分区标题" },
+      { key: "subtitle", label: "副标题", type: "string", defaultValue: "" },
+      { key: "variant", label: "样式", type: "select", defaultValue: "underline", options: ["underline", "bar", "bracket"] },
+      { key: "accentColor", label: "强调色", type: "color", defaultValue: "", themeToken: "accent" },
+    ],
+    events: [],
+    actions: BASE_ACTIONS,
+    renderer: { kind: "vue", view: SectionTitleWidget },
+    exportRendererId: "chartforge-section-title-v1",
+  },
+  {
+    id: "chartforge.corner-frame",
+    version: 1,
+    name: "装饰边框",
+    category: "decoration",
+    catalog: {
+      group: "decoration",
+      description: "大屏角标边框装饰",
+      tags: ["边框", "角标", "装饰"],
+      previewKey: "corner-frame",
+    },
+    defaultFrame: { x: 100, y: 100, w: 500, h: 300, rotate: 0 },
+    defaults: { variant: "corner", color: "", thickness: 2, inset: 8 },
+    props: [
+      { key: "variant", label: "样式", type: "select", defaultValue: "corner", options: ["corner", "outline", "double"] },
+      { key: "color", label: "边框颜色", type: "color", defaultValue: "", themeToken: "accent" },
+      { key: "thickness", label: "线宽", type: "number", defaultValue: 2 },
+      { key: "inset", label: "内缩", type: "number", defaultValue: 8 },
+    ],
+    events: [],
+    actions: BASE_ACTIONS,
+    renderer: { kind: "vue", view: CornerFrameWidget },
+    exportRendererId: "chartforge-corner-frame-v1",
+  },
+];
+
+export const componentRegistry = createComponentRegistry([
+  ...legacyComponentDefinitions,
+  ...dataWidgetDefinitions,
+  ...decorationWidgetDefinitions,
+]);

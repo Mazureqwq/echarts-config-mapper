@@ -4,6 +4,8 @@ import type { ChartType, ComponentItem, DatasetSnapshot, Frame } from "@/core/mo
 export type LegacyItemKind = "chart" | "text" | "image" | "shape";
 export type ComponentCatalogGroup = "chart" | "data" | "decoration" | "basic";
 export type ComponentThemeToken = "panel" | "text" | "muted" | "accent" | "border";
+export type SectionTitleVariant = "underline" | "bar" | "bracket";
+export type CornerFrameVariant = "corner" | "outline" | "double";
 export type ComponentPayloadFieldType = "string" | "number" | "boolean" | "object";
 
 export interface ComponentCatalogMetadata {

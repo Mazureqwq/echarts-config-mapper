@@ -110,11 +110,11 @@
 - Register `chartforge.corner-frame@1` with `exportRendererId: "chartforge-corner-frame-v1"`, catalog `{ group: "decoration", description: "大屏角标边框装饰", tags: ["边框", "角标", "装饰"], previewKey: "corner-frame" }`, default frame `{ w: 500, h: 300 }`, defaults `{ variant: "corner", thickness: 2, inset: 8 }`, and props `{ variant: "corner" | "outline" | "double"; color: theme-inheriting color; thickness: number clamped to 1–8; inset: number clamped to 0–32 }`.
 - Both Vue renderers use `ComponentRenderProps`, contain no data fetch, use text nodes for title fields, and resolve missing/invalid style props to fixed defaults.
 
-- [ ] **Step 1: Write failing registration and SSR rendering tests** — assert exact IDs/versions/default frames/props/catalog metadata; section title renders hostile text literally; all declared variants render; invalid variants/colors resolve to safe defaults; corner frame adds no external resource.
-- [ ] **Step 2: Run the focused tests and confirm failure** — `npm test -- --run tests/registered-visual-widgets.spec.ts`; expect the new definitions/renderers to be missing.
-- [ ] **Step 3: Implement the two Vue renderers and compile-time definitions** — keep title and frame styling limited to declared variants, local CSS and theme tokens.
-- [ ] **Step 4: Run visual-widget, registry, and workbench item tests** — run `npm test -- --run tests/registered-visual-widgets.spec.ts`, `npm test -- --run tests/core-registry.spec.ts`, and `npm test -- --run tests/item-view.spec.ts` separately; expect PASS.
-- [ ] **Step 5: Commit** — `feat: add registered dashboard decorations`.
+- [x] **Step 1: Write failing registration and SSR rendering tests** — assert exact IDs/versions/default frames/props/catalog metadata; section title renders hostile text literally; all declared variants render; invalid variants/colors resolve to safe defaults; corner frame adds no external resource.
+- [x] **Step 2: Run the focused tests and confirm failure** — `npm test -- --run tests/registered-visual-widgets.spec.ts`; expect the new definitions/renderers to be missing.
+- [x] **Step 3: Implement the two Vue renderers and compile-time definitions** — keep title and frame styling limited to declared variants, local CSS and theme tokens.
+- [x] **Step 4: Run visual-widget, registry, and workbench item tests** — run `npm test -- --run tests/registered-visual-widgets.spec.ts`, `npm test -- --run tests/core-registry.spec.ts`, and `npm test -- --run tests/item-view.spec.ts` separately; expect PASS.
+- [x] **Step 5: Commit** — `feat: add registered dashboard decorations`.
 
 ## Task 5: Offline static renderers for all new component versions
 

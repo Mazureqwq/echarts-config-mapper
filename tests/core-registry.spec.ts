@@ -109,6 +109,23 @@ describe("component/registry", () => {
     expect(() => api.createComponentRegistry([definition, definition])).toThrow(/duplicate|重复/i);
   });
 
+  it("registers the versioned title and corner-frame Vue components", async () => {
+    const load = builtinModules["../src/core/components/builtins.ts"];
+    expect(load).toBeTypeOf("function");
+    if (!load) return;
+    const module = (await load()) as unknown as {
+      componentRegistry: { list(): readonly { id: string; version: number; renderer: { kind: string } }[] };
+    };
+
+    const visual = module.componentRegistry.list().filter((item) => item.id.startsWith("chartforge."));
+    expect(visual.filter((item) => item.id === "chartforge.section-title" || item.id === "chartforge.corner-frame")
+      .map(({ id, version, renderer }) => ({ id, version, renderer: renderer.kind })))
+      .toEqual([
+        { id: "chartforge.section-title", version: 1, renderer: "vue" },
+        { id: "chartforge.corner-frame", version: 1, renderer: "vue" },
+      ]);
+  });
+
   it("registers adapters for all four existing screen item kinds", async () => {
     const load = builtinModules["../src/core/components/builtins.ts"];
     expect(load).toBeTypeOf("function");
