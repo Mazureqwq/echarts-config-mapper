@@ -23,6 +23,7 @@ import type {
   Workspace,
 } from "./types";
 import type { ComponentDefinition } from "../components/types";
+import { componentRegistry } from "../components/builtins";
 import { initialChartData } from "../chart/chartData";
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
@@ -346,6 +347,57 @@ function normalizeDatasetBinding(raw: unknown): DatasetBinding | undefined {
   return { datasetId, ...(fields ? { fields } : {}), ...(filterBy ? { filterBy } : {}) };
 }
 
+export function normalizeComponentProps(definition: ComponentDefinition, raw: unknown): Record<string, unknown> {
+  const input = isRecord(raw) ? raw : {};
+  const output: Record<string, unknown> = {};
+  for (const prop of definition.props) {
+    const value = input[prop.key];
+    const fallback = prop.defaultValue;
+    if (value === undefined) {
+      output[prop.key] = JSON.parse(JSON.stringify(fallback)) as unknown;
+      continue;
+    }
+    switch (prop.type) {
+      case "string":
+        output[prop.key] = typeof value === "string" ? value : fallback;
+        break;
+      case "number":
+        output[prop.key] = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+        break;
+      case "boolean":
+        output[prop.key] = typeof value === "boolean" ? value : fallback;
+        break;
+      case "select":
+        output[prop.key] = typeof value === "string" && prop.options?.includes(value) ? value : fallback;
+        break;
+      case "json":
+        try {
+          const cloned = JSON.parse(JSON.stringify(value)) as unknown;
+          if (definition.id === "chartforge.data-table" && prop.key === "columns") {
+            if (!Array.isArray(cloned)) throw new Error("表格列配置必须为数组");
+            const columns = cloned.filter((entry): entry is Record<string, unknown> =>
+              isRecord(entry) && typeof entry.field === "string" && !!entry.field.trim() &&
+              typeof entry.label === "string" && ["text", "number", "percent"].includes(String(entry.format))
+            ).map((entry) => ({
+              field: String(entry.field).trim(),
+              label: String(entry.label).trim() || String(entry.field).trim(),
+              format: entry.format as "text" | "number" | "percent",
+              ...(typeof entry.width === "number" && Number.isFinite(entry.width) && entry.width > 0 && entry.width <= 2000 ? { width: Math.round(entry.width) } : {}),
+              ...(entry.align === "left" || entry.align === "center" || entry.align === "right" ? { align: entry.align } : {}),
+            }));
+            output[prop.key] = columns.length ? columns : JSON.parse(JSON.stringify(fallback)) as unknown;
+          } else {
+            output[prop.key] = cloned;
+          }
+        } catch {
+          output[prop.key] = JSON.parse(JSON.stringify(fallback)) as unknown;
+        }
+        break;
+    }
+  }
+  return output;
+}
+
 function normalizeItem(raw: unknown): ScreenItem | null {
   if (!isRecord(raw)) return null;
   const kind = str(raw.kind, "");
@@ -365,25 +417,33 @@ function normalizeItem(raw: unknown): ScreenItem | null {
       typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > 0
         ? rawVersion
         : 1;
+    const componentId = str(raw.componentId, "").trim();
     const dataBinding = normalizeDatasetBinding(raw.dataBinding);
+    const definition = componentRegistry.get(componentId, componentVersion);
+    const props = definition
+      ? normalizeComponentProps(definition, raw.props)
+      : isRecord(raw.props) ? { ...raw.props } : {};
     return {
       ...base,
       name: base.name || "组件",
       kind: "component",
-      componentId: str(raw.componentId, "").trim(),
+      componentId,
       componentVersion,
-      props: isRecord(raw.props) ? { ...raw.props } : {},
+      props,
       ...(dataBinding ? { dataBinding } : {}),
     } satisfies ComponentItem;
   }
   switch (kind) {
-    case "chart":
+    case "chart": {
+      const dataBinding = normalizeDatasetBinding(raw.dataBinding);
       return {
         ...base,
         kind: "chart",
         spec: normalizeSpec(raw.spec),
+        ...(dataBinding ? { dataBinding } : {}),
         ...(typeof raw.sourceAssetId === "string" ? { sourceAssetId: raw.sourceAssetId } : {}),
       } satisfies ChartItem;
+    }
     case "text":
       return {
         ...base,

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { DatasetRuntime } from "@/core/data/datasetRuntime";
 import { formatPairs, parsePairs } from "@/core/live/apiSettings";
 import { validateLiveSource } from "@/core/live/liveSource";
 import type { DatasetDefinition, DatasetPipeline, DatasetSnapshot, HttpMethodName } from "@/core/model/types";
@@ -36,7 +35,7 @@ const columns = computed(() => {
   const first = preview.value.rows[0];
   return first ? Object.keys(first).slice(0, 5) : [];
 });
-let runtime = new DatasetRuntime(ws.workspace.datasets, { resolveApi: () => ws.settings.api });
+const runtime = ws.getDatasetRuntime();
 let stopPreview: (() => void) | null = null;
 let consumerSeq = 0;
 
@@ -54,13 +53,6 @@ function subscribeSelected(): void {
   stopPreview = currentRuntime.subscribe(selectedDataset.value.id, consumerId, (snapshot) => {
     preview.value = snapshot;
   });
-}
-
-function rebuildRuntime(): void {
-  stopSelectedPreview();
-  runtime.dispose();
-  runtime = new DatasetRuntime(ws.workspace.datasets, { resolveApi: () => ws.settings.api });
-  subscribeSelected();
 }
 
 function loadDraft(dataset: DatasetDefinition | null): void {
@@ -108,11 +100,9 @@ watch(
   },
   { immediate: true }
 );
-
 watch(
-  () => JSON.stringify({ datasets: ws.workspace.datasets, api: ws.settings.api }),
-  () => rebuildRuntime(),
-  { deep: true }
+  () => JSON.stringify(selectedDataset.value),
+  () => subscribeSelected()
 );
 
 function beginCreate(kind: "static" | "http"): void {
@@ -216,8 +206,6 @@ function saveDataset(): void {
     if (isCreating.value) {
       const id = ws.createDataset(cleanedName, source);
       ws.updateDataset(id, { parameters, pipeline: pipeline ?? null });
-      // Refresh the runtime before the selection watcher subscribes to the new ID.
-      rebuildRuntime();
       isCreating.value = false;
       selectedId.value = id;
     } else if (selectedDataset.value) {
@@ -250,7 +238,6 @@ function displayCell(value: unknown): string {
 
 onBeforeUnmount(() => {
   stopSelectedPreview();
-  runtime.dispose();
 });
 </script>
 

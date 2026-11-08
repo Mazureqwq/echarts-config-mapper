@@ -1,16 +1,24 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CSSProperties } from "vue";
-import type { ScreenItem } from "@/core/model/types";
+import type { DatasetSnapshot, ScreenItem } from "@/core/model/types";
+import type { ComponentRenderProps } from "@/core/components/types";
 import { componentRegistry } from "@/core/components/builtins";
+import { filterRowsByBinding } from "@/core/components/dataWidgets";
 import { buildOption } from "@/core/chart/optionBuilder";
+import { buildChartDataFromRows } from "@/core/live/payload";
 import { themeMode } from "@/shared/theme";
 import { useDocumentStore } from "@/stores/documentStore";
-
-const doc = useDocumentStore();
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import EChartsView from "./EChartsView.vue";
 
-const props = defineProps<{ item: ScreenItem }>();
+const doc = useDocumentStore();
+const ws = useWorkspaceStore();
+const props = withDefaults(defineProps<{
+  item: ScreenItem;
+  variables?: Readonly<Record<string, unknown>>;
+  emitEvent?: ComponentRenderProps["emitEvent"];
+}>(), { variables: () => ({}), emitEvent: () => undefined });
 
 const componentDefinition = computed(() => {
   const item = props.item;
@@ -106,16 +114,75 @@ const shapeStyle = computed<CSSProperties>(() => {
   return style;
 });
 
+const datasetBinding = computed(() =>
+  props.item.kind === "chart" || props.item.kind === "component" ? props.item.dataBinding : undefined
+);
+const datasetSnapshot = ref<DatasetSnapshot>({ status: "idle", rows: [] });
+const datasetRuntime = ws.getDatasetRuntime();
+let stopDataset: (() => void) | null = null;
+let consumerSeq = 0;
+
+watch(
+  () => {
+    const datasetId = datasetBinding.value?.datasetId ?? "";
+    return [datasetId, !!datasetId && ws.workspace.datasets.some((dataset) => dataset.id === datasetId)] as const;
+  },
+  ([datasetId, exists]) => {
+    stopDataset?.();
+    stopDataset = null;
+    datasetSnapshot.value = { status: "idle", rows: [] };
+    if (!datasetId) return;
+    if (!exists) {
+      datasetSnapshot.value = { status: "error", rows: [], error: "绑定的数据集不存在" };
+      return;
+    }
+    try {
+      const consumerId = `item-view-${props.item.id}-${++consumerSeq}`;
+      stopDataset = datasetRuntime.subscribe(datasetId, consumerId, (snapshot) => {
+        datasetSnapshot.value = snapshot;
+      });
+    } catch (cause) {
+      datasetSnapshot.value = { status: "error", rows: [], error: cause instanceof Error ? cause.message : String(cause) };
+    }
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  stopDataset?.();
+  stopDataset = null;
+});
+
+const boundRows = computed(() =>
+  filterRowsByBinding(datasetSnapshot.value.rows, datasetBinding.value, props.variables)
+);
+
+function emitComponentEvent(name: string, payload: unknown): void {
+  const definition = componentDefinition.value;
+  if (!definition?.events.some((event) => event.name === name)) return;
+  props.emitEvent(name, payload);
+}
+
+const chartDataError = computed(() => {
+  const item = props.item;
+  if (item.kind !== "chart" || !item.dataBinding) return "";
+  const result = buildChartDataFromRows(boundRows.value, item.dataBinding.fields, item.spec.type);
+  return result.ok ? "" : result.message;
+});
+
 const chartOption = computed<Record<string, unknown> | null>(() => {
   const it = props.item;
-  return it.kind === "chart" ? buildOption(it.spec) : null;
+  if (it.kind !== "chart") return null;
+  if (!it.dataBinding) return buildOption(it.spec);
+  const result = buildChartDataFromRows(boundRows.value, it.dataBinding.fields, it.spec.type);
+  return result.ok ? buildOption({ ...it.spec, data: result.data }) : null;
 });
 </script>
 
 <template>
   <div class="item-view" :style="boxStyle" :data-item-id="item.id">
     <div
-      v-if="item.kind === 'chart' && doc.liveStatus[item.id]?.stale"
+      v-if="item.kind === 'chart' && (doc.liveStatus[item.id]?.stale || datasetSnapshot.status === 'stale')"
       class="item-view__stale"
       data-ui-only
       title="实时数据拉取失败，显示的是最后一次成功数据"
@@ -133,11 +200,21 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
       <div :style="shapeStyle" />
     </template>
     <template v-else-if="item.kind === 'component'">
-      <component v-if="componentView" :is="componentView" :item="item" v-bind="item.props" />
+      <component
+        v-if="componentView"
+        :is="componentView"
+        v-bind="item.props"
+        :item="item"
+        :snapshot="datasetSnapshot"
+        :rows="boundRows"
+        :variables="variables"
+        :emit-event="emitComponentEvent"
+      />
       <div v-else class="item-view__missing">{{ componentFallback }}</div>
     </template>
     <template v-else-if="item.kind === 'chart' && legacyAdapterAvailable">
       <EChartsView v-if="chartOption" :option="chartOption" :theme="themeMode" />
+      <div v-if="chartDataError" class="item-view__binding-error" role="status">{{ chartDataError }}</div>
     </template>
   </div>
 </template>
@@ -164,6 +241,17 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
   border: 1px dashed var(--cf-border);
   color: var(--cf-text-2);
   font-size: 12px;
+}
+.item-view__binding-error {
+  position: absolute;
+  inset: auto 4px 4px;
+  z-index: 4;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(127, 29, 29, 0.88);
+  color: #fff;
+  font-size: 10px;
+  pointer-events: none;
 }
 .item-view__missing {
   box-sizing: border-box;

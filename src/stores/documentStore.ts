@@ -1,7 +1,8 @@
 import { defineStore } from "pinia";
 import { markRaw } from "vue";
 import { History, HISTORY_LIMIT } from "@/core/history/history";
-import { DEFAULT_FRAME, createItem, createScreen } from "@/core/model/schema";
+import { DEFAULT_FRAME, createComponentItem, createItem, createScreen, normalizeComponentProps } from "@/core/model/schema";
+import { componentRegistry } from "@/core/components/builtins";
 import { deepMerge } from "@/core/chart/optionBuilder";
 import { chartRegistry } from "@/core/chart/registry";
 import { rotateFrame } from "@/core/geometry/transform";
@@ -12,6 +13,7 @@ import type {
   ChartData,
   ChartItem,
   ChartType,
+  DatasetBinding,
   Frame,
   LiveSource,
   Screen,
@@ -158,10 +160,21 @@ export const useDocumentStore = defineStore("document", {
       this.addItem(item);
       return item.id;
     },
+    addComponent(componentId: string, componentVersion = 1): string {
+      const screen = this.currentScreen;
+      const definition = componentRegistry.get(componentId, componentVersion);
+      if (!screen || !definition || definition.renderer.kind !== "vue") return "";
+      const item = createComponentItem(definition);
+      const offset = (screen.items.length % 8) * 18;
+      item.frame.x = Math.round((screen.canvas.width - item.frame.w) / 2) + offset;
+      item.frame.y = Math.round((screen.canvas.height - item.frame.h) / 2) + offset;
+      this.addItem(item);
+      return item.id;
+    },
     /** 图表落位时清掉被压住的模板占位框 */
     clearPlaceholdersUnder(item: ScreenItem): void {
       const screen = this.currentScreen;
-      if (!screen || item.kind !== "chart") return;
+      if (!screen || (item.kind !== "chart" && item.kind !== "component")) return;
       const hit = placeholdersToClear(screen.items, item.frame);
       if (!hit.length) return;
       const ids = new Set(hit.map((h) => h.id));
@@ -263,6 +276,21 @@ export const useDocumentStore = defineStore("document", {
         if (k === "id" || k === "kind" || k === "frame" || k === "spec") continue;
         item[k] = v;
       }
+      this.commit();
+    },
+    updateComponentProps(id: string, props: Record<string, unknown>): void {
+      const item = this.items.find((entry) => entry.id === id);
+      if (!item || item.kind !== "component") return;
+      const definition = componentRegistry.get(item.componentId, item.componentVersion);
+      if (!definition) return;
+      item.props = normalizeComponentProps(definition, props);
+      this.commit();
+    },
+    updateItemDataBinding(id: string, binding: DatasetBinding | undefined): void {
+      const item = this.items.find((entry) => entry.id === id);
+      if (!item || (item.kind !== "chart" && item.kind !== "component")) return;
+      if (binding?.datasetId) item.dataBinding = deepClone(binding);
+      else delete item.dataBinding;
       this.commit();
     },
     applyOptionPatch(id: string, patch: Record<string, unknown>) {

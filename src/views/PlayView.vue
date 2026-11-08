@@ -51,10 +51,10 @@ function switchTo(id: string, index: number): void {
 function setupLive(): void {
   executor?.dispose();
   executor = null;
-  if (!doc.items.some((i) => i.kind === "chart" && i.spec.source)) return;
+  if (!doc.items.some((i) => i.kind === "chart" && i.spec.source && !i.dataBinding)) return;
   executor = new LiveExecutor({ resolveApi: () => ws.settings.api });
   for (const item of doc.items) {
-    if (item.kind === "chart" && item.spec.source) {
+    if (item.kind === "chart" && item.spec.source && !item.dataBinding) {
       executor.register(
         item.id,
         item.spec.source,

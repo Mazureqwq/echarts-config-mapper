@@ -31,7 +31,7 @@ function collapsePanelsOnCompactViewport(): void {
 /** 数据源配置指纹：增删图表、改地址/间隔时才重新挂载 */
 const liveSignature = computed(() =>
   doc.items
-    .filter((i) => i.kind === "chart" && i.spec.source)
+    .filter((i) => i.kind === "chart" && i.spec.source && !i.dataBinding)
     .map((i) => {
       const s = i.kind === "chart" ? i.spec.source : undefined;
       const key = JSON.stringify({
@@ -59,11 +59,11 @@ const liveSignature = computed(() =>
 function syncLive(): void {
   executor?.dispose();
   executor = null;
-  const live = doc.items.filter((i) => i.kind === "chart" && i.spec.source);
+  const live = doc.items.filter((i) => i.kind === "chart" && i.spec.source && !i.dataBinding);
   if (!live.length) return;
   executor = new LiveExecutor({ resolveApi: () => ws.settings.api });
   for (const item of live) {
-    if (item.kind !== "chart" || !item.spec.source) continue;
+    if (item.kind !== "chart" || !item.spec.source || item.dataBinding) continue;
     executor.register(item.id, item.spec.source, (u) => {
       void doc.applyLiveUpdate(u.id, u.data, {
         stale: u.stale,

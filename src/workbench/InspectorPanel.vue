@@ -13,6 +13,8 @@ import ScreenPanel from "./panels/ScreenPanel.vue";
 import ChartConfigPanel from "./panels/ChartConfigPanel.vue";
 import DataTablePanel from "./panels/DataTablePanel.vue";
 import LiveSourcePanel from "./panels/LiveSourcePanel.vue";
+import ComponentInspector from "./components/ComponentInspector.vue";
+import DatasetBindingEditor from "./components/DatasetBindingEditor.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import type { AlignMode } from "@/stores/documentStore";
 
@@ -57,6 +59,9 @@ const single = computed<ScreenItem | null>(() =>
 );
 const singleChart = computed<ChartItem | null>(() =>
   single.value && single.value.kind === "chart" ? single.value : null
+);
+const singleComponent = computed(() =>
+  single.value?.kind === "component" ? single.value : null
 );
 const focusItem = computed<ChartItem | null>(() => {
   if (!ui.editingId) return null;
@@ -290,6 +295,14 @@ function confirmSaveAsset(): void {
           <div class="inspector__section-title">属性</div>
           <StylePanel :item="single" />
         </div>
+        <div v-if="singleComponent" class="inspector__section">
+          <div class="inspector__section-title">组件配置</div>
+          <ComponentInspector
+            :item="singleComponent"
+            @update:props="doc.updateComponentProps(singleComponent.id, $event)"
+            @update:data-binding="doc.updateItemDataBinding(singleComponent.id, $event)"
+          />
+        </div>
         <template v-if="single.kind === 'chart'">
           <div class="inspector__section">
             <div class="inspector__section-title">图表</div>
@@ -333,6 +346,10 @@ function confirmSaveAsset(): void {
     <div v-else-if="activeTab === 'data'" id="inspector-panel" class="inspector__tab-panel inspector__tab-panel--data" role="tabpanel" aria-labelledby="inspector-tab-data">
       <template v-if="focusItem">
         <div class="inspector__section">
+          <div class="inspector__section-title">工作区数据集绑定</div>
+          <DatasetBindingEditor :model-value="focusItem.dataBinding" :show-fields="true" @update:model-value="doc.updateItemDataBinding(focusItem.id, $event)" />
+        </div>
+        <div class="inspector__section">
           <div class="inspector__section-title">静态数据</div>
           <DataTablePanel :item="focusItem" @change-data="(data) => onChartData(focusItem!.id, data)" />
         </div>
@@ -342,6 +359,11 @@ function confirmSaveAsset(): void {
         </div>
       </template>
       <template v-else-if="singleChart">
+        <div class="inspector__section">
+          <div class="inspector__section-title">工作区数据集绑定</div>
+          <DatasetBindingEditor :model-value="singleChart.dataBinding" :show-fields="true" @update:model-value="doc.updateItemDataBinding(singleChart.id, $event)" />
+          <p class="inspector__binding-hint">绑定数据集后优先使用共享数据；下方图表数据与实时源仍保留为可编辑备用配置。</p>
+        </div>
         <div v-if="singleChart.sourceAssetId" class="inspector__source">
           <span v-if="sourceAsset(singleChart)" class="inspector__source-label">来源：{{ sourceAsset(singleChart)!.name }}</span>
           <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
@@ -501,6 +523,12 @@ function confirmSaveAsset(): void {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 150px;
+}
+.inspector__binding-hint {
+  margin: 6px 0 0;
+  color: var(--cf-text-2);
+  font-size: 10px;
+  line-height: 1.45;
 }
 .inspector__source-missing {
   color: var(--cf-text-2);

@@ -18,10 +18,12 @@ import {
   importJson,
 } from "@/core/storage/workspaceRepo";
 import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
+import { DatasetRuntime } from "@/core/data/datasetRuntime";
 
 export const SAVE_DEBOUNCE_MS = 500;
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const datasetRuntimeByStore = new WeakMap<object, DatasetRuntime>();
 
 export const useWorkspaceStore = defineStore("workspace", {
   state: () => ({
@@ -40,6 +42,27 @@ export const useWorkspaceStore = defineStore("workspace", {
       this.workspace = loadWorkspace();
       this.loaded = true;
       this.saveState = "idle";
+      this.syncDatasetRuntime();
+    },
+    getDatasetRuntime(): DatasetRuntime {
+      let runtime = datasetRuntimeByStore.get(this);
+      if (!runtime) {
+        runtime = new DatasetRuntime(this.workspace.datasets, { resolveApi: () => this.settings.api });
+        datasetRuntimeByStore.set(this, runtime);
+      }
+      return runtime;
+    },
+    syncDatasetRuntime(): void {
+      const runtime = datasetRuntimeByStore.get(this);
+      if (!runtime) return;
+      const activeIds = new Set(this.workspace.datasets.map((dataset) => dataset.id));
+      for (const id of runtime.datasetIds()) if (!activeIds.has(id)) runtime.removeDataset(id);
+      for (const dataset of this.workspace.datasets) runtime.upsertDataset(dataset);
+    },
+    disposeDatasetRuntime(): void {
+      const runtime = datasetRuntimeByStore.get(this);
+      runtime?.dispose();
+      datasetRuntimeByStore.delete(this);
     },
     save() {
       try {
@@ -206,6 +229,7 @@ export const useWorkspaceStore = defineStore("workspace", {
         source: JSON.parse(JSON.stringify(source)) as DatasetDefinition["source"],
       };
       this.workspace.datasets.push(dataset);
+      if (datasetRuntimeByStore.has(this)) this.getDatasetRuntime().upsertDataset(dataset);
       this.save();
       return id;
     },
@@ -235,12 +259,14 @@ export const useWorkspaceStore = defineStore("workspace", {
         if (patch.pipeline) dataset.pipeline = JSON.parse(JSON.stringify(patch.pipeline)) as DatasetPipeline;
         else delete dataset.pipeline;
       }
+      if (datasetRuntimeByStore.has(this)) this.getDatasetRuntime().upsertDataset(dataset);
       this.save();
     },
     removeDataset(id: string): void {
       const index = this.workspace.datasets.findIndex((entry) => entry.id === id);
       if (index === -1) return;
       this.workspace.datasets.splice(index, 1);
+      datasetRuntimeByStore.get(this)?.removeDataset(id);
       this.save();
     },
     /** 更新全局接口设置（baseUrl / 公共头 / 公共 query / 超时） */
@@ -263,10 +289,12 @@ export const useWorkspaceStore = defineStore("workspace", {
         next.exportHeaders !== true;
       if (empty) delete this.workspace.settings.api;
       else this.workspace.settings.api = next;
+      this.syncDatasetRuntime();
       this.save();
     },
     resetApiSettings(): void {
       delete this.workspace.settings.api;
+      this.syncDatasetRuntime();
       this.save();
     },
     exportAll(): string {
@@ -276,6 +304,7 @@ export const useWorkspaceStore = defineStore("workspace", {
       this.workspace = importJson(text, mode);
       this.loaded = true;
       this.saveState = "saved";
+      this.syncDatasetRuntime();
     },
   },
 });

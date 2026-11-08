@@ -139,6 +139,10 @@ export class DatasetRuntime {
     return this.getEntry(datasetId).snapshot;
   }
 
+  datasetIds(): string[] {
+    return [...this.entries.keys()];
+  }
+
   dispose(): void {
     if (this.disposed) return;
     for (const entry of this.entries.values()) {

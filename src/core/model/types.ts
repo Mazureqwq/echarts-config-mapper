@@ -139,6 +139,8 @@ export interface BaseItem {
 export interface ChartItem extends BaseItem {
   kind: "chart";
   spec: ChartSpec;
+  /** 显式绑定工作区数据集；存在时优先于 spec.source */
+  dataBinding?: DatasetBinding;
   /** 来源图表库资产的 id（拖入大屏时记录，仅作回溯用；spec 是独立副本，删资产不影响它） */
   sourceAssetId?: string;
 }

@@ -1,5 +1,5 @@
 import type { Component } from "vue";
-import type { Frame } from "@/core/model/types";
+import type { ComponentItem, DatasetSnapshot, Frame } from "@/core/model/types";
 
 export type LegacyItemKind = "chart" | "text" | "image" | "shape";
 export type ComponentPayloadFieldType = "string" | "number" | "boolean" | "object";
@@ -7,7 +7,7 @@ export type ComponentPayloadFieldType = "string" | "number" | "boolean" | "objec
 export interface ComponentProp {
   readonly key: string;
   readonly label: string;
-  readonly type: "string" | "number" | "boolean" | "select";
+  readonly type: "string" | "number" | "boolean" | "select" | "json";
   readonly defaultValue: unknown;
   readonly options?: readonly string[];
 }
@@ -38,6 +38,14 @@ export interface ComponentDefinition {
   readonly actions: readonly ComponentAction[];
   readonly renderer: ComponentRenderer;
   readonly exportRendererId: string;
+}
+
+export interface ComponentRenderProps {
+  item: ComponentItem;
+  snapshot: DatasetSnapshot;
+  rows: Array<Record<string, unknown>>;
+  variables: Readonly<Record<string, unknown>>;
+  emitEvent(name: string, payload: unknown): void;
 }
 
 export interface ComponentRegistry {

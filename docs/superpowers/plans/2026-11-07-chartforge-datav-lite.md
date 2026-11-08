@@ -130,12 +130,12 @@ This UI foundation is deliberately inserted between completed Task 1 and Task 2 
 - KPI props: `{ valueField: string; label: string; format: "number" | "currency" | "percent"; aggregation: "first" | "sum" | "average" }`; binding supports optional `{ field: string; globalVariable: string }` filter. Add optional `dataBinding` to `ChartItem`; when present it takes precedence over legacy `spec.source` and uses `DatasetRuntime` plus `fields` mapping and the same global-variable filter. Without `dataBinding`, legacy chart data flow stays unchanged.
 - `ComponentInspector` edits only registered `props` and declared data bindings; unknown/invalid props are ignored by normalizers, not executed.
 
-- [ ] **Step 1: Write failing widget and binding tests** — assert table field mapping/order/format, row selection payload, KPI aggregation/format, and a chart bound to the same dataset updates with the KPI when the row-select blueprint variable changes.
-- [ ] **Step 2: Run `npm test -- --run tests/data-widgets.spec.ts`** — expect the new behavior to fail before implementation.
-- [ ] **Step 3: Implement both Vue widgets as pure renderers of props + dataset snapshot** — do not fetch from widgets; represent loading, stale, error and empty states consistently.
-- [ ] **Step 4: Register the widgets and connect the elements/inspector flows** — create default frames/props, edit schema fields and dataset bindings for widgets/charts, preserve existing `DataTablePanel.vue` as the chart data editor, and unsubscribe widget listeners when items/datasets change or unmount.
-- [ ] **Step 5: Run widget tests and relevant workbench/model tests** — expect all PASS; existing chart editor tests remain unchanged.
-- [ ] **Step 6: Commit** — `feat: add registered table and KPI widgets`.
+- [x] **Step 1: Write failing widget and binding tests** — assert table field mapping/order/format, row selection payload, KPI aggregation/format, and a chart bound to the same dataset updates with the KPI when the row-select blueprint variable changes.
+- [x] **Step 2: Run `npm test -- --run tests/data-widgets.spec.ts`** — expect the new behavior to fail before implementation.
+- [x] **Step 3: Implement both Vue widgets as pure renderers of props + dataset snapshot** — do not fetch from widgets; represent loading, stale, error and empty states consistently.
+- [x] **Step 4: Register the widgets and connect the elements/inspector flows** — create default frames/props, edit schema fields and dataset bindings for widgets/charts, preserve existing `DataTablePanel.vue` as the chart data editor, and unsubscribe widget listeners when items/datasets change or unmount.
+- [x] **Step 5: Run widget tests and relevant workbench/model tests** — expect all PASS; existing chart editor tests remain unchanged.
+- [x] **Step 6: Commit** — `feat: add registered table and KPI widgets`.
 
 ## Task 4: Declarative blueprint model, safe runner and node editor
 

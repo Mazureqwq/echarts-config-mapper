@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ChartType, ScreenItem } from "@/core/model/types";
+import { componentRegistry } from "@/core/components/builtins";
 import { useDocumentStore } from "@/stores/documentStore";
 import Icon from "@/shared/ui/Icon.vue";
 
@@ -11,6 +12,12 @@ const DROP_MIME = "application/x-chartforge-item";
 
 function pickChart(type: ChartType): void {
   doc.addChart(type);
+}
+
+const DATA_WIDGETS = componentRegistry.list().filter((definition) => definition.category === "data" && definition.renderer.kind === "vue");
+
+function pickComponent(componentId: string, version: number): void {
+  doc.addComponent(componentId, version);
 }
 
 const CHART_TYPES: Array<{ type: ChartType; label: string }> = [
@@ -52,6 +59,20 @@ function drag(ev: DragEvent, payload: { kind: ScreenItem["kind"]; chartType?: Ch
         </div>
       </div>
       <div class="elements-panel__hint">单击添加图表，或拖入画布指定位置</div>
+      <div class="elements-panel__group-title">数据组件</div>
+      <div class="elements-panel__grid">
+        <button
+          v-for="definition in DATA_WIDGETS"
+          :key="`${definition.id}@${definition.version}`"
+          class="elements-panel__chip"
+          type="button"
+          @click="pickComponent(definition.id, definition.version)"
+        >
+          <Icon name="chart" :size="18" />
+          <span>{{ definition.name }}</span>
+        </button>
+      </div>
+      <div class="elements-panel__hint">数据表格可发出行选择事件，指标卡与图表共用数据集</div>
     </template>
     <template v-else>
       <div class="elements-panel__group-title">素材</div>
@@ -88,6 +109,9 @@ function drag(ev: DragEvent, payload: { kind: ScreenItem["kind"]; chartType?: Ch
 }
 .elements-panel__chip {
   display: flex;
+  border: 1px solid var(--cf-border);
+  font: inherit;
+  text-align: center;
   flex-direction: column;
   align-items: center;
   gap: 6px;

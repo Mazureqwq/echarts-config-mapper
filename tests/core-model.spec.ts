@@ -198,6 +198,26 @@ describe("model/component item factory", () => {
     expect(workspace.screens[0].items[0]).toMatchObject(component);
   });
 
+  it("normalizes only registered component props and preserves chart dataset bindings", () => {
+    const workspace = normalizeWorkspace({
+      version: 2,
+      screens: [{
+        id: "bindings",
+        items: [
+          { id: "kpi", kind: "component", componentId: "chartforge.kpi", componentVersion: 1, props: { label: 7, format: "eval", aggregation: "average", extra: "ignored" } },
+          { id: "table", kind: "component", componentId: "chartforge.data-table", componentVersion: 1, props: { striped: "yes", columns: [{ field: "city", label: "城市", format: "text", align: "right" }, { field: "bad", label: "错误", format: "eval" }], unexpected: true } },
+          { id: "chart", kind: "chart", spec: createChartSpec("line"), dataBinding: { datasetId: "sales", fields: { category: "month", value: "amount" }, filterBy: { field: "city", globalVariable: "selectedCity" } } },
+        ],
+      }],
+    });
+    const items = workspace.screens[0].items;
+    expect(items[0]).toMatchObject({ kind: "component", props: { valueField: "value", label: "指标", format: "number", aggregation: "average" } });
+    expect(items[0].kind === "component" ? items[0].props : {}).not.toHaveProperty("extra");
+    expect(items[1]).toMatchObject({ kind: "component", props: { striped: true, columns: [{ field: "city", label: "城市", format: "text", align: "right" }] } });
+    expect(items[1].kind === "component" ? items[1].props : {}).not.toHaveProperty("unexpected");
+    expect(items[2]).toMatchObject({ kind: "chart", dataBinding: { datasetId: "sales", fields: { category: "month", value: "amount" }, filterBy: { field: "city", globalVariable: "selectedCity" } } });
+  });
+
   it("copies registered defaults and combines default, definition and caller frames", async () => {
     const schema = await import("../src/core/model/schema");
     const factory = (schema as unknown as {

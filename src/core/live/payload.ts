@@ -1,7 +1,69 @@
 import type { ChartData, ChartType } from "@/core/model/types";
 import { matrixToChartData, validateChartData } from "@/core/chart/chartData";
+import type { ChartDataResult, PipelineMap } from "./pipeline";
 
 export type PayloadResult = { ok: true; data: ChartData } | { ok: false; message: string };
+
+function rowText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function rowNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+/** Map processed dataset rows into chart data without changing the saved chart spec. */
+export function buildChartDataFromRows(
+  rows: Array<Record<string, unknown>>,
+  map: PipelineMap | undefined,
+  type: ChartType
+): ChartDataResult {
+  const first = rows[0] ?? {};
+  const keys = Object.keys(first);
+  const categoryField = map?.category || keys[0] || "";
+  const valueField = map?.value || keys.find((key) => key !== categoryField && rows.some((row) => rowNumber(row[key]) !== 0)) || keys[1] || "";
+  const seriesField = map?.seriesField || "";
+  const categories: string[] = [];
+  const groupNames: string[] = [];
+  for (const row of rows) {
+    const category = categoryField ? rowText(row[categoryField]) : "";
+    if (!categories.includes(category)) categories.push(category);
+    const group = seriesField ? rowText(row[seriesField]) : "数值";
+    if (!groupNames.includes(group)) groupNames.push(group);
+  }
+
+  let data: ChartData;
+  if (type === "pie" || type === "map") {
+    data = { kind: "nameValue", rows: rows.map((row) => ({ name: categoryField ? rowText(row[categoryField]) : "", value: valueField ? rowNumber(row[valueField]) : 0 })) };
+  } else if (type === "scatter") {
+    data = { kind: "xy", rows: rows.map((row) => ({ x: categoryField ? rowNumber(row[categoryField]) : 0, y: valueField ? rowNumber(row[valueField]) : 0, ...(seriesField ? { group: rowText(row[seriesField]) } : {}) })) };
+  } else if (type === "radar") {
+    const series = groupNames.map((group) => ({
+      name: group,
+      values: categories.map((category) => rows.filter((row) => rowText(row[categoryField]) === category && (!seriesField || rowText(row[seriesField]) === group)).reduce((sum, row) => sum + rowNumber(row[valueField]), 0)),
+    }));
+    const indicators = categories.map((name, index) => {
+      const max = Math.max(0, ...series.map((entry) => entry.values[index] ?? 0));
+      return { name, max: max > 0 ? Math.ceil(max * 1.2) : 100 };
+    });
+    data = { kind: "radar", indicators, series };
+  } else {
+    const series = groupNames.map((group) => ({
+      name: group,
+      values: categories.map((category) => rows.filter((row) => rowText(row[categoryField]) === category && (!seriesField || rowText(row[seriesField]) === group)).reduce((sum, row) => sum + rowNumber(row[valueField]), 0)),
+    }));
+    data = { kind: "category", categories, series };
+  }
+  const count = rows.length;
+  return { ok: true, data, counts: { raw: count, filtered: count, selected: count, sorted: count, limited: count } };
+}
 
 const KIND_SET = new Set(["category", "nameValue", "xy", "radar"]);
 

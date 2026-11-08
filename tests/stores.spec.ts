@@ -264,6 +264,23 @@ describe("stores/documentStore", () => {
     expect(doc.liveStatus[item.id].stale).toBe(true);
   });
 
+  it("可添加注册的数据表格/KPI、编辑受控属性并绑定共享数据集", () => {
+    const { doc, screen } = seedScreen();
+    const tableId = doc.addComponent("chartforge.data-table", 1);
+    const kpiId = doc.addComponent("chartforge.kpi", 1);
+    expect(screen.items.map((item) => item.kind)).toEqual(["component", "component"]);
+    const table = screen.items.find((item) => item.id === tableId)!;
+    expect(table).toMatchObject({ kind: "component", componentId: "chartforge.data-table", componentVersion: 1, props: { striped: true } });
+    doc.updateComponentProps(tableId, { ...(table.kind === "component" ? table.props : {}), striped: false, unregisteredProp: "ignored" });
+    expect(table.kind === "component" && table.props.striped).toBe(false);
+    expect(table.kind === "component" && table.props).not.toHaveProperty("unregisteredProp");
+    doc.updateItemDataBinding(tableId, { datasetId: "sales", filterBy: { field: "city", globalVariable: "selectedCity" } });
+    doc.updateItemDataBinding(kpiId, { datasetId: "sales" });
+    expect(screen.items.find((item) => item.id === tableId)).toMatchObject({ dataBinding: { datasetId: "sales", filterBy: { field: "city", globalVariable: "selectedCity" } } });
+    doc.updateItemDataBinding(tableId, undefined);
+    expect(screen.items.find((item) => item.id === tableId)).not.toHaveProperty("dataBinding");
+  });
+
   it("同一大屏可以添加多个独立图表", () => {
     const { doc, screen } = seedScreen();
     const firstId = doc.addChart("line");
