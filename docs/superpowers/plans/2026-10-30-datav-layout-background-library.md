@@ -171,9 +171,16 @@ No exporter, runtime, package API, or persisted schema change was needed: the re
 
 ### Task 5: Final review and branch handoff
 
-- [ ] **Step 1: Review the diff against the approved spec** — check exact ID allow-lists, group/order behavior, no-schema-change guarantee, local-only previews, and that previous uncommitted background/scrollbar changes are still present but not committed by this feature.
-- [ ] **Step 2: Review code and security** — check `git diff --check`; scan new code for external URLs, network APIs, `eval`, `new Function`, and `innerHTML`; record any reviewer-tool limitation instead of claiming an independent review that did not run.
-- [ ] **Step 3: Commit plan close-out if any plan-only edits remain** — do not merge or push; ask the user how they want to integrate the current branch.
+- [x] **Step 1: Review the diff against the approved spec** — manually confirmed the exact two layout/three asset entries and allow-listed IDs, grouped bottom-layer insertion/order behavior, no schema changes in feature commits, local-only preview keys, and preservation of the five pre-existing uncommitted background/scrollbar changes.
+- [x] **Step 2: Review code and security** — `git diff --check` passed; scanned `src/core/design/layoutBackgrounds.ts`, `src/workbench/layoutBackgroundActions.ts`, and `src/workbench/components/LayoutBackgroundCatalog.vue` for external URLs, network APIs, `eval`, `new Function`, and `innerHTML` (0 matches). The independent reviewer was accepted but returned no report after repeated waits; it was closed, and no independent-review completion is claimed.
+- [x] **Step 3: Commit plan close-out if any plan-only edits remain** — plan close-out is recorded in this file; neither merge nor push was performed. Ask the user how they want to integrate the current branch.
+
+### Final review record
+
+- Manual specification review confirmed the approved dark-only scope: `monitor-main-side`, `monitor-grid-2x2`, and the three declared single-piece assets; grouping inserts at the bottom without changing existing item frames/order, and the feature commits contain no schema changes.
+- The five pre-existing user modifications remain uncommitted. The snapshot test fixture was isolated from their schema-default change in a separate test-only commit (`1772d09`).
+- Final validation after that test fix: `npm run typecheck` passed; 45 test files / 393 tests passed; `npm run build` passed; `git diff --check` passed.
+- Independent reviewer limitation: the read-only reviewer did not return a report despite waiting; it was closed. This task therefore records manual review and targeted security checks, not a completed independent review.
 
 ## Execution
 
