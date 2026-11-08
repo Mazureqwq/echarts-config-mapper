@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildPackagePayload, isSafeImageSrc, toPackageScreen } from "../src/core/export/snapshot";
 import { createWorkspace, createScreen, createChartAsset, createChartSpec } from "../src/core/model/schema";
 import type { ChartItem, ComponentItem, ImageItem, ShapeItem, TextItem } from "../src/core/model/types";
+import { createLayoutAssetItems, createLayoutBackgroundItems } from "../src/core/design/layoutBackgrounds";
 
 function item<T>(kind: string, extra: Record<string, unknown>): T {
   return {
@@ -176,5 +177,39 @@ describe("export/snapshot 快照与白名单", () => {
     const { ws, screen } = seed();
     const payload = buildPackagePayload(ws, [screen.id], { keepHeaders: true });
     expect(payload.warnings.join()).toContain("令牌");
+  });
+
+  it("layout and asset recipes remain supported local shapes and registered components in package snapshots", () => {
+    const workspace = createWorkspace();
+    const screen = createScreen("深色布局快照", { width: 1280, height: 720 });
+    const sourceItems = [
+      ...createLayoutBackgroundItems("monitor-main-side", screen.canvas),
+      ...createLayoutBackgroundItems("monitor-grid-2x2", screen.canvas),
+      ...createLayoutAssetItems("monitor-panel-frame", screen.canvas),
+      ...createLayoutAssetItems("monitor-title-band", screen.canvas),
+      ...createLayoutAssetItems("monitor-corner-accent", screen.canvas),
+    ];
+    sourceItems.forEach((item, index) => {
+      item.id = `layout-export-${index}`;
+      item.groupId = "layout-export-group";
+    });
+    screen.items.push(...sourceItems);
+    workspace.screens.push(screen);
+
+    const payload = buildPackagePayload(workspace, [screen.id]);
+    const exported = payload.screens[0]!.items;
+    const expectedIds = sourceItems.map((entry) => entry.id).sort();
+    const layoutItems = exported.filter((entry) => expectedIds.includes(entry.id)).sort((a, b) => a.id.localeCompare(b.id));
+    expect(layoutItems.map((entry) => entry.id)).toEqual(expectedIds);
+    for (const item of layoutItems) {
+      const source = sourceItems.find((entry) => entry.id === item.id)!;
+      expect(item.frame).toEqual(source.frame);
+    }
+    expect(layoutItems.some((entry) => entry.kind === "shape" && entry.fill === "#0d2234" && entry.stroke === "#214258")).toBe(true);
+    expect(layoutItems.filter((entry) => entry.kind === "component").map((entry) => entry.kind === "component" ? entry.componentId : "")).toEqual(
+      expect.arrayContaining(["chartforge.section-title", "chartforge.corner-frame"])
+    );
+    expect(payload.screens[0]?.canvas.background).toEqual({ kind: "color", color: "#12161d" });
+    expect(JSON.stringify(payload)).not.toMatch(/https?:\/\//i);
   });
 });

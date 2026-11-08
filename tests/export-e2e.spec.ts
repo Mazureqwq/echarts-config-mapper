@@ -5,6 +5,7 @@ import { RUNTIME_CODE } from "../src/core/export/runtime";
 import { createZip, filesToEntries } from "../src/core/export/zip";
 import { createWorkspace, createScreen, createChartSpec } from "../src/core/model/schema";
 import type { ChartItem, ComponentItem, ImageItem } from "../src/core/model/types";
+import { createLayoutAssetItems, createLayoutBackgroundItems } from "../src/core/design/layoutBackgrounds";
 
 const ECHARTS_STUB = "var echarts={registerMap:function(){},init:function(){return{setOption:function(){},resize:function(){},dispose:function(){}}}};";
 
@@ -216,5 +217,76 @@ describe("export 端到端：产物 → zip → 回读", () => {
     expect(findItem(root, "progress")?.textContent).toContain("South");
     expect(findItem(root, "progress")?.textContent).not.toContain("North");
     expect(chartOptions.at(-1)?.series[0]?.data).toEqual([11]);
+  });
+
+  it("renders layout backgrounds in self-contained ZIP and inline exports", async () => {
+    const workspace = createWorkspace();
+    const screen = createScreen("深色布局离线验收");
+    const items = [
+      ...createLayoutBackgroundItems("monitor-main-side", screen.canvas),
+      ...createLayoutBackgroundItems("monitor-grid-2x2", screen.canvas),
+      ...createLayoutAssetItems("monitor-panel-frame", screen.canvas),
+      ...createLayoutAssetItems("monitor-title-band", screen.canvas),
+      ...createLayoutAssetItems("monitor-corner-accent", screen.canvas),
+    ];
+    items.forEach((item, index) => {
+      item.id = `offline-layout-${index}`;
+      item.groupId = "offline-layout-group";
+    });
+    const panel = items.find((item) => item.kind === "shape")!;
+    const title = items.find((item) => item.kind === "component" && item.componentId === "chartforge.section-title")!;
+    const corner = items.find((item) => item.kind === "component" && item.componentId === "chartforge.corner-frame")!;
+    panel.id = "offline-panel-background";
+    title.id = "offline-section-title";
+    corner.id = "offline-corner-frame";
+    screen.items.push(...items);
+    workspace.screens.push(screen);
+
+    const payload = buildPackagePayload(workspace, [screen.id]);
+    const packed = payload.screens[0]!.items;
+    expect(packed.some((item) => item.kind === "shape" && item.id === panel.id && item.fill === "#0d2234")).toBe(true);
+    expect(packed.some((item) => item.kind === "component" && item.id === title.id && item.componentId === "chartforge.section-title")).toBe(true);
+    expect(packed.some((item) => item.kind === "component" && item.id === corner.id && item.componentId === "chartforge.corner-frame")).toBe(true);
+
+    const [inline, folder] = await Promise.all([
+      buildArtifact({ payload, echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "inline" }),
+      buildArtifact({ payload, echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "folder" }),
+    ]);
+    const inlineHtml = inline.files.find((file) => file.path === "index.html")!.content;
+    const folderHtml = folder.files.find((file) => file.path === "index.html")!.content;
+    const folderRuntime = folder.files.find((file) => file.path === "assets/app.js")!.content;
+    for (const content of [inlineHtml, folderHtml, folderRuntime]) {
+      expect(content).not.toMatch(/(?:src|href)=["']https?:\/\//i);
+      expect(content).not.toMatch(/\b(?:fetch|XMLHttpRequest|WebSocket)\b/);
+      expect(content).not.toContain("eval(");
+      expect(content).not.toContain("new Function");
+    }
+    expect(inlineHtml).toContain("offline-section-title");
+    expect(folderHtml).toContain("assets/app.js");
+    const packageZip = await createZip(filesToEntries(folder.files));
+    expect(packageZip.length).toBeGreaterThan(0);
+
+    const root = new MemoryElement("div");
+    const payloadNode = new MemoryElement("script");
+    payloadNode.textContent = JSON.stringify(payload);
+    const doc = {
+      title: "",
+      getElementById: (id: string) => id === "cf-root" ? root : id === "cf-payload" ? payloadNode : null,
+      createElement: (tag: string) => new MemoryElement(tag),
+      addEventListener: () => undefined,
+    };
+    const windowStub: Record<string, any> = {
+      innerWidth: 1920, innerHeight: 1080, location: { search: "" }, matchMedia: () => ({ matches: true }),
+      addEventListener: () => undefined, setInterval: () => 1, clearInterval: () => undefined,
+      echarts: { registerMap: () => undefined, init: () => ({ setOption: () => undefined, resize: () => undefined, dispose: () => undefined }) },
+    };
+    const { runInNewContext } = await import("node:vm");
+    runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
+    expect(findItem(root, panel.id)?.className).toContain("cf-shape");
+    expect(findItem(root, panel.id)?.style.background).toBe("#0d2234");
+    expect(findItem(root, title.id)?.textContent).toContain("主视区");
+    expect(findItem(root, title.id)?.attributes["data-component"]).toBe("chartforge.section-title");
+    expect(findItem(root, corner.id)?.className).toContain("cf-component");
+    expect(findItem(root, corner.id)?.attributes["data-component"]).toBe("chartforge.corner-frame");
   });
 });
