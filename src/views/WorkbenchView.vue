@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import CanvasStage from "@/workbench/CanvasStage.vue";
@@ -10,6 +10,11 @@ import Icon from "@/shared/ui/Icon.vue";
 import ShortcutsHelp from "@/workbench/ShortcutsHelp.vue";
 import { snapshotStage } from "@/workbench/stageThumbnail";
 import { LiveExecutor } from "@/core/live/liveExecutor";
+import { componentRegistry } from "@/core/components/builtins";
+import { runBlueprint } from "@/core/blueprint/runner";
+import type { BlueprintContext, BlueprintGraph, BlueprintVariable } from "@/core/blueprint/types";
+import type { ComponentItem } from "@/core/model/types";
+import BlueprintEditor from "@/workbench/BlueprintEditor.vue";
 
 const props = defineProps<{ id: string }>();
 const ws = useWorkspaceStore();
@@ -17,6 +22,86 @@ const doc = useDocumentStore();
 const stageWrap = ref<HTMLDivElement | null>(null);
 const leftCollapsed = ref(false);
 const rightCollapsed = ref(false);
+const blueprintOpen = ref(false);
+const blueprintMessage = ref("");
+const runtimeVariablesByScreen = reactive<Record<string, Record<string, unknown>>>({});
+const currentRuntimeVariables = computed<Readonly<Record<string, unknown>>>(() => {
+  const screenId = doc.currentScreen?.id;
+  return screenId ? runtimeVariablesByScreen[screenId] ?? {} : {};
+});
+const currentBlueprint = computed<BlueprintGraph>(() =>
+  doc.currentScreen?.blueprint ?? { nodes: [], edges: [], variables: [] }
+);
+
+function cloneJson<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
+function variableMatches(variable: BlueprintVariable, value: unknown): boolean {
+  if (variable.type === "string") return typeof value === "string";
+  if (variable.type === "number") return typeof value === "number" && Number.isFinite(value);
+  if (variable.type === "boolean") return typeof value === "boolean";
+  return value === null || typeof value === "object";
+}
+watch(
+  () => ({ screenId: doc.currentScreen?.id, variables: doc.currentScreen?.blueprint?.variables }),
+  ({ screenId, variables }) => {
+    if (!screenId) return;
+    const current = runtimeVariablesByScreen[screenId] ?? (runtimeVariablesByScreen[screenId] = {});
+    const declarations = variables ?? [];
+    const names = new Set(declarations.map((variable) => variable.name));
+    for (const variable of declarations) {
+      if (!(variable.name in current) || !variableMatches(variable, current[variable.name])) current[variable.name] = cloneJson(variable.initialValue);
+    }
+    for (const name of Object.keys(current)) if (!names.has(name)) delete current[name];
+  },
+  { immediate: true, deep: true }
+);
+
+function createBlueprintContext(): BlueprintContext {
+  const screenId = doc.currentScreen?.id;
+  const screenGraph = currentBlueprint.value;
+  const values: Record<string, unknown> = screenId ? (runtimeVariablesByScreen[screenId] ?? (runtimeVariablesByScreen[screenId] = {})) : {};
+  for (const variable of screenGraph.variables) {
+    if (!(variable.name in values) || !variableMatches(variable, values[variable.name])) values[variable.name] = cloneJson(variable.initialValue);
+  }
+  return {
+    getVariable: (name) => values[name],
+    setVariable: (name, value) => {
+      const declaration = screenGraph.variables.find((variable) => variable.name === name);
+      if (!declaration || !variableMatches(declaration, value)) throw new Error(`变量赋值与声明不匹配：${name}`);
+      if (!screenId) throw new Error("当前没有可用屏幕");
+      runtimeVariablesByScreen[screenId][name] = cloneJson(value);
+    },
+    setDatasetFilter: (datasetId, field, value) => {
+      const text = value === null || value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value) ?? "";
+      ws.getDatasetRuntime().setFilter(datasetId, [{ field, op: "eq", value: text }]);
+    },
+    setDatasetParameters: (datasetId, parameters) => ws.getDatasetRuntime().setParameters(datasetId, parameters),
+    refreshDataset: (datasetId) => ws.getDatasetRuntime().refresh(datasetId),
+    setComponentVisibility: (componentId, componentVersion, visible) => doc.applyBlueprintVisibility(componentId, componentVersion, visible),
+    setComponentProps: (componentId, componentVersion, componentProps) => doc.applyBlueprintProps(componentId, componentVersion, componentProps),
+    navigateScreen: (screenId) => {
+      if (ws.workspace.screens.some((screen) => screen.id === screenId)) {
+        doc.currentScreenId = screenId;
+        doc.selectedIds = [];
+      }
+    },
+  };
+}
+
+async function dispatchComponentEvent(item: ComponentItem, name: string, payload: unknown): Promise<void> {
+  const definition = componentRegistry.get(item.componentId, item.componentVersion);
+  if (!definition?.events.some((event) => event.name === name)) return;
+  const screen = doc.currentScreen;
+  if (!screen?.blueprint) return;
+  const result = await runBlueprint(screen.blueprint, { componentId: item.componentId, componentVersion: item.componentVersion, event: name, payload }, createBlueprintContext(), componentRegistry);
+  blueprintMessage.value = result.ok ? "蓝图运行完成" : `蓝图未执行：${result.errors.join("；")}`;
+}
+function saveBlueprint(graph: BlueprintGraph): void {
+  const screenId = doc.currentScreenId;
+  if (!screenId) return;
+  doc.updateScreenBlueprint(screenId, graph);
+  blueprintOpen.value = false;
+  blueprintMessage.value = "蓝图已保存";
+}
 
 // ---- 实时数据：编辑期也保持拉取，否则配置完看不到效果 ----
 let executor: LiveExecutor | null = null;
@@ -128,6 +213,10 @@ onBeforeUnmount(() => {
 <template>
   <div class="workbench">
     <TopBar :screen-id="doc.currentScreenId ?? id" @saved="refreshThumbnail" />
+    <div class="workbench__blueprint-bar">
+      <button class="cf-button cf-button--plain cf-button--small" type="button" @click="blueprintOpen = true">蓝图交互</button>
+      <span v-if="blueprintMessage" role="status">{{ blueprintMessage }}</span>
+    </div>
     <div class="workbench__main">
       <aside
         class="workbench__side workbench__side--left"
@@ -146,7 +235,7 @@ onBeforeUnmount(() => {
         <LeftPanel v-else @collapse="leftCollapsed = true" />
       </aside>
       <main ref="stageWrap" class="workbench__stage" aria-label="画布工作区">
-        <CanvasStage />
+        <CanvasStage :variables="currentRuntimeVariables" :on-component-event="dispatchComponentEvent" />
       </main>
       <aside
         class="workbench__side workbench__side--right"
@@ -165,6 +254,13 @@ onBeforeUnmount(() => {
         <InspectorPanel v-else @collapse="rightCollapsed = true" />
       </aside>
     </div>
+    <BlueprintEditor
+      v-if="blueprintOpen && doc.currentScreen"
+      :model-value="currentBlueprint"
+      :datasets="ws.workspace.datasets"
+      @save="saveBlueprint"
+      @close="blueprintOpen = false"
+    />
     <ShortcutsHelp />
   </div>
 </template>
@@ -185,6 +281,16 @@ onBeforeUnmount(() => {
   background: var(--cf-bg);
   color: var(--cf-text);
 }
+.workbench__blueprint-bar {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-panel);
+}
+.workbench__blueprint-bar span { color: var(--cf-text-2); font-size: 11px; }
 .workbench__main {
   flex: 1;
   display: flex;

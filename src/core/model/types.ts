@@ -1,3 +1,5 @@
+import type { BlueprintGraph } from "@/core/blueprint/types";
+
 export type ChartType = "line" | "bar" | "pie" | "map" | "scatter" | "radar";
 
 export interface Frame {
@@ -177,6 +179,7 @@ export interface Screen {
   name: string;
   canvas: { width: number; height: number; background: Background };
   items: ScreenItem[];
+  blueprint?: BlueprintGraph;
   updatedAt: number;
   thumbnail?: string;
   category?: string;

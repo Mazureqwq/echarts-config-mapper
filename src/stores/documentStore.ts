@@ -21,6 +21,7 @@ import type {
   ShapeItem,
   Workspace,
 } from "@/core/model/types";
+import type { BlueprintGraph } from "@/core/blueprint/types";
 import { setPath } from "@/core/model/path";
 import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates";
 import { exportJson } from "@/core/storage/workspaceRepo";
@@ -96,6 +97,7 @@ function restoreWorkspace(target: Workspace, source: Workspace): void {
         delete existing.thumbnail;
       }
       existing.items = src.items;
+      existing.blueprint = src.blueprint;
       result.push(existing);
     } else {
       result.push(src);
@@ -284,6 +286,29 @@ export const useDocumentStore = defineStore("document", {
       const definition = componentRegistry.get(item.componentId, item.componentVersion);
       if (!definition) return;
       item.props = normalizeComponentProps(definition, props);
+      this.commit();
+    },
+    updateScreenBlueprint(id: string, blueprint: BlueprintGraph): void {
+      const screen = useWorkspaceStore().workspace.screens.find((entry) => entry.id === id);
+      if (!screen) return;
+      screen.blueprint = deepClone(blueprint);
+      this.commit();
+    },
+    applyBlueprintVisibility(componentId: string, componentVersion: number, visible: boolean): void {
+      const targets = this.items.filter((entry) => entry.kind === "component" && entry.componentId === componentId && entry.componentVersion === componentVersion);
+      if (!targets.length) return;
+      targets.forEach((entry) => { entry.hidden = !visible; });
+      this.commit();
+    },
+    applyBlueprintProps(componentId: string, componentVersion: number, props: Record<string, unknown>): void {
+      const targets = this.items.filter((entry) => entry.kind === "component" && entry.componentId === componentId && entry.componentVersion === componentVersion);
+      if (!targets.length) return;
+      for (const entry of targets) {
+        if (entry.kind !== "component") continue;
+        const definition = componentRegistry.get(entry.componentId, entry.componentVersion);
+        if (!definition) continue;
+        entry.props = normalizeComponentProps(definition, { ...entry.props, ...props });
+      }
       this.commit();
     },
     updateItemDataBinding(id: string, binding: DatasetBinding | undefined): void {

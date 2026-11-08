@@ -8,7 +8,7 @@ import { boxSelect } from "@/core/geometry/hit";
 import { snapDelta } from "@/core/geometry/snap";
 import type { SnapCandidate, SnapGuide } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
-import type { ChartItem, ScreenItem, ChartType } from "@/core/model/types";
+import type { ChartItem, ComponentItem, ScreenItem, ChartType } from "@/core/model/types";
 import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
@@ -27,8 +27,16 @@ const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
   { mode: "distributeV", icon: "distribute-v", title: "垂直等间距" },
 ];
 
+const props = withDefaults(defineProps<{
+  variables?: Readonly<Record<string, unknown>>;
+  onComponentEvent?: (item: ComponentItem, name: string, payload: unknown) => void;
+}>(), { variables: () => ({}) });
 const doc = useDocumentStore();
 const ui = useUiStore();
+
+function forwardItemEvent(item: ScreenItem, name: string, payload: unknown): void {
+  if (item.kind === "component") props.onComponentEvent?.(item, name, payload);
+}
 
 const stageEl = ref<HTMLDivElement | null>(null);
 const marquee = ref<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -499,6 +507,8 @@ defineExpose({ canvasPoint, DROP_MIME });
           v-for="item in items"
           :key="item.id"
           :item="item"
+          :variables="props.variables"
+          :emit-event="(name, payload) => forwardItemEvent(item, name, payload)"
           @mousedown.stop="onItemClick($event, item)"
           @dblclick.stop="onItemDblclick($event, item)"
         />

@@ -22,6 +22,7 @@ import type {
   TextSpec,
   Workspace,
 } from "./types";
+import type { BlueprintGraph, BlueprintNode } from "../blueprint/types";
 import type { ComponentDefinition } from "../components/types";
 import { componentRegistry } from "../components/builtins";
 import { initialChartData } from "../chart/chartData";
@@ -71,6 +72,7 @@ export function createScreen(name: string, canvas?: { width: number; height: num
       background: { ...DEFAULT_BACKGROUND },
     },
     items: [],
+    blueprint: { nodes: [], edges: [], variables: [] },
     updatedAt: Date.now(),
   };
 }
@@ -475,6 +477,23 @@ function normalizeItem(raw: unknown): ScreenItem | null {
   }
 }
 
+function normalizeBlueprint(raw: unknown): BlueprintGraph {
+  if (!isRecord(raw)) return { nodes: [], edges: [], variables: [] };
+  const nodes = Array.isArray(raw.nodes)
+    ? raw.nodes.filter(isRecord).map((node) => ({ ...node })) as unknown as BlueprintNode[]
+    : [];
+  const edges = Array.isArray(raw.edges)
+    ? raw.edges.filter((edge) => isRecord(edge) && isRecord(edge.from) && isRecord(edge.to)).map((edge) => ({
+        ...edge, from: { ...(edge as Record<string, unknown>).from as Record<string, unknown> },
+        to: { ...(edge as Record<string, unknown>).to as Record<string, unknown> },
+      })) as unknown as BlueprintGraph["edges"]
+    : [];
+  const variables = Array.isArray(raw.variables)
+    ? raw.variables.filter(isRecord).map((variable) => ({ ...variable })) as unknown as BlueprintGraph["variables"]
+    : [];
+  return { nodes, edges, variables };
+}
+
 function normalizeScreen(raw: unknown): Screen | null {
   if (!isRecord(raw)) return null;
   const canvasRaw = isRecord(raw.canvas) ? raw.canvas : {};
@@ -496,6 +515,7 @@ function normalizeScreen(raw: unknown): Screen | null {
     items: itemsRaw
       .map((it) => normalizeItem(it))
       .filter((it): it is ScreenItem => it !== null),
+    blueprint: normalizeBlueprint(raw.blueprint),
     updatedAt: num(raw.updatedAt, 0),
     ...(typeof raw.thumbnail === "string" ? { thumbnail: raw.thumbnail } : {}),
     ...(typeof raw.category === "string" ? { category: raw.category } : {}),
