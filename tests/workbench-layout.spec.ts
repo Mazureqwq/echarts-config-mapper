@@ -87,6 +87,11 @@ describe("DataV-inspired workbench layout", () => {
     expect(canvasStage).toContain("snapDeltaToGrid");
     expect(canvasStage).toContain("findNearestSpacingHints");
     expect(canvasStage).toContain("Math.round(hint.distance)");
+    expect(canvasStage).toContain("buildEqualSpacingCandidates");
+    expect(canvasStage).toContain("snapPlacementFrame");
+    expect(canvasStage).toContain("snapPlacementPoint");
+    expect(canvasStage).toContain("snapPlacementPoint(canvasPoint(ev))");
+    expect(canvasStage).toContain("snapPlacementFrame(item.frame)");
     expect(canvasStage).toContain('aria-label="智能参考线吸附开关"');
     expect(transformHandles).toContain("snapResizeFrameToGrid");
     expect(transformHandles).toContain("ui.gridSnapEnabled");

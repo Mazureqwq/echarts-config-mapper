@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { hitTest, boxSelect } from "../src/core/geometry/hit";
 import { resizeFrame, rotateFrame, snapResizeFrameToGrid } from "../src/core/geometry/transform";
-import { findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
+import { buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
 import type { SnapCandidate } from "../src/core/geometry/snap";
 import type { ChartItem, Frame } from "../src/core/model/types";
 
@@ -147,6 +147,18 @@ describe("geometry/snap", () => {
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16)).toEqual({ dx: -3, dy: 7 });
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16, new Set(["x"]))).toEqual({ dx: 3, dy: 7 });
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 0)).toEqual({ dx: 3, dy: 2 });
+  });
+
+  it("为相邻对象生成前后及中间等间距磁吸位置", () => {
+    const moving = { x: 350, y: 20, w: 50, h: 50 };
+    const statics = [
+      { x: 0, y: 0, w: 100, h: 100 },
+      { x: 200, y: 0, w: 100, h: 100 },
+    ];
+    const candidates = buildEqualSpacingCandidates(moving, statics);
+    expect(candidates).toContainEqual({ axis: "x", moving: 350, static: 400 });
+    expect(candidates).toContainEqual({ axis: "x", moving: 350, static: 125 });
+    expect(buildEqualSpacingCandidates(moving, statics.map((frame) => ({ ...frame, y: 200 })))).toEqual([]);
   });
 
   it("显示最近相邻元素的水平与垂直间距", () => {

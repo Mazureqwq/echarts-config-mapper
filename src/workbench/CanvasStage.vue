@@ -5,7 +5,7 @@ import { GRID_SIZE_OPTIONS, useUiStore } from "@/stores/uiStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
-import { findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
+import { buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
 import type { SnapCandidate, SnapGuide, SpacingHint } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
 import type { ChartItem, ComponentItem, ScreenItem, ChartType } from "@/core/model/types";
@@ -158,8 +158,12 @@ function onWheel(ev: WheelEvent): void {
 }
 
 // ---- 吸附 ----
-function buildCandidates(bbox: { x: number; y: number; w: number; h: number }): SnapCandidate[] {
+function buildCandidates(
+  bbox: { x: number; y: number; w: number; h: number },
+  includeEqualSpacing: boolean = true
+): SnapCandidate[] {
   const out: SnapCandidate[] = [];
+  const staticItems: Array<{ x: number; y: number; w: number; h: number }> = [];
   const movingX = [bbox.x, bbox.x + bbox.w / 2, bbox.x + bbox.w];
   const movingY = [bbox.y, bbox.y + bbox.h / 2, bbox.y + bbox.h];
   const statics: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -171,6 +175,7 @@ function buildCandidates(bbox: { x: number; y: number; w: number; h: number }): 
     if (moveState && moveState.ids.includes(it.id)) continue;
     if (it.hidden) continue;
     statics.push(it.frame);
+    staticItems.push(it.frame);
   }
   for (const s of statics) {
     const sx = [s.x, s.x + s.w / 2, s.x + s.w];
@@ -178,7 +183,35 @@ function buildCandidates(bbox: { x: number; y: number; w: number; h: number }): 
     for (const m of movingX) for (const st of sx) out.push({ axis: "x", moving: m, static: st });
     for (const m of movingY) for (const st of sy) out.push({ axis: "y", moving: m, static: st });
   }
+  if (includeEqualSpacing) out.push(...buildEqualSpacingCandidates(bbox, staticItems));
   return out;
+}
+
+function snapPlacementDelta(
+  bounds: { x: number; y: number; w: number; h: number },
+  includeEqualSpacing: boolean
+): { dx: number; dy: number } {
+  const aligned = ui.snapEnabled
+    ? snapDelta(
+        { dx: 0, dy: 0 },
+        buildCandidates(bounds, includeEqualSpacing),
+        snapThresholdForZoom(ui.zoom)
+      )
+    : { dx: 0, dy: 0, guides: [] as SnapGuide[] };
+  return ui.gridSnapEnabled
+    ? snapDeltaToGrid(aligned, bounds, ui.gridSize, new Set(aligned.guides.map((guide) => guide.axis)))
+    : aligned;
+}
+
+function snapPlacementPoint(point: Point): Point {
+  const bounds = { x: point.x, y: point.y, w: 0, h: 0 };
+  const delta = snapPlacementDelta(bounds, false);
+  return { x: point.x + delta.dx, y: point.y + delta.dy };
+}
+
+function snapPlacementFrame(frame: ScreenItem["frame"]): ScreenItem["frame"] {
+  const delta = snapPlacementDelta(frame, true);
+  return { ...frame, x: frame.x + delta.dx, y: frame.y + delta.dy };
 }
 
 function selectionBBox(ids: string[]): { x: number; y: number; w: number; h: number } | null {
@@ -501,14 +534,14 @@ function onDrop(ev: DragEvent): void {
       if (backgroundPayload.kind === "layout-background") {
         doc.insertLayoutBackground(backgroundPayload.id);
       } else {
-        doc.insertLayoutAsset(backgroundPayload.id, canvasPoint(ev));
+        doc.insertLayoutAsset(backgroundPayload.id, snapPlacementPoint(canvasPoint(ev)));
       }
       return;
     }
 
     try {
       const payload = JSON.parse(designRaw) as { kind?: string; id?: string; version?: number };
-      const position = canvasPoint(ev);
+      const position = snapPlacementPoint(canvasPoint(ev));
       if (payload.kind === "component" && payload.id) doc.addComponent(payload.id, payload.version ?? 1, position);
       else if (payload.kind === "block" && payload.id) doc.insertBlock(payload.id, position);
       else if (payload.kind === "design-asset" && payload.id) doc.addDesignAssetImage(payload.id, position);
@@ -523,10 +556,14 @@ function onDrop(ev: DragEvent): void {
     const pt = canvasPoint(ev);
     const asset = useWorkspaceStore().assets.find((a) => a.id === assetId);
     const size = asset?.defaultSize ?? { w: 400, h: 300 };
-    doc.placeAsset(assetId, {
+    const frame = snapPlacementFrame({
       x: Math.round(pt.x - size.w / 2),
       y: Math.round(pt.y - size.h / 2),
+      w: size.w,
+      h: size.h,
+      rotate: 0,
     });
+    doc.placeAsset(assetId, { x: frame.x, y: frame.y, w: size.w, h: size.h });
     return;
   }
   const raw = ev.dataTransfer?.getData(DROP_MIME);
@@ -564,6 +601,7 @@ function onDrop(ev: DragEvent): void {
   } else {
     item = createItem("shape", { x: Math.round(pt.x - 80), y: Math.round(pt.y - 50) });
   }
+  item.frame = snapPlacementFrame(item.frame);
   doc.addItem(item);
 }
 

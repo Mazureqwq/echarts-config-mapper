@@ -102,6 +102,55 @@ export function snapDeltaToGrid(
   return result;
 }
 
+export function buildEqualSpacingCandidates(moving: SnapRect, statics: SnapRect[]): SnapCandidate[] {
+  if (![moving.x, moving.y, moving.w, moving.h].every(Number.isFinite) || moving.w <= 0 || moving.h <= 0) {
+    return [];
+  }
+  const fixed = statics.filter((frame) =>
+    [frame.x, frame.y, frame.w, frame.h].every(Number.isFinite) && frame.w > 0 && frame.h > 0
+  );
+  const candidates: SnapCandidate[] = [];
+  const overlap = (aStart: number, aSize: number, bStart: number, bSize: number): number =>
+    Math.min(aStart + aSize, bStart + bSize) - Math.max(aStart, bStart);
+
+  for (let i = 0; i < fixed.length; i += 1) {
+    for (let j = i + 1; j < fixed.length; j += 1) {
+      const first = fixed[i]!;
+      const second = fixed[j]!;
+      if (overlap(moving.y, moving.h, first.y, first.h) > 0 && overlap(moving.y, moving.h, second.y, second.h) > 0) {
+        const [left, right] = first.x <= second.x ? [first, second] : [second, first];
+        const gap = right.x - (left.x + left.w);
+        if (gap >= 0) {
+          candidates.push(
+            { axis: "x", moving: moving.x, static: right.x + right.w + gap },
+            { axis: "x", moving: moving.x + moving.w, static: left.x - gap }
+          );
+          const innerGap = (gap - moving.w) / 2;
+          if (innerGap >= 0) {
+            candidates.push({ axis: "x", moving: moving.x, static: left.x + left.w + innerGap });
+          }
+        }
+      }
+
+      if (overlap(moving.x, moving.w, first.x, first.w) > 0 && overlap(moving.x, moving.w, second.x, second.w) > 0) {
+        const [top, bottom] = first.y <= second.y ? [first, second] : [second, first];
+        const gap = bottom.y - (top.y + top.h);
+        if (gap >= 0) {
+          candidates.push(
+            { axis: "y", moving: moving.y, static: bottom.y + bottom.h + gap },
+            { axis: "y", moving: moving.y + moving.h, static: top.y - gap }
+          );
+          const innerGap = (gap - moving.h) / 2;
+          if (innerGap >= 0) {
+            candidates.push({ axis: "y", moving: moving.y, static: top.y + top.h + innerGap });
+          }
+        }
+      }
+    }
+  }
+  return candidates;
+}
+
 export function findNearestSpacingHints(
   moving: SnapRect,
   statics: SnapRect[],
