@@ -63,6 +63,15 @@ const PREVIEW_BARS: Readonly<Record<PreviewKind, readonly number[]>> = {
 };
 
 const filteredEntries = computed(() => filterComponentCatalog(props.entries, query.value, activeGroup.value));
+
+function countForGroup(group: ComponentCatalogGroup | "all"): number {
+  return group === "all" ? props.entries.length : props.entries.filter((entry) => entry.group === group).length;
+}
+
+function clearFilters(): void {
+  query.value = "";
+  activeGroup.value = "all";
+}
 const visibleGroups = computed(() => {
   const groups = activeGroup.value === "all"
     ? (GROUP_OPTIONS.filter((option) => option.value !== "all").map((option) => option.value) as ComponentCatalogGroup[])
@@ -102,10 +111,17 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
         type="button"
         :aria-pressed="activeGroup === option.value"
         @click="activeGroup = option.value"
-      >{{ option.label }}</button>
+      >
+        <span>{{ option.label }}</span>
+        <span class="catalog-category__count" aria-hidden="true">{{ countForGroup(option.value) }}</span>
+      </button>
     </div>
 
-    <p v-if="filteredEntries.length === 0" class="catalog-empty" role="status">没有找到匹配的组件</p>
+    <p v-if="filteredEntries.length > 0" class="catalog-result-count" aria-live="polite">{{ filteredEntries.length }} 项可添加</p>
+    <div v-if="filteredEntries.length === 0" class="catalog-empty" role="status">
+      <span>没有找到匹配的组件</span>
+      <button v-if="query || activeGroup !== 'all'" type="button" @click="clearFilters">清除筛选</button>
+    </div>
     <div v-else class="catalog-sections">
       <section v-for="section in visibleGroups" :key="section.group" class="catalog-section">
         <h3>{{ section.label }}</h3>
@@ -150,15 +166,18 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
 .catalog-search input { box-sizing: border-box; width: 100%; min-height: 34px; padding: 6px 9px; border: 1px solid var(--cf-border); border-radius: 6px; background: var(--cf-bg); color: var(--cf-text); font: inherit; font-size: 11px; }
 .catalog-search input:focus { outline: 2px solid color-mix(in srgb, var(--cf-primary) 45%, transparent); outline-offset: 1px; }
 .catalog-categories { display: flex; flex-wrap: wrap; gap: 5px; }
-.catalog-categories button { padding: 5px 8px; border: 1px solid var(--cf-border); border-radius: 999px; background: transparent; color: var(--cf-text-2); cursor: pointer; font: inherit; font-size: 10px; }
+.catalog-categories button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid var(--cf-border); border-radius: 999px; background: transparent; color: var(--cf-text-2); cursor: pointer; font: inherit; font-size: 10px; }
 .catalog-categories button[aria-pressed="true"] { border-color: var(--cf-primary); background: color-mix(in srgb, var(--cf-primary) 13%, transparent); color: var(--cf-primary); }
+.catalog-category__count { min-width: 12px; color: var(--cf-text-2); font-size: 9px; text-align: center; opacity: .8; }
+.catalog-result-count { margin: -3px 0 0; color: var(--cf-text-2); font-size: 10px; }
 .catalog-sections { display: flex; min-width: 0; flex-direction: column; gap: 13px; }
 .catalog-section h3 { margin: 0 0 6px; color: var(--cf-text-2); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
-.catalog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.catalog-card { display: flex; min-width: 0; flex-direction: column; gap: 6px; padding: 7px; border: 1px solid var(--cf-border); border-radius: 7px; background: var(--cf-bg); color: inherit; cursor: grab; font: inherit; text-align: left; }
-.catalog-card:hover, .catalog-card:focus-visible { border-color: var(--cf-primary); outline: none; }
+.catalog-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.catalog-card { display: flex; min-width: 0; min-height: 62px; flex-direction: row; align-items: center; gap: 9px; padding: 7px; border: 1px solid var(--cf-border); border-radius: 8px; background: var(--cf-bg); color: inherit; cursor: grab; font: inherit; text-align: left; transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease; }
+.catalog-card:hover { border-color: color-mix(in srgb, var(--cf-primary) 65%, var(--cf-border)); background: color-mix(in srgb, var(--cf-primary) 4%, var(--cf-bg)); }
+.catalog-card:focus-visible { border-color: var(--cf-primary); outline: 2px solid color-mix(in srgb, var(--cf-primary) 42%, transparent); outline-offset: 1px; }
 .catalog-card:active { cursor: grabbing; }
-.catalog-card__preview { display: grid; height: 54px; place-items: center; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cf-border) 80%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--cf-panel) 78%, transparent); }
+.catalog-card__preview { display: grid; flex: 0 0 58px; width: 58px; height: 48px; place-items: center; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cf-border) 80%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--cf-panel) 78%, transparent); }
 .preview-bars { display: flex; width: 68%; height: 70%; align-items: flex-end; justify-content: center; gap: 5px; }
 .preview-bars i { width: 8px; max-height: 100%; border-radius: 2px 2px 0 0; background: var(--cf-primary); opacity: .75; }
 .catalog-card__preview--line .preview-bars i { border-radius: 999px; }
@@ -185,12 +204,14 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
 .preview-shape i, .preview-shape b { display: block; width: 18px; height: 18px; border: 2px solid var(--cf-primary); }
 .preview-shape i { border-radius: 50%; }
 .preview-shape b { border-radius: 3px; background: color-mix(in srgb, var(--cf-primary) 20%, transparent); }
-.catalog-card__copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-.catalog-card__copy strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.catalog-card__copy small { min-height: 25px; color: var(--cf-text-2); font-size: 9px; line-height: 1.4; }
-.catalog-card__add { align-self: flex-end; color: var(--cf-primary); font-size: 13px; line-height: 1; }
+.catalog-card__copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.catalog-card__copy strong { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-card__copy small { display: -webkit-box; overflow: hidden; color: var(--cf-text-2); font-size: 10px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.catalog-card__add { flex: 0 0 auto; align-self: center; margin-left: auto; color: var(--cf-primary); font-size: 15px; line-height: 1; }
 .catalog-empty, .catalog-hint { margin: 2px 0; color: var(--cf-text-2); font-size: 10px; line-height: 1.5; }
-.catalog-empty { padding: 14px 7px; text-align: center; }
+.catalog-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 7px; text-align: center; }
+.catalog-empty button { padding: 5px 9px; border: 1px solid var(--cf-border); border-radius: 5px; background: transparent; color: var(--cf-primary); cursor: pointer; font: inherit; font-size: 10px; }
+.catalog-empty button:hover { border-color: var(--cf-primary); background: color-mix(in srgb, var(--cf-primary) 8%, transparent); }
 .catalog-hint { text-align: center; }
 .catalog-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 </style>
