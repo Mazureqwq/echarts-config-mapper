@@ -819,86 +819,89 @@ defineExpose({ canvasPoint, DROP_MIME });
         aria-hidden="true"
         data-ui-only
       />
-      <div
-        v-if="!ui.previewing"
-        class="canvas-stage__toolbar"
-        role="toolbar"
-        aria-label="画布排列辅助工具"
-        data-ui-only
-        @mousedown.stop
-      >
-        <button
-          class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
-          :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
-          :aria-pressed="ui.snapEnabled"
-          aria-label="智能参考线吸附开关"
-          title="与画布边缘、中心及其他元素对齐（按屏幕距离触发）"
-          @click="ui.setSnapEnabled(!ui.snapEnabled)"
+      <Teleport to=".canvas-stage">
+        <div
+          v-if="!ui.previewing"
+          class="canvas-stage__toolbar"
+          role="toolbar"
+          aria-label="画布排列辅助工具"
+          data-ui-only
+          @mousedown.stop
+          @wheel.stop
         >
-          参考线
-        </button>
-        <button
-          class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
-          :class="{ 'canvas-stage__tool-btn--on': ui.gridEnabled }"
-          :aria-pressed="ui.gridEnabled"
-          aria-label="显示对齐网格"
-          title="显示或隐藏画布网格"
-          @click="ui.setGridEnabled(!ui.gridEnabled)"
-        >
-          网格
-        </button>
-        <label class="canvas-stage__grid-size">
-          <span>步长</span>
-          <select
-            class="cf-control cf-control--compact"
-            aria-label="网格间距"
-            :value="ui.gridSize"
-            @change="onGridSizeChange"
-          >
-            <option v-for="size in GRID_SIZE_OPTIONS" :key="size" :value="size">{{ size }} px</option>
-          </select>
-        </label>
-        <button
-          class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
-          :class="{ 'canvas-stage__tool-btn--on': ui.gridSnapEnabled }"
-          :aria-pressed="ui.gridSnapEnabled"
-          aria-label="网格吸附开关"
-          title="将选中元素吸附到网格步长"
-          @click="ui.setGridSnapEnabled(!ui.gridSnapEnabled)"
-        >
-          步进吸附
-        </button>
-        <template v-if="doc.selectedIds.length > 1">
-          <span class="canvas-stage__tool-sep" />
           <button
-            v-for="t in ALIGN_TOOLS"
-            :key="t.mode"
             class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
-            :title="t.title"
-            :aria-label="t.title"
-            @click="doc.alignDistribute(t.mode)"
+            :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
+            :aria-pressed="ui.snapEnabled"
+            aria-label="智能参考线吸附开关"
+            title="与画布边缘、中心及其他元素对齐（按屏幕距离触发）"
+            @click="ui.setSnapEnabled(!ui.snapEnabled)"
           >
-            <Icon :name="t.icon" :size="14" />
+            参考线
           </button>
-          <span class="canvas-stage__tool-sep" />
-          <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="组合 (Ctrl+G)" @click="doc.addGroup()">
-            <Icon name="group" :size="14" />
-          </button>
-          <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="取消组合 (Ctrl+Shift+G)" @click="doc.ungroup()">
-            <Icon name="close" :size="14" />
-          </button>
-        </template>
-        <template v-if="doc.selectedIds.length > 0">
-          <span class="canvas-stage__tool-sep" />
           <button
-            class="cf-button cf-button--plain cf-button--small cf-button--danger canvas-stage__tool-btn canvas-stage__tool-btn--danger"
-            title="删除选中元素 (Delete)"
-            @click="doc.removeItems([...doc.selectedIds])"
+            class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
+            :class="{ 'canvas-stage__tool-btn--on': ui.gridEnabled }"
+            :aria-pressed="ui.gridEnabled"
+            aria-label="显示对齐网格"
+            title="显示或隐藏画布网格"
+            @click="ui.setGridEnabled(!ui.gridEnabled)"
           >
-            <Icon name="trash" :size="14" /> 删除
+            网格
           </button>
-        </template>
-      </div>
+          <label class="canvas-stage__grid-size">
+            <span>步长</span>
+            <select
+              class="cf-control cf-control--compact"
+              aria-label="网格间距"
+              :value="ui.gridSize"
+              @change="onGridSizeChange"
+            >
+              <option v-for="size in GRID_SIZE_OPTIONS" :key="size" :value="size">{{ size }} px</option>
+            </select>
+          </label>
+          <button
+            class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
+            :class="{ 'canvas-stage__tool-btn--on': ui.gridSnapEnabled }"
+            :aria-pressed="ui.gridSnapEnabled"
+            aria-label="网格吸附开关"
+            title="将选中元素吸附到网格步长"
+            @click="ui.setGridSnapEnabled(!ui.gridSnapEnabled)"
+          >
+            步进吸附
+          </button>
+          <template v-if="doc.selectedIds.length > 1">
+            <span class="canvas-stage__tool-sep" />
+            <button
+              v-for="t in ALIGN_TOOLS"
+              :key="t.mode"
+              class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
+              :title="t.title"
+              :aria-label="t.title"
+              @click="doc.alignDistribute(t.mode)"
+            >
+              <Icon :name="t.icon" :size="14" />
+            </button>
+            <span class="canvas-stage__tool-sep" />
+            <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="组合 (Ctrl+G)" @click="doc.addGroup()">
+              <Icon name="group" :size="14" />
+            </button>
+            <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="取消组合 (Ctrl+Shift+G)" @click="doc.ungroup()">
+              <Icon name="close" :size="14" />
+            </button>
+          </template>
+          <template v-if="doc.selectedIds.length > 0">
+            <span class="canvas-stage__tool-sep" />
+            <button
+              class="cf-button cf-button--plain cf-button--small cf-button--danger canvas-stage__tool-btn canvas-stage__tool-btn--danger"
+              title="删除选中元素 (Delete)"
+              @click="doc.removeItems([...doc.selectedIds])"
+            >
+              <Icon name="trash" :size="14" /> 删除
+            </button>
+          </template>
+        </div>
+      </Teleport>
       <template v-if="!ui.previewing">
         <div
           v-for="(g, i) in guides"
@@ -1056,6 +1059,9 @@ defineExpose({ canvasPoint, DROP_MIME });
   flex-wrap: wrap;
   justify-content: center;
   max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px 10px;
   border-radius: 8px;
   background: var(--cf-panel);

@@ -116,6 +116,8 @@ describe("DataV-inspired workbench layout", () => {
 
   it("previews snapped drop placement while dragging local canvas assets", () => {
     expect(canvasStage).toContain('@dragover.prevent="onStageDragOver"');
+    expect(canvasStage).toContain('<Teleport to=".canvas-stage">');
+    expect(canvasStage).toContain("max-height: calc(100% - 24px)");
     expect(canvasStage).toContain('@dragleave="onStageDragLeave"');
     expect(canvasStage).toContain("dragPlacementPreview(active.mime, active.data, canvasPoint(ev))");
     expect(canvasStage).toContain("canvas-stage__drop-preview");
