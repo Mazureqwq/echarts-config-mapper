@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { hitTest, boxSelect } from "../src/core/geometry/hit";
 import { resizeFrame, rotateFrame } from "../src/core/geometry/transform";
-import { snapDelta } from "../src/core/geometry/snap";
+import { findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
 import type { SnapCandidate } from "../src/core/geometry/snap";
 import type { ChartItem, Frame } from "../src/core/model/types";
 
@@ -109,5 +109,42 @@ describe("geometry/snap", () => {
     ]);
     expect(out.dx).toBe(2);
     expect(out.guides).toEqual([{ axis: "x", position: 52 }]);
+  });
+
+  it("将吸附触发距离保持为稳定的屏幕像素宽度", () => {
+    expect(snapThresholdForZoom(25)).toBe(32);
+    expect(snapThresholdForZoom(100)).toBe(8);
+    expect(snapThresholdForZoom(200)).toBe(4);
+
+    const candidates: SnapCandidate[] = [{ axis: "x", moving: 100, static: 105 }];
+    expect(snapDelta({ dx: 0, dy: 0 }, candidates, snapThresholdForZoom(25)).dx).toBe(5);
+    expect(snapDelta({ dx: 0, dy: 0 }, candidates, snapThresholdForZoom(200)).dx).toBe(0);
+  });
+
+  it("将选区按画布原点吸附到网格，并允许智能参考线优先", () => {
+    const bounds = { x: 3, y: 9, w: 100, h: 80 };
+    expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16)).toEqual({ dx: -3, dy: 7 });
+    expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16, new Set(["x"]))).toEqual({ dx: 3, dy: 7 });
+    expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 0)).toEqual({ dx: 3, dy: 2 });
+  });
+
+  it("显示最近相邻元素的水平与垂直间距", () => {
+    const hints = findNearestSpacingHints(
+      { x: 100, y: 100, w: 100, h: 100 },
+      [
+        { x: 50, y: 120, w: 30, h: 40 },
+        { x: 230, y: 120, w: 50, h: 40 },
+        { x: 120, y: 50, w: 40, h: 30 },
+        { x: 120, y: 230, w: 40, h: 50 },
+        { x: 400, y: 120, w: 50, h: 40 },
+      ],
+      100
+    );
+    expect(hints.map(({ axis, side, distance }) => ({ axis, side, distance }))).toEqual([
+      { axis: "x", side: "before", distance: 20 },
+      { axis: "x", side: "after", distance: 30 },
+      { axis: "y", side: "before", distance: 20 },
+      { axis: "y", side: "after", distance: 30 },
+    ]);
   });
 });

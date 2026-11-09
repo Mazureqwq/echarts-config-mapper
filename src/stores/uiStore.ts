@@ -2,6 +2,8 @@ import { defineStore } from "pinia";
 import { useDocumentStore } from "./documentStore";
 
 export type AppView = "screens" | "workbench" | "play";
+export const GRID_SIZE_OPTIONS = [8, 16, 24, 32] as const;
+export type GridSize = (typeof GRID_SIZE_OPTIONS)[number];
 
 export const useUiStore = defineStore("ui", {
   state: () => ({
@@ -11,6 +13,9 @@ export const useUiStore = defineStore("ui", {
     previewing: false,
     aligning: true,
     snapEnabled: true,
+    gridEnabled: false,
+    gridSnapEnabled: false,
+    gridSize: 24 as GridSize,
     helpVisible: false,
     editingId: null as string | null,
   }),
@@ -35,6 +40,15 @@ export const useUiStore = defineStore("ui", {
     },
     setSnapEnabled(v: boolean) {
       this.snapEnabled = v;
+    },
+    setGridEnabled(v: boolean) {
+      this.gridEnabled = v;
+    },
+    setGridSnapEnabled(v: boolean) {
+      this.gridSnapEnabled = v;
+    },
+    setGridSize(size: number) {
+      if (GRID_SIZE_OPTIONS.some((option) => option === size)) this.gridSize = size as GridSize;
     },
     setHelpVisible(v: boolean) {
       this.helpVisible = v;

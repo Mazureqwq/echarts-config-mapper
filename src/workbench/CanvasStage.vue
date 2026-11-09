@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
-import { useUiStore } from "@/stores/uiStore";
+import { GRID_SIZE_OPTIONS, useUiStore } from "@/stores/uiStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
-import { snapDelta } from "@/core/geometry/snap";
-import type { SnapCandidate, SnapGuide } from "@/core/geometry/snap";
+import { findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
+import type { SnapCandidate, SnapGuide, SpacingHint } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
 import type { ChartItem, ComponentItem, ScreenItem, ChartType } from "@/core/model/types";
 import ItemView from "./ItemView.vue";
@@ -43,6 +43,7 @@ function forwardItemEvent(item: ScreenItem, name: string, payload: unknown): voi
 const stageEl = ref<HTMLDivElement | null>(null);
 const marquee = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 const guides = ref<SnapGuide[]>([]);
+const spacingHints = ref<SpacingHint[]>([]);
 const panning = ref(false);
 
 interface Point {
@@ -74,6 +75,15 @@ const bgStyle = computed<Record<string, string>>(() => {
   }
   return { background: bg.color };
 });
+
+const gridStyle = computed<Record<string, string>>(() => ({
+  backgroundImage: "linear-gradient(to right, rgba(91, 151, 194, .22) 1px, transparent 1px), linear-gradient(to bottom, rgba(91, 151, 194, .22) 1px, transparent 1px)",
+  backgroundSize: `${ui.gridSize}px ${ui.gridSize}px`,
+}));
+
+function onGridSizeChange(ev: Event): void {
+  ui.setGridSize(Number((ev.target as HTMLSelectElement).value));
+}
 
 function canvasPoint(ev: { clientX: number; clientY: number }): Point {
   const rect = stageEl.value?.getBoundingClientRect();
@@ -181,6 +191,34 @@ function selectionBBox(ids: string[]): { x: number; y: number; w: number; h: num
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+const DISTANCE_HINT_MAX_SCREEN = 180;
+
+function updateSpacingHints(bounds: { x: number; y: number; w: number; h: number }, movingIds: string[]): void {
+  const staticFrames = doc.items
+    .filter((item) => !movingIds.includes(item.id) && !item.hidden)
+    .map((item) => item.frame);
+  spacingHints.value = findNearestSpacingHints(
+    bounds,
+    staticFrames,
+    DISTANCE_HINT_MAX_SCREEN / (ui.zoom / 100)
+  );
+}
+
+function spacingHintStyle(hint: SpacingHint): Record<string, string> {
+  if (hint.axis === "x") {
+    return {
+      left: `${Math.min(hint.from, hint.to)}px`,
+      top: `${hint.cross}px`,
+      width: `${Math.abs(hint.to - hint.from)}px`,
+    };
+  }
+  return {
+    left: `${hint.cross}px`,
+    top: `${Math.min(hint.from, hint.to)}px`,
+    height: `${Math.abs(hint.to - hint.from)}px`,
+  };
+}
+
 function clampTranslation(delta: number, start: number, size: number, canvasSize: number): number {
   const min = -start;
   const max = canvasSize - start - size;
@@ -218,11 +256,27 @@ function onWindowMove(ev: MouseEvent): void {
     moveState.started = true;
     let dx = rawDx;
     let dy = rawDy;
-    if (ui.snapEnabled && moveState.bounds) {
-      const snapped = snapDelta({ dx, dy }, buildCandidates(moveState.bounds));
+    if (moveState.bounds) {
+      const aligned = ui.snapEnabled
+        ? snapDelta(
+            { dx, dy },
+            buildCandidates(moveState.bounds),
+            snapThresholdForZoom(ui.zoom)
+          )
+        : { dx, dy, guides: [] as SnapGuide[] };
+      const snapped = ui.gridSnapEnabled
+        ? snapDeltaToGrid(
+            aligned,
+            moveState.bounds,
+            ui.gridSize,
+            new Set(aligned.guides.map((guide) => guide.axis))
+          )
+        : aligned;
       dx = snapped.dx;
       dy = snapped.dy;
-      guides.value = snapped.guides;
+      guides.value = aligned.guides;
+    } else {
+      guides.value = [];
     }
     const canvas = doc.currentScreen?.canvas;
     if (canvas && moveState.bounds) {
@@ -233,6 +287,16 @@ function onWindowMove(ev: MouseEvent): void {
     const last = moveState.last ?? { x: 0, y: 0 };
     doc.moveBy(moveState.ids, dx - last.x, dy - last.y, { commit: false });
     moveState.last = { x: dx, y: dy };
+    if (moveState.bounds) {
+      const bounds = moveState.bounds;
+      updateSpacingHints(
+        { x: bounds.x + dx, y: bounds.y + dy, w: bounds.w, h: bounds.h },
+        moveState.ids
+      );
+    } else {
+      spacingHints.value = [];
+    }
+
   }
 }
 
@@ -256,6 +320,7 @@ function onWindowUp(): void {
   panning.value = false;
   moveState = null;
   guides.value = [];
+  spacingHints.value = [];
   window.removeEventListener("mousemove", onWindowMove);
   window.removeEventListener("mouseup", onWindowUp);
 }
@@ -529,6 +594,7 @@ defineExpose({ canvasPoint, DROP_MIME });
     <div class="canvas-stage__canvas" :style="canvasStyle">
       <div class="canvas-stage__content" :style="designThemeStyle">
         <div class="canvas-stage__bg" :style="bgStyle" title="拖动空白画布以平移视图" @mousedown.stop="onCanvasBackgroundDown" />
+        <div v-if="ui.gridEnabled && !ui.previewing" class="canvas-stage__grid" :style="gridStyle" aria-hidden="true" />
         <ItemView
           v-for="item in items"
           :key="item.id"
@@ -540,14 +606,54 @@ defineExpose({ canvasPoint, DROP_MIME });
         />
       </div>
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
-      <div v-if="!ui.previewing" class="canvas-stage__toolbar" data-ui-only @mousedown.stop>
+      <div
+        v-if="!ui.previewing"
+        class="canvas-stage__toolbar"
+        role="toolbar"
+        aria-label="画布排列辅助工具"
+        data-ui-only
+        @mousedown.stop
+      >
         <button
           class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
           :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
-          title="吸附开关"
+          :aria-pressed="ui.snapEnabled"
+          aria-label="智能参考线吸附开关"
+          title="与画布边缘、中心及其他元素对齐（按屏幕距离触发）"
           @click="ui.setSnapEnabled(!ui.snapEnabled)"
         >
-          吸附
+          参考线
+        </button>
+        <button
+          class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
+          :class="{ 'canvas-stage__tool-btn--on': ui.gridEnabled }"
+          :aria-pressed="ui.gridEnabled"
+          aria-label="显示对齐网格"
+          title="显示或隐藏画布网格"
+          @click="ui.setGridEnabled(!ui.gridEnabled)"
+        >
+          网格
+        </button>
+        <label class="canvas-stage__grid-size">
+          <span>步长</span>
+          <select
+            class="cf-control cf-control--compact"
+            aria-label="网格间距"
+            :value="ui.gridSize"
+            @change="onGridSizeChange"
+          >
+            <option v-for="size in GRID_SIZE_OPTIONS" :key="size" :value="size">{{ size }} px</option>
+          </select>
+        </label>
+        <button
+          class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
+          :class="{ 'canvas-stage__tool-btn--on': ui.gridSnapEnabled }"
+          :aria-pressed="ui.gridSnapEnabled"
+          aria-label="网格吸附开关"
+          title="将选中元素吸附到网格步长"
+          @click="ui.setGridSnapEnabled(!ui.gridSnapEnabled)"
+        >
+          步进吸附
         </button>
         <template v-if="doc.selectedIds.length > 1">
           <span class="canvas-stage__tool-sep" />
@@ -556,6 +662,7 @@ defineExpose({ canvasPoint, DROP_MIME });
             :key="t.mode"
             class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
             :title="t.title"
+            :aria-label="t.title"
             @click="doc.alignDistribute(t.mode)"
           >
             <Icon :name="t.icon" :size="14" />
@@ -591,6 +698,17 @@ defineExpose({ canvasPoint, DROP_MIME });
           "
         data-ui-only
         />
+        <div
+          v-for="(hint, i) in spacingHints"
+          :key="`distance-${i}`"
+          class="canvas-stage__measure"
+          :class="`canvas-stage__measure--${hint.axis}`"
+          :style="spacingHintStyle(hint)"
+          aria-hidden="true"
+          data-ui-only
+        >
+          <span>{{ Math.round(hint.distance) }} px</span>
+        </div>
         <TransformHandles
           v-if="selectedItems.length > 0"
           :items="selectedItems"
@@ -626,6 +744,12 @@ defineExpose({ canvasPoint, DROP_MIME });
   pointer-events: auto;
   cursor: grab;
 }
+.canvas-stage__grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-position: 0 0;
+}
 .canvas-stage--panning .canvas-stage__bg {
   cursor: grabbing;
 }
@@ -633,6 +757,39 @@ defineExpose({ canvasPoint, DROP_MIME });
   position: absolute;
   background: #f5222d;
   pointer-events: none;
+}
+.canvas-stage__measure {
+  position: absolute;
+  pointer-events: none;
+  border-color: #f5bd4f;
+}
+.canvas-stage__measure--x {
+  height: 0;
+  border-top: 1px dashed #f5bd4f;
+}
+.canvas-stage__measure--y {
+  width: 0;
+  border-left: 1px dashed #f5bd4f;
+}
+.canvas-stage__measure span {
+  position: absolute;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(18, 27, 39, 0.92);
+  color: #ffd36a;
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.canvas-stage__measure--x span {
+  left: 50%;
+  top: -4px;
+  transform: translate(-50%, -100%);
+}
+.canvas-stage__measure--y span {
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .canvas-stage__zoom-bar {
   position: absolute;
@@ -677,6 +834,18 @@ defineExpose({ canvasPoint, DROP_MIME });
   background: var(--cf-panel);
   box-shadow: var(--cf-shadow);
   border: 1px solid var(--cf-border);
+}
+.canvas-stage__grid-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--cf-text-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.canvas-stage__grid-size select {
+  width: 74px;
+  min-height: 28px;
 }
 .canvas-stage__tool-btn--danger:hover {
   background: color-mix(in srgb, var(--cf-danger) 12%, transparent);

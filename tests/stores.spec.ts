@@ -601,4 +601,22 @@ describe("stores/uiStore", () => {
     expect(ui.zoom).toBe(77);
     expect(ui.previewing).toBe(false);
   });
+
+  it("提供独立的参考线、网格显示和网格吸附开关，并限制网格步长", () => {
+    const ui = useUiStore();
+    expect(ui.snapEnabled).toBe(true);
+    expect(ui.gridEnabled).toBe(false);
+    expect(ui.gridSnapEnabled).toBe(false);
+    expect(ui.gridSize).toBe(24);
+
+    ui.setGridEnabled(true);
+    ui.setGridSnapEnabled(true);
+    ui.setGridSize(32);
+    expect(ui.gridEnabled).toBe(true);
+    expect(ui.gridSnapEnabled).toBe(true);
+    expect(ui.gridSize).toBe(32);
+
+    ui.setGridSize(13);
+    expect(ui.gridSize).toBe(32);
+  });
 });

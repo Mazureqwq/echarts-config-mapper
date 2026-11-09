@@ -9,6 +9,7 @@ const workbench = read("views/WorkbenchView.vue");
 const leftPanel = read("workbench/LeftPanel.vue");
 const inspector = read("workbench/InspectorPanel.vue");
 const topBar = read("workbench/TopBar.vue");
+const canvasStage = read("workbench/CanvasStage.vue");
 const appHeader = read("shared/ui/AppHeader.vue");
 const library = read("views/LibraryView.vue");
 const charts = read("views/ChartsView.vue");
@@ -73,6 +74,21 @@ describe("DataV-inspired workbench layout", () => {
     expect(workbench).toContain("workbench__side--collapsed");
     expect(workbench).toContain('window.matchMedia("(max-width: 680px)")');
     expect(workbench).toContain("collapsePanelsOnCompactViewport");
+  });
+
+  it("exposes accessible grid, smart-snap, and multi-selection alignment controls", () => {
+    expect(canvasStage).toContain('aria-label="画布排列辅助工具"');
+    expect(canvasStage).toContain('aria-label="显示对齐网格"');
+    expect(canvasStage).toContain('aria-label="网格吸附开关"');
+    expect(canvasStage).toContain('aria-label="网格间距"');
+    expect(canvasStage).toContain("canvas-stage__grid");
+    expect(canvasStage).toContain("snapThresholdForZoom(ui.zoom)");
+    expect(canvasStage).toContain("snapDeltaToGrid");
+    expect(canvasStage).toContain("findNearestSpacingHints");
+    expect(canvasStage).toContain("Math.round(hint.distance)");
+    expect(canvasStage).toContain('aria-label="智能参考线吸附开关"');
+    expect(canvasStage).toContain(':aria-label="t.title"');
+    expect(canvasStage).toContain('v-for="t in ALIGN_TOOLS"');
   });
 
   it("shares application navigation and page-shell tokens across resource pages", () => {
