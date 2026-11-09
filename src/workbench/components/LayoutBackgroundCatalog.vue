@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { LAYOUT_BACKGROUND_ENTRIES, type LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
 import { layoutBackgroundDragPayload } from "@/workbench/layoutBackgroundActions";
+import { setActiveCanvasDragPayload } from "@/shared/dnd";
 
 const emit = defineEmits<{ select: [entry: LayoutBackgroundEntry] }>();
 const layouts = computed(() => LAYOUT_BACKGROUND_ENTRIES.filter((entry) => entry.kind === "layout"));
@@ -13,6 +14,7 @@ function startDrag(event: DragEvent, entry: LayoutBackgroundEntry): void {
   if (!payload) return;
   event.dataTransfer.effectAllowed = "copy";
   event.dataTransfer.setData(payload.mime, payload.data);
+  setActiveCanvasDragPayload(payload.mime, payload.data);
   event.dataTransfer.setData("text/plain", entry.id);
 }
 </script>

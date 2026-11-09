@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { filterComponentCatalog, getComponentCatalog } from "@/core/components/catalog";
 import type { ComponentCatalogEntry, ComponentCatalogGroup } from "@/core/components/types";
 import { catalogDragPayload } from "../catalogActions";
+import { setActiveCanvasDragPayload } from "@/shared/dnd";
 
 const props = withDefaults(defineProps<{ entries?: readonly ComponentCatalogEntry[] }>(), {
   entries: () => getComponentCatalog(),
@@ -83,6 +84,7 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
   const payload = catalogDragPayload(entry);
   dataTransfer.effectAllowed = "copy";
   dataTransfer.setData(payload.mime, payload.data);
+  setActiveCanvasDragPayload(payload.mime, payload.data);
 }
 </script>
 

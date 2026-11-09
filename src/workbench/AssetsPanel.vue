@@ -7,6 +7,7 @@ import type { ChartAsset, ChartType } from "@/core/model/types";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import Icon from "@/shared/ui/Icon.vue";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
+import { setActiveCanvasDragPayload } from "@/shared/dnd";
 
 const ws = useWorkspaceStore();
 const doc = useDocumentStore();
@@ -25,11 +26,11 @@ const filtered = computed<ChartAsset[]>(() =>
 );
 
 function drag(ev: DragEvent, asset: ChartAsset): void {
-  ev.dataTransfer?.setData(
-    DROP_MIME,
-    JSON.stringify({ kind: "chart", chartType: asset.spec.type, assetId: asset.id })
-  );
-  if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "copy";
+  if (!ev.dataTransfer) return;
+  const data = JSON.stringify({ kind: "chart", chartType: asset.spec.type, assetId: asset.id });
+  ev.dataTransfer.setData(DROP_MIME, data);
+  ev.dataTransfer.effectAllowed = "copy";
+  setActiveCanvasDragPayload(DROP_MIME, data);
 }
 
 function insert(asset: ChartAsset): void {

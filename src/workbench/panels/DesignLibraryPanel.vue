@@ -4,7 +4,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { BUILT_IN_BLOCKS, BUILT_IN_THEMES } from "@/core/design/library";
 import { compressDesignImageFile, getDesignAssetTotalBytes } from "@/core/design/assets";
-import { DESIGN_DND_MIME } from "@/shared/dnd";
+import { DESIGN_DND_MIME, setActiveCanvasDragPayload } from "@/shared/dnd";
 import type { DesignAsset } from "@/core/model/types";
 import type { LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
 import { insertLayoutBackgroundEntry } from "@/workbench/layoutBackgroundActions";
@@ -51,7 +51,9 @@ function applyTheme(id: string): void {
 function startDrag(event: DragEvent, kind: "block" | "design-asset", id: string): void {
   if (!event.dataTransfer) return;
   event.dataTransfer.effectAllowed = "copy";
-  event.dataTransfer.setData(DESIGN_DND_MIME, JSON.stringify({ kind, id }));
+  const data = JSON.stringify({ kind, id });
+  event.dataTransfer.setData(DESIGN_DND_MIME, data);
+  setActiveCanvasDragPayload(DESIGN_DND_MIME, data);
   event.dataTransfer.setData("text/plain", id);
 }
 

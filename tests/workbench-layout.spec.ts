@@ -15,6 +15,16 @@ const transformHandles = read("workbench/TransformHandles.vue");
 const appHeader = read("shared/ui/AppHeader.vue");
 const library = read("views/LibraryView.vue");
 const charts = read("views/ChartsView.vue");
+const dnd = read("shared/dnd.ts");
+const dragSources = [
+  read("workbench/ElementsPanel.vue"),
+  read("workbench/AssetsPanel.vue"),
+  read("workbench/panels/AssetLibraryPanel.vue"),
+  read("workbench/panels/DesignLibraryPanel.vue"),
+  read("workbench/components/ComponentCatalogPanel.vue"),
+  read("workbench/components/LayoutBackgroundCatalog.vue"),
+  charts,
+];
 
 describe("DataV-inspired workbench layout", () => {
   it("keeps named tool, canvas and inspector regions around a central stage", () => {
@@ -102,6 +112,16 @@ describe("DataV-inspired workbench layout", () => {
     expect(transformHandles).toContain("ui.gridSize");
     expect(canvasStage).toContain(':aria-label="t.title"');
     expect(canvasStage).toContain('v-for="t in ALIGN_TOOLS"');
+  });
+
+  it("previews snapped drop placement while dragging local canvas assets", () => {
+    expect(canvasStage).toContain('@dragover.prevent="onStageDragOver"');
+    expect(canvasStage).toContain('@dragleave="onStageDragLeave"');
+    expect(canvasStage).toContain("dragPlacementPreview(active.mime, active.data, canvasPoint(ev))");
+    expect(canvasStage).toContain("canvas-stage__drop-preview");
+    expect(canvasStage).toContain("guides.value = preview.guides");
+    expect(dnd).toContain("getActiveCanvasDragPayload");
+    for (const source of dragSources) expect(source).toContain("setActiveCanvasDragPayload");
   });
 
   it("shares application navigation and page-shell tokens across resource pages", () => {

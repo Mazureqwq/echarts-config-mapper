@@ -3,6 +3,7 @@ import type { ChartType, ScreenItem } from "@/core/model/types";
 import { componentRegistry } from "@/core/components/builtins";
 import { useDocumentStore } from "@/stores/documentStore";
 import Icon from "@/shared/ui/Icon.vue";
+import { setActiveCanvasDragPayload } from "@/shared/dnd";
 
 defineProps<{ section: "charts" | "materials" }>();
 
@@ -36,8 +37,11 @@ const BASIC_ITEMS: Array<{ kind: ScreenItem["kind"]; label: string; icon: string
 ];
 
 function drag(ev: DragEvent, payload: { kind: ScreenItem["kind"]; chartType?: ChartType }): void {
-  ev.dataTransfer?.setData(DROP_MIME, JSON.stringify(payload));
-  if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "copy";
+  if (!ev.dataTransfer) return;
+  const data = JSON.stringify(payload);
+  ev.dataTransfer.setData(DROP_MIME, data);
+  ev.dataTransfer.effectAllowed = "copy";
+  setActiveCanvasDragPayload(DROP_MIME, data);
 }
 </script>
 

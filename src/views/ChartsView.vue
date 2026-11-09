@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import type { ChartAsset, ChartType } from "@/core/model/types";
-import { ASSET_DND_MIME } from "@/shared/dnd";
+import { ASSET_DND_MIME, setActiveCanvasDragPayload } from "@/shared/dnd";
 import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
@@ -235,6 +235,7 @@ function onDragStart(ev: DragEvent, asset: ChartAsset): void {
   ev.dataTransfer.effectAllowed = "copy";
   ev.dataTransfer.setData(ASSET_DND_MIME, asset.id);
   ev.dataTransfer.setData("text/plain", asset.name);
+  setActiveCanvasDragPayload(ASSET_DND_MIME, asset.id);
 }
 
 </script>

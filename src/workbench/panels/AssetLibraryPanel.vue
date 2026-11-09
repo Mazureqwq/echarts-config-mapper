@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import type { ChartAsset, ChartType } from "@/core/model/types";
-import { ASSET_DND_MIME } from "@/shared/dnd";
+import { ASSET_DND_MIME, setActiveCanvasDragPayload } from "@/shared/dnd";
 import Icon from "@/shared/ui/Icon.vue";
 
 const ws = useWorkspaceStore();
@@ -57,6 +57,7 @@ function drag(ev: DragEvent, asset: ChartAsset): void {
   ev.dataTransfer.effectAllowed = "copy";
   ev.dataTransfer.setData(ASSET_DND_MIME, asset.id);
   ev.dataTransfer.setData("text/plain", asset.name);
+  setActiveCanvasDragPayload(ASSET_DND_MIME, asset.id);
 }
 
 function place(asset: ChartAsset): void {

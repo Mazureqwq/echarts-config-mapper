@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
+import { componentRegistry } from "@/core/components/builtins";
+import { createLayoutAssetItems } from "@/core/design/layoutBackgrounds";
 import { GRID_SIZE_OPTIONS, useUiStore } from "@/stores/uiStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
 import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
-import type { SnapCandidate, SnapGuide, SpacingHint } from "@/core/geometry/snap";
+import type { SnapCandidate, SnapGuide, SnapResult, SpacingHint } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
 import type { ChartItem, ComponentItem, ScreenItem, ChartType } from "@/core/model/types";
 import ItemView from "./ItemView.vue";
 import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
 import Icon from "@/shared/ui/Icon.vue";
-import { ASSET_DND_MIME, DESIGN_DND_MIME } from "@/shared/dnd";
-import { getThemeById, themeCssVariables } from "@/core/design/library";
+import { ASSET_DND_MIME, DESIGN_DND_MIME, clearActiveCanvasDragPayload, getActiveCanvasDragPayload } from "@/shared/dnd";
+import { BUILT_IN_BLOCKS, getThemeById, themeCssVariables } from "@/core/design/library";
 import { parseLayoutBackgroundDragPayload } from "@/workbench/layoutBackgroundActions";
 import type { AlignMode } from "@/stores/documentStore";
 
@@ -44,6 +46,7 @@ const stageEl = ref<HTMLDivElement | null>(null);
 const marquee = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 const guides = ref<SnapGuide[]>([]);
 const spacingHints = ref<SpacingHint[]>([]);
+const dropPreview = ref<{ frame: { x: number; y: number; w: number; h: number }; fullCanvas: boolean } | null>(null);
 const panning = ref(false);
 
 interface Point {
@@ -190,7 +193,7 @@ function buildCandidates(
 function snapPlacementDelta(
   bounds: { x: number; y: number; w: number; h: number },
   includeEqualSpacing: boolean
-): { dx: number; dy: number } {
+): SnapResult {
   const aligned = ui.snapEnabled
     ? snapDelta(
         { dx: 0, dy: 0 },
@@ -198,9 +201,11 @@ function snapPlacementDelta(
         snapThresholdForZoom(ui.zoom)
       )
     : { dx: 0, dy: 0, guides: [] as SnapGuide[] };
-  return ui.gridSnapEnabled
-    ? snapDeltaToGrid(aligned, bounds, ui.gridSize, new Set(aligned.guides.map((guide) => guide.axis)))
-    : aligned;
+  if (!ui.gridSnapEnabled) return aligned;
+  return {
+    ...snapDeltaToGrid(aligned, bounds, ui.gridSize, new Set(aligned.guides.map((guide) => guide.axis))),
+    guides: aligned.guides,
+  };
 }
 
 function snapPlacementPoint(point: Point): Point {
@@ -212,6 +217,158 @@ function snapPlacementPoint(point: Point): Point {
 function snapPlacementFrame(frame: ScreenItem["frame"]): ScreenItem["frame"] {
   const delta = snapPlacementDelta(frame, true);
   return { ...frame, x: frame.x + delta.dx, y: frame.y + delta.dy };
+}
+
+interface PlacementPreview {
+  frame: { x: number; y: number; w: number; h: number };
+  guides: SnapGuide[];
+  fullCanvas: boolean;
+}
+
+function clampPreviewFrame(
+  frame: PlacementPreview["frame"],
+  canvas: { width: number; height: number }
+): PlacementPreview["frame"] {
+  const w = Math.max(1, Math.min(canvas.width, frame.w));
+  const h = Math.max(1, Math.min(canvas.height, frame.h));
+  return {
+    x: Math.max(0, Math.min(canvas.width - w, frame.x)),
+    y: Math.max(0, Math.min(canvas.height - h, frame.y)),
+    w,
+    h,
+  };
+}
+
+function framePreview(
+  point: Point,
+  size: { w: number; h: number },
+  canvas: { width: number; height: number },
+  roundPosition: boolean,
+  snapAsFrame: boolean
+): PlacementPreview {
+  if (snapAsFrame) {
+    const bounds = {
+      x: Math.round(point.x - size.w / 2),
+      y: Math.round(point.y - size.h / 2),
+      w: size.w,
+      h: size.h,
+    };
+    const snapped = snapPlacementDelta(bounds, true);
+    return {
+      frame: clampPreviewFrame({ x: bounds.x + snapped.dx, y: bounds.y + snapped.dy, w: size.w, h: size.h }, canvas),
+      guides: snapped.guides,
+      fullCanvas: false,
+    };
+  }
+
+  const snapped = snapPlacementDelta({ x: point.x, y: point.y, w: 0, h: 0 }, false);
+  const x = point.x + snapped.dx - size.w / 2;
+  const y = point.y + snapped.dy - size.h / 2;
+  return {
+    frame: clampPreviewFrame({ x: roundPosition ? Math.round(x) : x, y: roundPosition ? Math.round(y) : y, ...size }, canvas),
+    guides: snapped.guides,
+    fullCanvas: false,
+  };
+}
+
+function parseDragRecord(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function dragPlacementPreview(mime: string, raw: string, point: Point): PlacementPreview | null {
+  const canvas = doc.currentScreen?.canvas;
+  if (!canvas) return null;
+
+  if (mime === ASSET_DND_MIME) {
+    const asset = useWorkspaceStore().assets.find((entry) => entry.id === raw);
+    return framePreview(point, asset?.defaultSize ?? { w: 400, h: 300 }, canvas, true, true);
+  }
+
+  if (mime === DROP_MIME) {
+    const payload = parseDragRecord(raw);
+    if (!payload) return null;
+    const kind = payload.kind;
+    if (kind !== "chart" && kind !== "text" && kind !== "image" && kind !== "shape") return null;
+    return framePreview(point, { w: 400, h: 300 }, canvas, true, true);
+  }
+
+  if (mime !== DESIGN_DND_MIME) return null;
+  const layoutPayload = parseLayoutBackgroundDragPayload(raw);
+  if (layoutPayload?.kind === "layout-background") {
+    return { frame: { x: 0, y: 0, w: canvas.width, h: canvas.height }, guides: [], fullCanvas: true };
+  }
+  if (layoutPayload?.kind === "layout-asset") {
+    const center = { x: canvas.width / 2, y: canvas.height / 2 };
+    const item = createLayoutAssetItems(layoutPayload.id, canvas, center)[0];
+    return item ? framePreview(point, { w: item.frame.w, h: item.frame.h }, canvas, false, false) : null;
+  }
+
+  const payload = parseDragRecord(raw);
+  if (!payload || typeof payload.id !== "string") return null;
+  if (payload.kind === "component") {
+    const version = typeof payload.version === "number" ? payload.version : 1;
+    const definition = componentRegistry.get(payload.id, version);
+    if (!definition || definition.renderer.kind !== "vue") return null;
+    return framePreview(point, { w: definition.defaultFrame.w, h: definition.defaultFrame.h }, canvas, true, false);
+  }
+  if (payload.kind === "block") {
+    const block = BUILT_IN_BLOCKS.find((entry) => entry.id === payload.id);
+    if (!block || block.items.length === 0) return null;
+    const minX = Math.min(...block.items.map((item) => item.frame.x));
+    const minY = Math.min(...block.items.map((item) => item.frame.y));
+    const maxX = Math.max(...block.items.map((item) => item.frame.x + item.frame.w));
+    const maxY = Math.max(...block.items.map((item) => item.frame.y + item.frame.h));
+    return framePreview(point, { w: maxX - minX, h: maxY - minY }, canvas, false, false);
+  }
+  if (payload.kind === "design-asset") {
+    return framePreview(point, { w: 400, h: 300 }, canvas, false, false);
+  }
+  return null;
+}
+
+function clearDropPreview(): void {
+  dropPreview.value = null;
+  guides.value = [];
+  spacingHints.value = [];
+}
+
+function onStageDragOver(ev: DragEvent): void {
+  if (ui.previewing) {
+    clearDropPreview();
+    return;
+  }
+  const active = getActiveCanvasDragPayload();
+  const types = Array.from(ev.dataTransfer?.types ?? []);
+  if (!active || (types.length > 0 && !types.includes(active.mime))) {
+    clearDropPreview();
+    return;
+  }
+  const preview = dragPlacementPreview(active.mime, active.data, canvasPoint(ev));
+  if (!preview) {
+    clearDropPreview();
+    return;
+  }
+  dropPreview.value = { frame: preview.frame, fullCanvas: preview.fullCanvas };
+  guides.value = preview.guides;
+  spacingHints.value = [];
+}
+
+function onStageDragLeave(ev: DragEvent): void {
+  const next = ev.relatedTarget;
+  if (next instanceof Node && stageEl.value?.contains(next)) return;
+  clearDropPreview();
+}
+
+function onCanvasDragEnd(): void {
+  clearActiveCanvasDragPayload();
+  clearDropPreview();
 }
 
 function selectionBBox(ids: string[]): { x: number; y: number; w: number; h: number } | null {
@@ -512,9 +669,11 @@ function onKeyUp(ev: KeyboardEvent): void {
 
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", onKeyUp);
+window.addEventListener("dragend", onCanvasDragEnd, true);
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown);
   window.removeEventListener("keyup", onKeyUp);
+  window.removeEventListener("dragend", onCanvasDragEnd, true);
 });
 
 // ---- 拖入落位 ----
@@ -527,6 +686,8 @@ interface DropPayload {
 }
 
 function onDrop(ev: DragEvent): void {
+  clearActiveCanvasDragPayload();
+  clearDropPreview();
   const designRaw = ev.dataTransfer?.getData(DESIGN_DND_MIME);
   if (designRaw) {
     const backgroundPayload = parseLayoutBackgroundDragPayload(designRaw);
@@ -616,7 +777,8 @@ defineExpose({ canvasPoint, DROP_MIME });
     tabindex="0"
     @wheel.prevent="onWheel"
     @mousedown="onStageDown"
-    @dragover.prevent
+    @dragover.prevent="onStageDragOver"
+    @dragleave="onStageDragLeave"
     @drop.prevent="onDrop"
   >
     <div v-if="!ui.previewing" class="canvas-stage__zoom-bar" @mousedown.stop>
@@ -644,6 +806,19 @@ defineExpose({ canvasPoint, DROP_MIME });
         />
       </div>
       <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
+      <div
+        v-if="dropPreview && !ui.previewing"
+        class="canvas-stage__drop-preview"
+        :class="{ 'canvas-stage__drop-preview--canvas': dropPreview.fullCanvas }"
+        :style="{
+          left: `${dropPreview.frame.x}px`,
+          top: `${dropPreview.frame.y}px`,
+          width: `${dropPreview.frame.w}px`,
+          height: `${dropPreview.frame.h}px`,
+        }"
+        aria-hidden="true"
+        data-ui-only
+      />
       <div
         v-if="!ui.previewing"
         class="canvas-stage__toolbar"
@@ -790,6 +965,20 @@ defineExpose({ canvasPoint, DROP_MIME });
 }
 .canvas-stage--panning .canvas-stage__bg {
   cursor: grabbing;
+}
+.canvas-stage__drop-preview {
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  border: 2px dashed #29d3ff;
+  border-radius: 4px;
+  background: rgba(41, 211, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(9, 42, 58, 0.25);
+  pointer-events: none;
+}
+.canvas-stage__drop-preview--canvas {
+  border-radius: 0;
+  background: rgba(41, 211, 255, 0.025);
 }
 .canvas-stage__guide {
   position: absolute;
