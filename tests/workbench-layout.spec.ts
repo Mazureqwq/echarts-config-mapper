@@ -10,6 +10,7 @@ const leftPanel = read("workbench/LeftPanel.vue");
 const inspector = read("workbench/InspectorPanel.vue");
 const topBar = read("workbench/TopBar.vue");
 const canvasStage = read("workbench/CanvasStage.vue");
+const shortcutsHelp = read("workbench/ShortcutsHelp.vue");
 const transformHandles = read("workbench/TransformHandles.vue");
 const appHeader = read("shared/ui/AppHeader.vue");
 const library = read("views/LibraryView.vue");
@@ -89,6 +90,8 @@ describe("DataV-inspired workbench layout", () => {
     expect(canvasStage).toContain("Math.round(hint.distance)");
     expect(canvasStage).toContain("buildEqualSpacingCandidates");
     expect(canvasStage).toContain("arrowNudgeStep(ui.gridSnapEnabled, ui.gridSize, ev.shiftKey)");
+    expect(shortcutsHelp).toContain("网格吸附开启时方向键按网格间距移动");
+    expect(shortcutsHelp).toContain("关闭时方向键 1px / Shift 10px");
     expect(canvasStage).toContain("snapPlacementFrame");
     expect(canvasStage).toContain("snapPlacementPoint");
     expect(canvasStage).toContain("snapPlacementPoint(canvasPoint(ev))");
