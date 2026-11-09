@@ -27,14 +27,14 @@ const GROUP_LABELS: Readonly<Record<ComponentCatalogGroup, string>> = {
   basic: "基础",
 };
 
-type PreviewKind = "line" | "bars" | "pie" | "table" | "kpi" | "progress" | "title" | "frame" | "text" | "image" | "shape" | "generic";
+type PreviewKind = "line" | "bars" | "pie" | "map" | "radar" | "scatter" | "table" | "kpi" | "progress" | "title" | "frame" | "text" | "image" | "shape" | "generic";
 const PREVIEW_VARIANTS: Readonly<Record<string, PreviewKind>> = {
   "chart-line": "line",
   "chart-bar": "bars",
   "chart-pie": "pie",
-  "chart-map": "generic",
-  "chart-scatter": "line",
-  "chart-radar": "generic",
+  "chart-map": "map",
+  "chart-scatter": "scatter",
+  "chart-radar": "radar",
   "data-table": "table",
   kpi: "kpi",
   "progress-list": "progress",
@@ -51,6 +51,9 @@ const PREVIEW_BARS: Readonly<Record<PreviewKind, readonly number[]>> = {
   line: [42, 70, 51, 88, 62],
   bars: [55, 82, 48, 70, 95],
   pie: [72, 44, 90, 58, 78],
+  map: [55, 72, 48, 85, 61],
+  radar: [74, 58, 88, 50, 68],
+  scatter: [36, 82, 54, 72, 46],
   table: [70, 70, 70, 70, 70],
   kpi: [46, 46, 46, 46, 46],
   progress: [36, 64, 84, 52, 76],
@@ -137,7 +140,54 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
             @dragstart="onDragStart($event, entry)"
           >
             <span class="catalog-card__preview" :class="`catalog-card__preview--${previewKind(entry)}`" aria-hidden="true">
-              <span v-if="previewKind(entry) === 'table'" class="preview-table">
+              <svg v-if="previewKind(entry) === 'line'" class="preview-chart-svg" viewBox="0 0 100 64" aria-hidden="true">
+                <path class="preview-chart-grid" d="M12 14H94 M12 31H94 M12 48H94" />
+                <path class="preview-chart-axis" d="M12 8V54H95" />
+                <path class="preview-line-area" d="M14 43 L32 32 L49 37 L68 17 L90 24 L90 53 L14 53 Z" />
+                <polyline class="preview-line-main" points="14,43 32,32 49,37 68,17 90,24" />
+                <polyline class="preview-line-secondary" points="14,35 32,40 49,27 68,33 90,15" />
+                <circle class="preview-line-dot" cx="14" cy="43" r="2.2" />
+                <circle class="preview-line-dot" cx="32" cy="32" r="2.2" />
+                <circle class="preview-line-dot" cx="49" cy="37" r="2.2" />
+                <circle class="preview-line-dot" cx="68" cy="17" r="2.2" />
+                <circle class="preview-line-dot" cx="90" cy="24" r="2.2" />
+              </svg>
+              <svg v-else-if="previewKind(entry) === 'bars'" class="preview-chart-svg" viewBox="0 0 100 64" aria-hidden="true">
+                <path class="preview-chart-grid" d="M12 14H94 M12 31H94 M12 48H94" />
+                <path class="preview-chart-axis" d="M12 8V54H95" />
+                <rect class="preview-bar-a" x="20" y="32" width="9" height="21" rx="1.5" />
+                <rect class="preview-bar-b" x="30" y="23" width="9" height="30" rx="1.5" />
+                <rect class="preview-bar-a" x="46" y="20" width="9" height="33" rx="1.5" />
+                <rect class="preview-bar-b" x="56" y="29" width="9" height="24" rx="1.5" />
+                <rect class="preview-bar-a" x="72" y="13" width="9" height="40" rx="1.5" />
+                <rect class="preview-bar-b" x="82" y="25" width="9" height="28" rx="1.5" />
+              </svg>
+              <span v-else-if="previewKind(entry) === 'pie'" class="preview-pie" aria-hidden="true" />
+              <svg v-else-if="previewKind(entry) === 'map'" class="preview-chart-svg preview-map" viewBox="0 0 120 80" aria-hidden="true">
+                <path class="preview-map-land" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <path class="preview-map-boundary" d="M30 25 L35 34 L29 43 L37 56 M46 20 L48 31 L41 40 L49 49 L43 61 M62 19 L59 30 L67 38 L60 48 L68 60 M78 23 L73 32 L82 40 L76 51 L84 59 M20 38 L35 36 L49 40 L63 37 L80 40 L101 39 M26 49 L42 48 L58 51 L76 48 L96 51" />
+                <path class="preview-map-island" d="M94 64 l2 -2 2 2 -2 2z M87 69 l1.5 -1.5 1.5 1.5 -1.5 1.5z" />
+                <ellipse class="preview-map-island" cx="37" cy="70" rx="3" ry="1.5" />
+              </svg>
+              <svg v-else-if="previewKind(entry) === 'radar'" class="preview-chart-svg" viewBox="0 0 100 72" aria-hidden="true">
+                <polygon class="preview-radar-grid" points="50,7 88,28 74,65 26,65 12,28" />
+                <polygon class="preview-radar-grid preview-radar-grid--inner" points="50,20 72,32 64,53 36,53 28,32" />
+                <path class="preview-chart-grid" d="M50 7V65 M12 28L74 65 M88 28L26 65" />
+                <polygon class="preview-radar-secondary" points="50,17 70,31 61,52 37,55 25,31" />
+                <polygon class="preview-radar-main" points="50,12 79,29 68,49 39,60 21,32" />
+              </svg>
+              <svg v-else-if="previewKind(entry) === 'scatter'" class="preview-chart-svg" viewBox="0 0 100 64" aria-hidden="true">
+                <path class="preview-chart-grid" d="M12 14H94 M12 31H94 M12 48H94" />
+                <path class="preview-chart-axis" d="M12 8V54H95" />
+                <circle class="preview-scatter-dot" cx="24" cy="41" r="4" />
+                <circle class="preview-scatter-dot preview-scatter-dot--alt" cx="36" cy="29" r="3" />
+                <circle class="preview-scatter-dot" cx="48" cy="37" r="5" />
+                <circle class="preview-scatter-dot preview-scatter-dot--alt" cx="58" cy="21" r="3.5" />
+                <circle class="preview-scatter-dot" cx="70" cy="31" r="3" />
+                <circle class="preview-scatter-dot preview-scatter-dot--alt" cx="82" cy="17" r="4.5" />
+                <circle class="preview-scatter-dot" cx="87" cy="43" r="2.7" />
+              </svg>
+              <span v-else-if="previewKind(entry) === 'table'" class="preview-table">
                 <i v-for="row in 3" :key="row"><b /><b /><b /></i>
               </span>
               <span v-else-if="previewKind(entry) === 'kpi'" class="preview-kpi"><b>128</b><i>指标</i></span>
@@ -180,8 +230,25 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
 .catalog-card__preview { display: grid; flex: 0 0 58px; width: 58px; height: 48px; place-items: center; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cf-border) 80%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--cf-panel) 78%, transparent); }
 .preview-bars { display: flex; width: 68%; height: 70%; align-items: flex-end; justify-content: center; gap: 5px; }
 .preview-bars i { width: 8px; max-height: 100%; border-radius: 2px 2px 0 0; background: var(--cf-primary); opacity: .75; }
-.catalog-card__preview--line .preview-bars i { border-radius: 999px; }
-.catalog-card__preview--pie .preview-bars i:nth-child(odd) { opacity: .42; }
+
+.preview-chart-svg { display: block; width: 100%; height: 100%; padding: 5px; box-sizing: border-box; overflow: visible; }
+.preview-chart-grid { fill: none; stroke: color-mix(in srgb, var(--cf-border) 80%, transparent); stroke-width: 1; }
+.preview-chart-axis { fill: none; stroke: var(--cf-text-2); stroke-width: 1.1; opacity: .55; }
+.preview-line-area { fill: color-mix(in srgb, var(--cf-primary) 12%, transparent); }
+.preview-line-main, .preview-line-secondary { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.preview-line-main { stroke: var(--cf-primary); stroke-width: 2.8; }
+.preview-line-secondary { stroke: color-mix(in srgb, var(--cf-primary) 42%, #42c7b8); stroke-width: 2; }
+.preview-line-dot { fill: var(--cf-primary); stroke: var(--cf-panel); stroke-width: 1.5; }
+.preview-bar-a { fill: var(--cf-primary); }
+.preview-bar-b { fill: color-mix(in srgb, var(--cf-primary) 42%, #42c7b8); }
+.preview-pie { display: block; width: 36px; height: 36px; border: 2px solid var(--cf-panel); border-radius: 50%; background: conic-gradient(var(--cf-primary) 0 34%, color-mix(in srgb, var(--cf-primary) 48%, #42c7b8) 34% 59%, color-mix(in srgb, var(--cf-primary) 25%, #f0c76a) 59% 78%, color-mix(in srgb, var(--cf-primary) 12%, #7f8ca5) 78% 100%); box-shadow: 0 1px 4px color-mix(in srgb, var(--cf-text) 12%, transparent); }
+.preview-map-land { fill: color-mix(in srgb, var(--cf-primary) 30%, var(--cf-panel)); stroke: var(--cf-primary); stroke-width: 1.5; stroke-linejoin: round; }
+.preview-map-boundary { fill: none; stroke: var(--cf-panel); stroke-width: 1.5; stroke-linecap: round; opacity: .95; }
+.preview-map-island { fill: var(--cf-primary); }
+.preview-radar-grid { fill: color-mix(in srgb, var(--cf-primary) 4%, transparent); stroke: color-mix(in srgb, var(--cf-border) 80%, transparent); stroke-width: 1; }
+.preview-radar-grid--inner { fill: none; }
+.preview-radar-secondary { fill: color-mix(in srgb, #42c7b8 18%, transparent); stroke: #42c7b8; stroke-width: 1.8; }
+.preview-radar-main { fill: color-mix(in srgb, var(--cf-primary) 20%, transparent); stroke: var(--cf-primary); stroke-width: 2; }
 .preview-table { display: flex; width: 76%; flex-direction: column; gap: 4px; }
 .preview-table i { display: flex; height: 5px; gap: 4px; }
 .preview-table b { flex: 1; border-radius: 2px; background: color-mix(in srgb, var(--cf-primary) 43%, var(--cf-border)); }

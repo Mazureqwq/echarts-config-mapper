@@ -72,6 +72,12 @@ describe("ComponentCatalogPanel", () => {
     expect(html).toContain('role="group" aria-label="组件分类"');
     for (const label of ["全部", "图表", "数据", "装饰", "基础"]) expect(html).toContain(label);
     expect(html).toContain("catalog-card__preview");
+    for (const variant of ["line", "bars", "pie", "map", "radar", "scatter"]) {
+      expect(html).toContain(`catalog-card__preview--${variant}`);
+    }
+    for (const mark of ["preview-line-main", "preview-map-land", "preview-radar-main", "preview-scatter-dot"]) {
+      expect(html).toContain(mark);
+    }
     expect(html).toContain("catalog-category__count");
     expect(html).toContain(`${getComponentCatalog().length} 项可添加`);
     expect(html).toContain("折线图可视化图表。");
