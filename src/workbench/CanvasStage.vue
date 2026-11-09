@@ -770,86 +770,7 @@ defineExpose({ canvasPoint, DROP_MIME });
 </script>
 
 <template>
-  <div
-    ref="stageEl"
-    class="canvas-stage"
-    :class="{ 'canvas-stage--panning': panning }"
-    tabindex="0"
-    @wheel.prevent="onWheel"
-    @mousedown="onStageDown"
-    @dragover.prevent="onStageDragOver"
-    @dragleave="onStageDragLeave"
-    @drop.prevent="onDrop"
-  >
-    <div v-if="!ui.previewing" class="canvas-stage__zoom-bar" @mousedown.stop>
-      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="缩小" @click="zoomBy(-10)">−</button>
-      <span class="canvas-stage__zoom-label">{{ ui.zoom }}%</span>
-      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="放大" @click="zoomBy(10)">＋</button>
-      <span class="canvas-stage__tool-sep" />
-      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="适应窗口" @click="fitToWindow">适应</button>
-      <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="恢复 100%" @click="zoomReset">100%</button>
-      <span class="canvas-stage__tool-sep" />
-      <span class="canvas-stage__pan-hint">灰色区域也可拖动平移</span>
-    </div>
-    <div class="canvas-stage__canvas" :style="canvasStyle">
-      <div class="canvas-stage__content" :style="designThemeStyle">
-        <div class="canvas-stage__bg" :style="bgStyle" title="拖动空白画布以平移视图" @mousedown.stop="onCanvasBackgroundDown" />
-        <div v-if="ui.gridEnabled && !ui.previewing" class="canvas-stage__grid" :style="gridStyle" aria-hidden="true" />
-        <ItemView
-          v-for="item in items"
-          :key="item.id"
-          :item="item"
-          :variables="props.variables"
-          :emit-event="(name, payload) => forwardItemEvent(item, name, payload)"
-          @mousedown.stop="onItemClick($event, item)"
-          @dblclick.stop="onItemDblclick($event, item)"
-        />
-      </div>
-      <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
-      <div
-        v-if="dropPreview && !ui.previewing"
-        class="canvas-stage__drop-preview"
-        :class="{ 'canvas-stage__drop-preview--canvas': dropPreview.fullCanvas }"
-        :style="{
-          left: `${dropPreview.frame.x}px`,
-          top: `${dropPreview.frame.y}px`,
-          width: `${dropPreview.frame.w}px`,
-          height: `${dropPreview.frame.h}px`,
-        }"
-        aria-hidden="true"
-        data-ui-only
-      />
-      <template v-if="!ui.previewing">
-        <div
-          v-for="(g, i) in guides"
-          :key="`g${i}`"
-          class="canvas-stage__guide"
-          :style="
-            g.axis === 'x'
-              ? { left: `${g.position}px`, top: '0', width: '1px', height: '100%' }
-              : { left: '0', top: `${g.position}px`, width: '100%', height: '1px' }
-          "
-        data-ui-only
-        />
-        <div
-          v-for="(hint, i) in spacingHints"
-          :key="`distance-${i}`"
-          class="canvas-stage__measure"
-          :class="`canvas-stage__measure--${hint.axis}`"
-          :style="spacingHintStyle(hint)"
-          aria-hidden="true"
-          data-ui-only
-        >
-          <span>{{ Math.round(hint.distance) }} px</span>
-        </div>
-        <TransformHandles
-          v-if="selectedItems.length > 0"
-          :items="selectedItems"
-          :zoom="ui.zoom"
-        />
-      </template>
-    </div>
-
+  <div class="canvas-stage">
     <div
       v-if="!ui.previewing"
       class="canvas-stage__toolbar"
@@ -931,13 +852,106 @@ defineExpose({ canvasPoint, DROP_MIME });
         </button>
       </template>
     </div>
+    <div
+      ref="stageEl"
+      class="canvas-stage__viewport"
+      :class="{ 'canvas-stage--panning': panning }"
+      tabindex="0"
+      @wheel.prevent="onWheel"
+      @mousedown="onStageDown"
+      @dragover.prevent="onStageDragOver"
+      @dragleave="onStageDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <div v-if="!ui.previewing" class="canvas-stage__zoom-bar" @mousedown.stop>
+        <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="缩小" @click="zoomBy(-10)">−</button>
+        <span class="canvas-stage__zoom-label">{{ ui.zoom }}%</span>
+        <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="放大" @click="zoomBy(10)">＋</button>
+        <span class="canvas-stage__tool-sep" />
+        <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="适应窗口" @click="fitToWindow">适应</button>
+        <button class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn" title="恢复 100%" @click="zoomReset">100%</button>
+        <span class="canvas-stage__tool-sep" />
+        <span class="canvas-stage__pan-hint">灰色区域也可拖动平移</span>
+      </div>
+      <div class="canvas-stage__canvas" :style="canvasStyle">
+        <div class="canvas-stage__content" :style="designThemeStyle">
+          <div class="canvas-stage__bg" :style="bgStyle" title="拖动空白画布以平移视图" @mousedown.stop="onCanvasBackgroundDown" />
+          <div v-if="ui.gridEnabled && !ui.previewing" class="canvas-stage__grid" :style="gridStyle" aria-hidden="true" />
+          <ItemView
+            v-for="item in items"
+            :key="item.id"
+            :item="item"
+            :variables="props.variables"
+            :emit-event="(name, payload) => forwardItemEvent(item, name, payload)"
+            @mousedown.stop="onItemClick($event, item)"
+            @dblclick.stop="onItemDblclick($event, item)"
+          />
+        </div>
+        <SelectionOverlay :selected="selectedItems" :marquee="marquee" />
+        <div
+          v-if="dropPreview && !ui.previewing"
+          class="canvas-stage__drop-preview"
+          :class="{ 'canvas-stage__drop-preview--canvas': dropPreview.fullCanvas }"
+          :style="{
+            left: `${dropPreview.frame.x}px`,
+            top: `${dropPreview.frame.y}px`,
+            width: `${dropPreview.frame.w}px`,
+            height: `${dropPreview.frame.h}px`,
+          }"
+          aria-hidden="true"
+          data-ui-only
+        />
+        <template v-if="!ui.previewing">
+          <div
+            v-for="(g, i) in guides"
+            :key="`g${i}`"
+            class="canvas-stage__guide"
+            :style="
+              g.axis === 'x'
+                ? { left: `${g.position}px`, top: '0', width: '1px', height: '100%' }
+                : { left: '0', top: `${g.position}px`, width: '100%', height: '1px' }
+            "
+          data-ui-only
+          />
+          <div
+            v-for="(hint, i) in spacingHints"
+            :key="`distance-${i}`"
+            class="canvas-stage__measure"
+            :class="`canvas-stage__measure--${hint.axis}`"
+            :style="spacingHintStyle(hint)"
+            aria-hidden="true"
+            data-ui-only
+          >
+            <span>{{ Math.round(hint.distance) }} px</span>
+          </div>
+          <TransformHandles
+            v-if="selectedItems.length > 0"
+            :items="selectedItems"
+            :zoom="ui.zoom"
+          />
+        </template>
+      </div>
+
+    </div>
   </div>
 </template>
 
 <style scoped>
 .canvas-stage {
   position: relative;
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--cf-canvas-bg, #e9ebf0);
+  outline: none;
+}
+.canvas-stage__viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   background: var(--cf-canvas-bg, #e9ebf0);
   outline: none;
@@ -1047,25 +1061,22 @@ defineExpose({ canvasPoint, DROP_MIME });
   white-space: nowrap;
 }
 .canvas-stage__toolbar {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 10;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
-  justify-content: center;
-  max-width: calc(100% - 24px);
-  max-height: calc(100% - 24px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 6px 10px;
-  border-radius: 8px;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  padding: 6px 12px;
   background: var(--cf-panel);
-  box-shadow: var(--cf-shadow);
-  border: 1px solid var(--cf-border);
+  border-bottom: 1px solid var(--cf-border);
 }
 .canvas-stage__grid-size {
   display: inline-flex;

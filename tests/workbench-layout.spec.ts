@@ -117,8 +117,11 @@ describe("DataV-inspired workbench layout", () => {
   it("previews snapped drop placement while dragging local canvas assets", () => {
     expect(canvasStage).toContain('@dragover.prevent="onStageDragOver"');
     expect(canvasStage).not.toContain("<Teleport");
-    expect(canvasStage).toContain('class="canvas-stage__toolbar"');
-    expect(canvasStage).toContain("max-height: calc(100% - 24px)");
+    const toolbarPosition = canvasStage.indexOf('class="canvas-stage__toolbar"');
+    const viewportPosition = canvasStage.indexOf('class="canvas-stage__viewport"');
+    expect(toolbarPosition).toBeGreaterThan(-1);
+    expect(toolbarPosition).toBeLessThan(viewportPosition);
+    expect(canvasStage).toContain("overflow-x: auto");
     expect(canvasStage).toContain('@dragleave="onStageDragLeave"');
     expect(canvasStage).toContain("dragPlacementPreview(active.mime, active.data, canvasPoint(ev))");
     expect(canvasStage).toContain("canvas-stage__drop-preview");
