@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { hitTest, boxSelect } from "../src/core/geometry/hit";
 import { resizeFrame, rotateFrame, snapResizeFrameToGrid } from "../src/core/geometry/transform";
-import { buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
+import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
 import type { SnapCandidate } from "../src/core/geometry/snap";
 import type { ChartItem, Frame } from "../src/core/model/types";
 
@@ -147,6 +147,14 @@ describe("geometry/snap", () => {
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16)).toEqual({ dx: -3, dy: 7 });
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16, new Set(["x"]))).toEqual({ dx: 3, dy: 7 });
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 0)).toEqual({ dx: 3, dy: 2 });
+  });
+
+  it("网格吸附启用时方向键按网格步进，Shift 保留精细调整", () => {
+    expect(arrowNudgeStep(true, 24, false)).toBe(24);
+    expect(arrowNudgeStep(true, 24, true)).toBe(1);
+    expect(arrowNudgeStep(false, 24, false)).toBe(1);
+    expect(arrowNudgeStep(false, 24, true)).toBe(10);
+    expect(arrowNudgeStep(true, 0, false)).toBe(1);
   });
 
   it("为相邻对象生成前后及中间等间距磁吸位置", () => {

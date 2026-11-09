@@ -102,6 +102,14 @@ export function snapDeltaToGrid(
   return result;
 }
 
+export function arrowNudgeStep(gridSnapEnabled: boolean, gridSize: number, shiftKey: boolean): number {
+  if (gridSnapEnabled) {
+    if (shiftKey) return 1;
+    return Number.isFinite(gridSize) && gridSize > 0 ? gridSize : 1;
+  }
+  return shiftKey ? 10 : 1;
+}
+
 export function buildEqualSpacingCandidates(moving: SnapRect, statics: SnapRect[]): SnapCandidate[] {
   if (![moving.x, moving.y, moving.w, moving.h].every(Number.isFinite) || moving.w <= 0 || moving.h <= 0) {
     return [];

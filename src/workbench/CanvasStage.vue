@@ -5,7 +5,7 @@ import { GRID_SIZE_OPTIONS, useUiStore } from "@/stores/uiStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
-import { buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
+import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
 import type { SnapCandidate, SnapGuide, SpacingHint } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
 import type { ChartItem, ComponentItem, ScreenItem, ChartType } from "@/core/model/types";
@@ -452,7 +452,7 @@ function onKeyDown(ev: KeyboardEvent): void {
     return;
   }
   if (isTypingTarget(ev)) return;
-  const step = ev.shiftKey ? 10 : 1;
+  const step = arrowNudgeStep(ui.gridSnapEnabled, ui.gridSize, ev.shiftKey);
   const ctrl = ev.ctrlKey || ev.metaKey;
   if (ctrl && !ev.shiftKey && ev.key.toLowerCase() === "z") {
     ev.preventDefault();

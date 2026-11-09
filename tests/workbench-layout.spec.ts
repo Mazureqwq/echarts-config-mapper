@@ -88,6 +88,7 @@ describe("DataV-inspired workbench layout", () => {
     expect(canvasStage).toContain("findNearestSpacingHints");
     expect(canvasStage).toContain("Math.round(hint.distance)");
     expect(canvasStage).toContain("buildEqualSpacingCandidates");
+    expect(canvasStage).toContain("arrowNudgeStep(ui.gridSnapEnabled, ui.gridSize, ev.shiftKey)");
     expect(canvasStage).toContain("snapPlacementFrame");
     expect(canvasStage).toContain("snapPlacementPoint");
     expect(canvasStage).toContain("snapPlacementPoint(canvasPoint(ev))");
