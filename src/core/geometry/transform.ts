@@ -73,6 +73,70 @@ export function resizeFrame(
   return { ...frame, x: nx, y: ny, w: nw, h: nh };
 }
 
+export function snapResizeFrameToGrid(
+  frame: Frame,
+  resized: Frame,
+  handle: Handle,
+  gridSize: number,
+  keepAspect: boolean = false
+): Frame {
+  if (!Number.isFinite(gridSize) || gridSize <= 0 || frame.w <= 0 || frame.h <= 0) return resized;
+  const snap = (value: number): number => Math.round(value / gridSize) * gridSize;
+  const west = handle === "nw" || handle === "w" || handle === "sw";
+  const east = handle === "ne" || handle === "e" || handle === "se";
+  const north = handle === "nw" || handle === "n" || handle === "ne";
+  const south = handle === "sw" || handle === "s" || handle === "se";
+  const corner = (west || east) && (north || south);
+
+  if (corner && keepAspect) {
+    const ratio = frame.w / frame.h;
+    const widthDominant = Math.abs(resized.w - frame.w) >= Math.abs(resized.h - frame.h);
+    let w: number;
+    let h: number;
+    if (widthDominant) {
+      const anchorX = west ? frame.x + frame.w : frame.x;
+      const movingX = snap(west ? resized.x : resized.x + resized.w);
+      w = Math.max(MIN_SIZE, west ? anchorX - movingX : movingX - anchorX);
+      h = w / ratio;
+      if (h < MIN_SIZE) {
+        h = MIN_SIZE;
+        w = h * ratio;
+      }
+    } else {
+      const anchorY = north ? frame.y + frame.h : frame.y;
+      const movingY = snap(north ? resized.y : resized.y + resized.h);
+      h = Math.max(MIN_SIZE, north ? anchorY - movingY : movingY - anchorY);
+      w = h * ratio;
+      if (w < MIN_SIZE) {
+        w = MIN_SIZE;
+        h = w / ratio;
+      }
+    }
+    return {
+      ...resized,
+      x: west ? frame.x + frame.w - w : frame.x,
+      y: north ? frame.y + frame.h - h : frame.y,
+      w,
+      h,
+    };
+  }
+
+  let { x, y, w, h } = resized;
+  if (east) w = Math.max(MIN_SIZE, snap(frame.x + resized.w) - frame.x);
+  if (west) {
+    const right = frame.x + frame.w;
+    x = Math.min(snap(resized.x), right - MIN_SIZE);
+    w = right - x;
+  }
+  if (south) h = Math.max(MIN_SIZE, snap(frame.y + resized.h) - frame.y);
+  if (north) {
+    const bottom = frame.y + frame.h;
+    y = Math.min(snap(resized.y), bottom - MIN_SIZE);
+    h = bottom - y;
+  }
+  return { ...resized, x, y, w, h };
+}
+
 export interface RotateOptions {
   snap?: boolean;
 }

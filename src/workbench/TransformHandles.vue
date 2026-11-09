@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
+import { useUiStore } from "@/stores/uiStore";
 import type { Frame, ScreenItem } from "@/core/model/types";
-import { resizeFrame, rotateFrame } from "@/core/geometry/transform";
+import { resizeFrame, rotateFrame, snapResizeFrameToGrid } from "@/core/geometry/transform";
 import type { Handle } from "@/core/geometry/transform";
 import { frameCenter, rotatePoint } from "@/core/geometry/hit";
 
 const props = defineProps<{ items: ScreenItem[]; zoom: number }>();
 const doc = useDocumentStore();
+const ui = useUiStore();
 
 const wrapperEl = ref<HTMLDivElement | null>(null);
 
@@ -85,7 +87,10 @@ function onHandleDown(ev: MouseEvent, handle: Handle): void {
   const isSingle = single.value !== null;
   const move = (e: MouseEvent) => {
     const local = toLocalDelta((e.clientX - start.x) / zoom, (e.clientY - start.y) / zoom);
-    const next = resizeFrame(frame0, handle, local.dx, local.dy, { keepAspect: e.shiftKey });
+    const resized = resizeFrame(frame0, handle, local.dx, local.dy, { keepAspect: e.shiftKey });
+    const next = ui.gridSnapEnabled
+      ? snapResizeFrameToGrid(frame0, resized, handle, ui.gridSize, e.shiftKey)
+      : resized;
     if (isSingle) {
       doc.updateItemFrame(single.value!.id, next, { commit: false });
     } else {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { hitTest, boxSelect } from "../src/core/geometry/hit";
-import { resizeFrame, rotateFrame } from "../src/core/geometry/transform";
+import { resizeFrame, rotateFrame, snapResizeFrameToGrid } from "../src/core/geometry/transform";
 import { findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
 import type { SnapCandidate } from "../src/core/geometry/snap";
 import type { ChartItem, Frame } from "../src/core/model/types";
@@ -58,6 +58,27 @@ describe("geometry/transform", () => {
     const out = resizeFrame(f, "se", -1000, -1000);
     expect(out.w).toBe(8);
     expect(out.h).toBe(8);
+  });
+
+  it("网格步进吸附拉伸边和角，并保持相对边锚定", () => {
+    const f: Frame = { x: 100, y: 100, w: 200, h: 100, rotate: 0 };
+    const se = snapResizeFrameToGrid(f, resizeFrame(f, "se", 35, 17), "se", 20);
+    expect(se).toEqual({ ...f, w: 240, h: 120 });
+
+    const west = snapResizeFrameToGrid(f, resizeFrame(f, "w", -33, 0), "w", 20);
+    expect(west).toEqual({ ...f, x: 60, w: 240 });
+
+    const nw = snapResizeFrameToGrid(
+      f,
+      resizeFrame(f, "nw", -33, -27, { keepAspect: true }),
+      "nw",
+      20,
+      true
+    );
+    expect(nw.x + nw.w).toBe(f.x + f.w);
+    expect(nw.y + nw.h).toBe(f.y + f.h);
+    expect(nw.w / nw.h).toBeCloseTo(f.w / f.h);
+    expect(nw.x % 20).toBe(0);
   });
 
   it("Shift 等比缩放四角保持宽高比", () => {

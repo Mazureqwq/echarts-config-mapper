@@ -10,6 +10,7 @@ const leftPanel = read("workbench/LeftPanel.vue");
 const inspector = read("workbench/InspectorPanel.vue");
 const topBar = read("workbench/TopBar.vue");
 const canvasStage = read("workbench/CanvasStage.vue");
+const transformHandles = read("workbench/TransformHandles.vue");
 const appHeader = read("shared/ui/AppHeader.vue");
 const library = read("views/LibraryView.vue");
 const charts = read("views/ChartsView.vue");
@@ -87,6 +88,9 @@ describe("DataV-inspired workbench layout", () => {
     expect(canvasStage).toContain("findNearestSpacingHints");
     expect(canvasStage).toContain("Math.round(hint.distance)");
     expect(canvasStage).toContain('aria-label="智能参考线吸附开关"');
+    expect(transformHandles).toContain("snapResizeFrameToGrid");
+    expect(transformHandles).toContain("ui.gridSnapEnabled");
+    expect(transformHandles).toContain("ui.gridSize");
     expect(canvasStage).toContain(':aria-label="t.title"');
     expect(canvasStage).toContain('v-for="t in ALIGN_TOOLS"');
   });
