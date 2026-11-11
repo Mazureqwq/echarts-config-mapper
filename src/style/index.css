@@ -15,6 +15,8 @@
   --cf-shell-text: #e7edf5;
   --cf-shell-muted: #a8b5c6;
   --cf-shell-accent: #49b9f2;
+  --cf-scrollbar-thumb: color-mix(in srgb, var(--cf-text-2) 36%, transparent);
+  --cf-scrollbar-thumb-hover: color-mix(in srgb, var(--cf-text-2) 58%, transparent);
 }
 
 .cf-page {
@@ -71,6 +73,29 @@ html.dark {
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cf-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--cf-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--cf-scrollbar-thumb-hover);
 }
 
 html,

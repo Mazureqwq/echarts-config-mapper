@@ -130,8 +130,47 @@ describe("DataV-lite registered data widgets", () => {
     const html = await renderToString(createSSRApp(ItemView, { item: boundItem }));
     expect(html).toContain("Berlin");
     expect(html).toContain("12");
+    expect(html).not.toContain("华东区");
     expect(ws.getDatasetRuntime()).toBe(ws.getDatasetRuntime());
     ws.disposeDatasetRuntime();
+  });
+
+  it("does not fall back to sample rows when a bound dataset is empty", async () => {
+    setActivePinia(createPinia());
+    const ws = useWorkspaceStore();
+    ws.workspace.datasets.push({ id: "empty-dataset", name: "空数据", source: { kind: "static", data: [] } });
+    const definition = componentRegistry.get("chartforge.data-table", 1)!;
+    const boundItem: ComponentItem = {
+      ...item(definition.id, definition.defaults),
+      dataBinding: { datasetId: "empty-dataset" },
+    };
+    const html = await renderToString(createSSRApp(ItemView, { item: boundItem }));
+
+    expect(html).toContain("接口没有返回可用的行数据");
+    expect(html).not.toContain("示例数据");
+    expect(html).not.toContain("华东区");
+    ws.disposeDatasetRuntime();
+  });
+
+  it("renders registered sample rows for unbound data widgets", async () => {
+    setActivePinia(createPinia());
+    const tableDefinition = componentRegistry.get("chartforge.data-table", 1)!;
+    const kpiDefinition = componentRegistry.get("chartforge.kpi", 1)!;
+    const progressDefinition = componentRegistry.get("chartforge.progress-list", 1)!;
+    const [tableHtml, kpiHtml, progressHtml] = await Promise.all([
+      renderToString(createSSRApp(ItemView, { item: item(tableDefinition.id, tableDefinition.defaults) })),
+      renderToString(createSSRApp(ItemView, { item: item(kpiDefinition.id, kpiDefinition.defaults) })),
+      renderToString(createSSRApp(ItemView, { item: item(progressDefinition.id, progressDefinition.defaults) })),
+    ]);
+
+    expect(tableHtml).toContain("示例数据");
+    expect(tableHtml).toContain("华东区");
+    expect(tableHtml).toContain("1,280");
+    expect(kpiHtml).toContain("示例数据");
+    expect(kpiHtml).toContain("1,280");
+    expect(progressHtml).toContain("示例数据");
+    expect(progressHtml).toContain("西南区");
+    expect(progressHtml).toContain("93");
   });
 
   it("updates a bound chart and KPI when a rowSelect event changes the shared variable", () => {

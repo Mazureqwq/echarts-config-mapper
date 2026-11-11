@@ -143,4 +143,44 @@ describe("live/pipeline 全链路", () => {
     if (!res.ok) return;
     expect(res.data).toEqual({ kind: "nameValue", rows: [{ name: "A", value: 2 }] });
   });
+
+  it("地理字段映射在过滤后转换为三种 Geo ChartData 并保留行数", () => {
+    const scatter = buildChartData([
+      { city: "香港", lng: "114.17", lat: "22.31", count: "7" },
+      { city: "广州", lng: "113.26", lat: "23.13", count: "5" },
+    ], {
+      ...base,
+      filter: [{ field: "city", op: "eq", value: "香港" }],
+      map: { geo: { longitude: "lng", latitude: "lat", name: "city", value: "count" } },
+    }, "geoScatter");
+    expect(scatter).toMatchObject({
+      ok: true,
+      data: { kind: "geoScatter", rows: [{ longitude: 114.17, latitude: 22.31, name: "香港", value: 7 }] },
+      counts: { raw: 2, filtered: 1, selected: 1, sorted: 1, limited: 1 },
+    });
+
+    const heat = buildChartData([{ x: 114, y: 22, weight: "3.5" }], {
+      ...base, map: { geo: { longitude: "x", latitude: "y", value: "weight" } },
+    }, "geoHeatmap");
+    expect(heat).toMatchObject({ ok: true, data: { kind: "geoHeatmap", rows: [{ longitude: 114, latitude: 22, value: 3.5 }] } });
+
+    const flow = buildChartData([{ sx: "113.9", sy: "22.3", tx: 114.2, ty: 22.5, route: "A→B" }], {
+      ...base, map: { geo: { originLongitude: "sx", originLatitude: "sy", destinationLongitude: "tx", destinationLatitude: "ty", name: "route" } },
+    }, "geoFlow");
+    expect(flow).toMatchObject({ ok: true, data: { kind: "geoFlow", rows: [{ from: [113.9, 22.3], to: [114.2, 22.5], name: "A→B" }] } });
+  });
+
+  it("地理选列遗漏映射列和越界坐标会给出错误且不伪造原点", () => {
+    const omitted = buildChartData([{ lng: 114, lat: 22 }], {
+      ...base, select: ["lat"], map: { geo: { longitude: "lng", latitude: "lat" } },
+    }, "geoScatter");
+    expect(omitted).toMatchObject({ ok: false, message: expect.stringContaining("lng") });
+
+    const outOfBounds = buildChartData([{ lng: 181, lat: 22 }], {
+      ...base, map: { geo: { longitude: "lng", latitude: "lat" } },
+    }, "geoScatter");
+    expect(outOfBounds).toMatchObject({ ok: false, message: expect.any(String) });
+    expect(JSON.stringify(outOfBounds)).not.toContain("[0,0]");
+  });
+
 });

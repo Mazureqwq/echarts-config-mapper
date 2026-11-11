@@ -81,8 +81,7 @@ export function snapDelta(
 export function snapDeltaToGrid(
   delta: { dx: number; dy: number },
   bounds: { x: number; y: number; w: number; h: number },
-  gridSize: number,
-  preferGuides: ReadonlySet<"x" | "y"> = new Set()
+  gridSize: number
 ): { dx: number; dy: number } {
   if (
     !Number.isFinite(gridSize) ||
@@ -91,15 +90,37 @@ export function snapDeltaToGrid(
   ) return { ...delta };
 
   const result = { ...delta };
-  if (!preferGuides.has("x")) {
-    const x = bounds.x + result.dx;
-    result.dx += Math.round(x / gridSize) * gridSize - x;
-  }
-  if (!preferGuides.has("y")) {
-    const y = bounds.y + result.dy;
-    result.dy += Math.round(y / gridSize) * gridSize - y;
-  }
+  const x = bounds.x + result.dx;
+  result.dx += Math.round(x / gridSize) * gridSize - x;
+  const y = bounds.y + result.dy;
+  result.dy += Math.round(y / gridSize) * gridSize - y;
   return result;
+}
+
+/** Keep grid snapping authoritative; show guides only when alignment and the guide coordinate both land on grid lines. */
+export function snapDeltaWithGridPriority(
+  delta: { dx: number; dy: number },
+  bounds: { x: number; y: number; w: number; h: number },
+  candidates: SnapCandidate[],
+  gridSize: number,
+  threshold: number = SNAP_THRESHOLD
+): SnapResult {
+  if (!Number.isFinite(gridSize) || gridSize <= 0) {
+    return snapDelta(delta, candidates, threshold);
+  }
+
+  const grid = snapDeltaToGrid(delta, bounds, gridSize);
+  const gridCandidates = candidates.filter((candidate) => {
+    const gridPosition = Math.round(candidate.static / gridSize) * gridSize;
+    return Math.abs(candidate.static - gridPosition) <= 1e-6;
+  });
+  const aligned = snapDelta(grid, gridCandidates, threshold);
+  const guides = aligned.guides.filter((guide) => {
+    const axis = guide.axis === "x" ? "dx" : "dy";
+    const gridPosition = Math.round(guide.position / gridSize) * gridSize;
+    return Math.abs(aligned[axis] - grid[axis]) <= 1e-6 && Math.abs(guide.position - gridPosition) <= 1e-6;
+  });
+  return { ...grid, guides };
 }
 
 export function arrowNudgeStep(gridSnapEnabled: boolean, gridSize: number, shiftKey: boolean): number {

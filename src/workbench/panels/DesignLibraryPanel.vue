@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { BUILT_IN_BLOCKS, BUILT_IN_THEMES } from "@/core/design/library";
+import { getBuiltInBackgroundPreset } from "@/core/design/backgroundPresets";
 import { compressDesignImageFile, getDesignAssetTotalBytes } from "@/core/design/assets";
 import { DESIGN_DND_MIME, setActiveCanvasDragPayload } from "@/shared/dnd";
 import type { DesignAsset } from "@/core/model/types";
@@ -40,6 +41,14 @@ function addLayoutBackground(entry: LayoutBackgroundEntry): void {
     insertLayoutBackground: (id) => doc.insertLayoutBackground(id),
     insertLayoutAsset: (id, position) => doc.insertLayoutAsset(id, position),
   });
+}
+function applyBackgroundPreset(id: string): void {
+  error.value = "";
+  if (!requireScreen()) return;
+  const background = getBuiltInBackgroundPreset(id);
+  if (!background) return;
+  doc.setCanvas({ background });
+  notice.value = "已应用原创内置背景；素材为本地 SVG，可离线导出。";
 }
 function applyTheme(id: string): void {
   error.value = "";
@@ -94,7 +103,7 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
 
 <template>
   <div class="design-library">
-    <LayoutBackgroundCatalog @select="addLayoutBackground" />
+    <LayoutBackgroundCatalog @select="addLayoutBackground" @apply-background="applyBackgroundPreset" />
 
     <section class="library-section">
       <header class="section-head">

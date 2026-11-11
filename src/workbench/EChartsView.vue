@@ -17,6 +17,21 @@ const renderError = ref("");
 let optionTimer: ReturnType<typeof setTimeout> | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
+function syncGeoLayerCamera(): void {
+  const instance = chart.value;
+  if (!instance) return;
+  const option = instance.getOption() as { geo?: Array<Record<string, unknown>> };
+  const geos = option.geo;
+  if (!Array.isArray(geos) || geos.length < 2) return;
+  const topIndex = geos.length - 1;
+  const topGeo = geos[topIndex];
+  const center = topGeo?.center;
+  const zoom = topGeo?.zoom;
+  if (!Array.isArray(center) || typeof zoom !== "number") return;
+  const syncedGeo = geos.map((geo, index) => ({ ...geo, center: [...center], zoom, ...(index < topIndex ? { roam: false } : {}) }));
+  instance.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true });
+}
+
 function render(): void {
   const c = chart.value;
   if (!c || !props.option) return;
@@ -40,6 +55,7 @@ function mountChart(): void {
     emit("error", msg);
     return;
   }
+  chart.value.on("georoam", syncGeoLayerCamera);
   render();
 }
 

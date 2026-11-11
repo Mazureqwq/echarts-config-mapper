@@ -21,9 +21,12 @@ const CHART_TYPE_LABELS: Array<{ type: ChartType; label: string }> = [
   { type: "line", label: "折线图" },
   { type: "bar", label: "柱状图" },
   { type: "pie", label: "饼图" },
-  { type: "map", label: "地图" },
+  { type: "map", label: "区域填色地图" },
   { type: "scatter", label: "散点图" },
   { type: "radar", label: "雷达图" },
+  { type: "geoScatter", label: "地理散点图" },
+  { type: "geoHeatmap", label: "点热力图" },
+  { type: "geoFlow", label: "OD 飞线图" },
 ];
 
 const renderError = ref("");

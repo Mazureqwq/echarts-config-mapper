@@ -31,6 +31,7 @@ function formatValue(value: number): string {
 
 <template>
   <div class="progress-list-widget">
+    <p v-if="snapshot.status === 'idle' && rows.length" class="progress-list-widget__sample" role="status">示例数据 · 绑定数据集后自动替换</p>
     <ul v-if="progressRows.length" class="progress-list-widget__list">
       <li v-for="(row, index) in progressRows" :key="`${row.label}-${index}`" class="progress-list-widget__row">
         <div class="progress-list-widget__heading">
@@ -64,4 +65,5 @@ function formatValue(value: number): string {
 .progress-list-widget__track { height: 9px; overflow: hidden; border-radius: 999px; }
 .progress-list-widget__fill { display: block; height: 100%; border-radius: inherit; transition: width 160ms ease; }
 .progress-list-widget__empty { margin: 0; color: var(--cf-text-2, #a4afbf); font-size: 12px; }
+.progress-list-widget__sample { margin: 0 0 10px; color: var(--cf-primary, #5b8cff); font-size: 10px; }
 </style>

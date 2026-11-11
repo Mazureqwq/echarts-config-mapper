@@ -117,6 +117,21 @@ describe("live/payload 载荷归一", () => {
     expect(r.data).toEqual(data);
   });
 
+
+  it("validates structured geographic ChartData for map ChartTypes", () => {
+    const data = { kind: "geoScatter", rows: [{ longitude: 114.1, latitude: 22.2, name: "港岛" }] };
+    const result = toChartData(data, "geoScatter");
+    expect(result).toEqual({ ok: true, data });
+    expect(toChartData(
+      [{ lng: "114.1", lat: "22.2", city: "港岛", weight: "3" }],
+      "geoScatter",
+      { longitude: "lng", latitude: "lat", name: "city", value: "weight" }
+    )).toEqual({ ok: true, data: { kind: "geoScatter", rows: [{ longitude: 114.1, latitude: 22.2, name: "港岛", value: 3 }] } });
+
+    const invalid = toChartData({ kind: "geoHeatmap", rows: [{ longitude: 181, latitude: 22, value: 3 }] }, "geoHeatmap");
+    expect(invalid).toMatchObject({ ok: false, message: expect.any(String) });
+  });
+
   it("空/无法识别的载荷给出人话错误", () => {
     expect(toChartData(null, "line")).toMatchObject({ ok: false });
     expect(toChartData([], "line")).toEqual({ ok: false, message: "接口返回了空数组" });

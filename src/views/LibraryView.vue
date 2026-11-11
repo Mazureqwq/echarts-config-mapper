@@ -31,6 +31,8 @@ const CANVAS_PRESETS = [
 const CATEGORIES = ["折线图", "柱状图", "饼图", "地图", "散点图", "雷达图"];
 
 const confirmingScreen = ref<Screen | null>(null);
+const importInput = ref<HTMLInputElement | null>(null);
+const importError = ref("");
 
 const createOpen = ref(false);
 const createPreset = ref("1920x1080");
@@ -90,6 +92,38 @@ function openPlay(id: string): void {
 
 function openCharts(): void {
   router.push("/charts");
+}
+
+function openScreenImport(): void {
+  importError.value = "";
+  importInput.value?.click();
+}
+
+async function importScreenFile(event: Event): Promise<void> {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed: unknown = JSON.parse(text);
+    const payload = typeof parsed === "object" && parsed !== null && "format" in parsed && parsed.format === "chartforge/v1"
+      ? (parsed as { payload?: unknown }).payload
+      : parsed;
+    if (typeof payload !== "object" || payload === null || !("canvas" in payload) || !("items" in payload)) {
+      throw new Error("请选择 ChartForge 导出的大屏 JSON 文件。");
+    }
+
+    const existingIds = new Set(ws.screens.map((screen) => screen.id));
+    await ws.importFrom(text, "merge");
+    const imported = ws.screens.find((screen) => !existingIds.has(screen.id));
+    if (!imported) throw new Error("文件中没有可导入的大屏。");
+    importError.value = "";
+    router.push(`/workbench/${imported.id}`);
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : "大屏导入失败。";
+  }
 }
 
 
@@ -257,6 +291,8 @@ function exportWorkspace(): void {
         <button class="cf-button cf-button--primary" @click="openCreate">
           <Icon name="plus" :size="14" /> 新建大屏
         </button>
+        <button class="cf-button" @click="openScreenImport">导入大屏 JSON</button>
+        <input ref="importInput" class="library__import-input" hidden type="file" accept=".json,application/json" @change="importScreenFile" />
         <button v-if="screens.length > 1" class="cf-button" @click="openPlaylist">
           <Icon name="chart" :size="14" /> 轮播演示
         </button>
@@ -268,6 +304,7 @@ function exportWorkspace(): void {
     </AppHeader>
 
     <main class="library__body cf-page__content" aria-label="大屏资源库">
+      <p v-if="importError" class="library__import-error" role="alert">{{ importError }}</p>
       <section class="cf-page__heading" aria-labelledby="screens-page-title">
         <div class="cf-page__eyebrow">ChartForge · 工作区</div>
         <h2 id="screens-page-title" class="cf-page__title">大屏应用</h2>

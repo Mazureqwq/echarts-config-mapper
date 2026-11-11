@@ -1,5 +1,5 @@
 import type {
-  Background, ChartData, ChartSpec, ChartType, DatasetBinding, DatasetSnapshot, DesignAsset, Frame,
+  Background, ChartData, ChartSpec, ChartType, DatasetBinding, DatasetSnapshot, DesignAsset, Frame, TextSpec,
 } from "@/core/model/types";
 import type { BlueprintGraph } from "@/core/blueprint/types";
 
@@ -30,18 +30,13 @@ export interface PackageChartItem {
   dataTemplate?: ChartData;
 }
 
-export interface PackageTextItem {
+export interface PackageTextItem extends Omit<TextSpec, "text"> {
   kind: "text";
   id: string;
   name: string;
   frame: Frame;
   opacity: number;
   text: string;
-  fontSize: number;
-  color: string;
-  align: "left" | "center" | "right";
-  weight: "normal" | "bold";
-  lineHeight?: number;
 }
 
 export interface PackageImageItem {
@@ -66,6 +61,8 @@ export interface PackageComponentItem {
   componentVersion: number;
   props: Record<string, unknown>;
   dataBinding?: DatasetBinding;
+  /** Local preview rows retained for unbound widgets in offline artifacts. */
+  sampleRows?: Array<Record<string, unknown>>;
 }
 
 export interface PackageDataset {
@@ -114,7 +111,7 @@ export interface PackagePayload {
   designAssets?: DesignAsset[];
   /** Selected-screen referenced normalized row snapshots, with no source configuration. */
   datasets: PackageDataset[];
-  /** 仅当地图图表存在时携带，避免白白多 54 KB */
+  /** 仅当旧地图图表或地图场景存在时携带，避免白白多 54 KB */
   geo?: { china: unknown };
   /** 导出过程中的取舍记录（被丢掉的非法 URL、被剔除的令牌等），同时写进 manifest */
   warnings: string[];

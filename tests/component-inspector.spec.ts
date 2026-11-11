@@ -39,6 +39,31 @@ describe("ComponentInspector theme-inheriting colors", () => {
     expect(item.props).toEqual({});
   });
 
+  it("shows inherited and independent map layer bindings with a clear-to-inherit action", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const item: ComponentItem = {
+      id: "map-1", name: "2D 平面地图", kind: "component", componentId: "chartforge.map-scene-flat", componentVersion: 1, frame,
+      props: { presentation: "flat", pitch: 0, layers: [
+        { id: "flow", type: "geoFlow", name: "运输流向", visible: true, style: { color: "#32d6ff", opacity: 0.8, size: 12 }, dataBinding: { datasetId: "routes", fields: { geo: { originLongitude: "fromLng" } } } },
+        { id: "points", type: "geoScatter", name: "网点", visible: true, style: { color: "#ffcc66", opacity: 1, size: 12 } },
+      ] },
+      dataBinding: { datasetId: "routes", fields: { category: "province", value: "sales", geo: { originLongitude: "fromLng" } } },
+    };
+    const app = createSSRApp(ComponentInspector, { item });
+    app.use(pinia);
+    const html = await renderToString(app);
+    expect(html).toContain("地图图层（2）");
+    expect(html).toContain("显示运输流向");
+    expect(html).toContain("共享数据绑定");
+    expect(html).toContain("区域名称字段");
+    expect(html).toContain("起点经度");
+    expect(html).toContain("数据绑定 · 独立");
+    expect(html).toContain("数据绑定 · 继承容器");
+    expect(html).toContain("清除图层绑定并继承容器");
+    expect(html).not.toContain("component-inspector__json");
+  });
+
   it("resets by removing the color override so the screen theme can take over", () => {
     const before = { trackColor: "#123456", fillColor: "#abcdef", showValue: true };
     expect(clearComponentColorOverride(before, "trackColor")).toEqual({ fillColor: "#abcdef", showValue: true });

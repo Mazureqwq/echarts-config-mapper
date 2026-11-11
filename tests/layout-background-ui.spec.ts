@@ -52,17 +52,24 @@ describe("layout background actions", () => {
 });
 
 describe("LayoutBackgroundCatalog", () => {
-  it("renders two local layout cards and three local asset cards with accessible click buttons", async () => {
+  it("renders layout, background preset and original SVG asset cards with accessible buttons", async () => {
     const html = await renderToString(createSSRApp(LayoutBackgroundCatalog));
     expect(html).toContain("布局底板");
     expect(html).toContain("背景素材");
+    expect(html).toContain("画布背景");
+    expect(html).toContain("深海网格");
+    expect(html).toContain("极光流线");
+    expect(html).toContain("海岸晨雾");
+    expect(html).toContain("雷达扫描环");
+    expect(html).toContain("蜂巢数据网");
     for (const entry of LAYOUT_BACKGROUND_ENTRIES) {
       expect(html).toContain(`插入 ${entry.name}`);
       expect(html).toContain(`data-preview=\"${entry.previewKey}\"`);
       expect(html).toContain(entry.description);
     }
-    expect((html.match(/class=\"layout-background-card/g) ?? []).length).toBe(5);
-    expect((html.match(/type=\"button\"/g) ?? []).length).toBe(5);
+    expect((html.match(/class=\"layout-background-card/g) ?? []).length).toBe(18);
+    expect((html.match(/class=\"background-preset-card/g) ?? []).length).toBe(8);
+    expect((html.match(/type=\"button\"/g) ?? []).length).toBe(26);
     expect(html).not.toMatch(/https?:\/\//i);
   });
 
@@ -72,6 +79,10 @@ describe("LayoutBackgroundCatalog", () => {
     expect(html).toContain("信息面板框");
     expect(html).toContain("主辅分栏");
     expect(html).toContain("角标装饰条");
+    expect(html).toContain("轨道环装饰");
+    expect(html).toContain("数据波形");
+    expect(html).toContain("状态指示点");
+    expect(html).toContain("数据脉冲路径");
   });
 });
 

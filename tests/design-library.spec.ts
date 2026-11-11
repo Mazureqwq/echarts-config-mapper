@@ -26,6 +26,7 @@ const makeText = (id: string, x: number): ScreenItem => ({
 describe("design library, themes and bounded local assets", () => {
   it("ships the two required themes with usable canvas, panel, text and chart defaults", () => {
     expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(["monitor-dark", "business-light"]);
+    expect(BUILT_IN_THEMES.find((theme) => theme.id === "monitor-dark")?.tokens.canvas).toBe("#12161d");
     for (const theme of BUILT_IN_THEMES) {
       expect(theme.tokens.canvas).toMatch(/^#/);
       expect(theme.tokens.panel).toBeTruthy();

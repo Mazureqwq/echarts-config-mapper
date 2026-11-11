@@ -102,6 +102,34 @@ describe("chart/chartData 矩阵转换", () => {
   });
 });
 
+  it("地理图表矩阵、默认样例和 ECharts option 使用本地 China geo", () => {
+    const pointMatrix = [["114.1", "22.2", "港岛", "5"]];
+    const point = matrixToChartData(pointMatrix, "geoScatter");
+    expect(point).toEqual({ kind: "geoScatter", rows: [{ longitude: 114.1, latitude: 22.2, name: "港岛", value: 5 }] });
+    expect(dataToMatrix(point)).toEqual(pointMatrix);
+
+    const heatMatrix = [["114", "22", "8"]];
+    const heat = matrixToChartData(heatMatrix, "geoHeatmap");
+    expect(heat).toEqual({ kind: "geoHeatmap", rows: [{ longitude: 114, latitude: 22, value: 8 }] });
+    expect(dataToMatrix(heat)).toEqual(heatMatrix);
+
+    const flowMatrix = [["113.9", "22.3", "114.2", "22.5", "A→B", "12"]];
+    const flow = matrixToChartData(flowMatrix, "geoFlow");
+    expect(flow).toEqual({ kind: "geoFlow", rows: [{ from: [113.9, 22.3], to: [114.2, 22.5], name: "A→B", value: 12 }] });
+    expect(dataToMatrix(flow)).toEqual(flowMatrix);
+
+    const expectedSeriesType = { geoScatter: "scatter", geoHeatmap: "heatmap", geoFlow: "lines" } as const;
+    for (const type of Object.keys(expectedSeriesType) as Array<keyof typeof expectedSeriesType>) {
+      const data = emptyChartData(type);
+      expect(validateChartData(data)).toBe(true);
+      expect(data.kind).toBe(type);
+      const option = buildOption({ type, option: {}, data }) as Record<string, any>;
+      expect(option.geo.map).toBe("china");
+      expect(option.series[0].type).toBe(expectedSeriesType[type]);
+      expect(option.series[0].coordinateSystem).toBe("geo");
+    }
+  });
+
 describe("chart/optionBuilder", () => {
   it("buildOption 生成各类型真实 ECharts 结构", () => {
     const lineSpec: ChartSpec = { type: "line", option: {}, data: emptyChartData("line") };
@@ -156,7 +184,8 @@ describe("chart/optionBuilder", () => {
     expect(out.series[0].shape).toBe("circle");
     expect(out.series[0].areaStyle.opacity).toBe(0.3);
     expect(out.series[0].data).toHaveLength(2);
-    expect(out.radar.indicators).toHaveLength(4);
+    expect(out.radar.indicator).toHaveLength(4);
+    expect(out.radar.indicators).toBeUndefined();
 
     const line: ChartSpec = {
       type: "line",

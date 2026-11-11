@@ -1,5 +1,6 @@
 import type { Background, ChartItem, DatasetDefinition, DesignAsset, Screen, ScreenItem, Workspace } from "@/core/model/types";
 import { componentRegistry } from "@/core/components/builtins";
+import { normalizeMapSceneProps } from "@/core/components/mapScene";
 import { applyThemeChartPalette, getThemeById } from "@/core/design/library";
 import { runPipeline } from "@/core/live/pipeline";
 import { buildOption } from "@/core/chart/optionBuilder";
@@ -106,6 +107,18 @@ function toPackageItem(item: ScreenItem, warnings: string[], themeId: string | u
       align: item.align,
       weight: item.weight,
       ...(typeof item.lineHeight === "number" ? { lineHeight: item.lineHeight } : {}),
+      ...(item.fontFamily ? { fontFamily: item.fontFamily } : {}),
+      ...(item.fontStyle ? { fontStyle: item.fontStyle } : {}),
+      ...(item.verticalAlign ? { verticalAlign: item.verticalAlign } : {}),
+      ...(typeof item.letterSpacing === "number" ? { letterSpacing: item.letterSpacing } : {}),
+      ...(item.overflow ? { overflow: item.overflow } : {}),
+      ...(typeof item.lineClamp === "number" ? { lineClamp: item.lineClamp } : {}),
+      ...(item.backgroundColor ? { backgroundColor: item.backgroundColor } : {}),
+      ...(typeof item.padding === "number" ? { padding: item.padding } : {}),
+      ...(typeof item.radius === "number" ? { radius: item.radius } : {}),
+      ...(item.borderColor ? { borderColor: item.borderColor } : {}),
+      ...(typeof item.borderWidth === "number" ? { borderWidth: item.borderWidth } : {}),
+      ...(item.shadow ? { shadow: { ...item.shadow } } : {}),
     };
   }
   if (item.kind === "image") {
@@ -121,7 +134,7 @@ function toPackageItem(item: ScreenItem, warnings: string[], themeId: string | u
   }
   if (item.kind === "component") {
     const definition = componentRegistry.get(item.componentId, item.componentVersion);
-    const supported = definition && ["chartforge-data-table-v1", "chartforge-kpi-v1", "chartforge-progress-list-v1", "chartforge-section-title-v1", "chartforge-corner-frame-v1"].includes(definition.exportRendererId);
+    const supported = definition && ["chartforge-data-table-v1", "chartforge-kpi-v1", "chartforge-progress-list-v1", "chartforge-section-title-v1", "chartforge-corner-frame-v1", "chartforge-map-scene-v1"].includes(definition.exportRendererId);
     const label = item.name && item.name !== "component" && item.name !== "组件" ? item.name : item.componentId;
     if (!supported) throw new Error(`组件「${label}」的导出渲染器版本缺失或不受支持，无法生成离线产物`);
     return {
@@ -129,8 +142,11 @@ function toPackageItem(item: ScreenItem, warnings: string[], themeId: string | u
       kind: "component",
       componentId: item.componentId,
       componentVersion: item.componentVersion,
-      props: cleanJsonObject(item.props),
+      props: item.componentId === "chartforge.map-scene-flat" || item.componentId === "chartforge.map-scene-tilted"
+        ? normalizeMapSceneProps(item.props, item.componentId.endsWith("tilted") ? "tilted" : "flat")
+        : cleanJsonObject(item.props),
       ...(item.dataBinding ? { dataBinding: cleanJson(item.dataBinding) as ChartItem["dataBinding"] } : {}),
+      ...(!item.dataBinding && definition?.sampleRows ? { sampleRows: cleanJson(definition.sampleRows) as Array<Record<string, unknown>> } : {}),
     };
   }
   return {
@@ -186,7 +202,12 @@ export function collectReferencedDesignAssets(
 function referencedDatasetIds(screens: readonly PackageScreen[]): Set<string> {
   const ids = new Set<string>();
   for (const screen of screens) {
-    for (const item of screen.items) if ("dataBinding" in item && item.dataBinding?.datasetId) ids.add(item.dataBinding.datasetId);
+    for (const item of screen.items) {
+      if ("dataBinding" in item && item.dataBinding?.datasetId) ids.add(item.dataBinding.datasetId);
+      if (item.kind === "component" && (item.componentId === "chartforge.map-scene-flat" || item.componentId === "chartforge.map-scene-tilted")) {
+        for (const layer of normalizeMapSceneProps(item.props).layers) if (layer.dataBinding?.datasetId) ids.add(layer.dataBinding.datasetId);
+      }
+    }
     for (const node of screen.blueprint?.nodes ?? []) if (node.kind === "datasetAction") ids.add(node.datasetId);
   }
   return ids;

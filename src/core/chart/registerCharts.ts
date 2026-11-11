@@ -5,6 +5,8 @@ import {
   PieChart,
   MapChart,
   ScatterChart,
+  HeatmapChart,
+  LinesChart,
   RadarChart,
 } from "echarts/charts";
 import {
@@ -13,6 +15,7 @@ import {
   LegendComponent,
   TitleComponent,
   VisualMapComponent,
+  GeoComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import chinaGeo from "../../assets/geo/china.json";
@@ -27,12 +30,15 @@ export function registerCharts(): void {
     PieChart,
     MapChart,
     ScatterChart,
+    HeatmapChart,
+    LinesChart,
     RadarChart,
     GridComponent,
     TooltipComponent,
     LegendComponent,
     TitleComponent,
     VisualMapComponent,
+    GeoComponent,
     CanvasRenderer,
   ]);
   registerMap("china", chinaGeo as never);

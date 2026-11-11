@@ -1,4 +1,4 @@
-import type { ChartData, ChartType, DatasetPipeline, LiveFilterOp, LiveSource } from "@/core/model/types";
+import type { ChartData, ChartType, DatasetPipeline, GeoFieldMapping, LiveFilterOp, LiveSource } from "@/core/model/types";
 import { toChartData } from "./payload";
 
 export type Row = Record<string, unknown>;
@@ -24,6 +24,7 @@ export interface PipelineMap {
   category?: string;
   value?: string;
   seriesField?: string;
+  geo?: GeoFieldMapping;
 }
 
 const WRAPPER_KEYS = ["data", "list", "rows", "items", "result", "records"];
@@ -286,8 +287,9 @@ export function buildChartData(
 ): ChartDataResult {
   const piped = runPipeline(raw, source);
   if (!piped.ok) return { ok: false, message: piped.message, counts: piped.counts };
-  const mapped = applyMap(piped.rows, source?.map);
-  const result = toChartData(mapped, type);
+  const isGeoType = type === "geoScatter" || type === "geoHeatmap" || type === "geoFlow";
+  const mapped = isGeoType ? piped.rows : applyMap(piped.rows, source?.map);
+  const result = toChartData(mapped, type, isGeoType ? source?.map?.geo : undefined);
   return result.ok
     ? { ok: true, data: result.data, counts: piped.counts }
     : { ok: false, message: result.message, counts: piped.counts };

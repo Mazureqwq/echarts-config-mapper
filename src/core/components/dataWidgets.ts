@@ -76,7 +76,7 @@ export function filterRowsByBinding<T extends DataRow>(
   variables: Readonly<Record<string, unknown>>
 ): T[] {
   const filter = binding?.filterBy;
-  if (!filter || !Object.prototype.hasOwnProperty.call(variables, filter.globalVariable)) return [...rows];
+  if (!filter || !filter.field.trim() || !filter.globalVariable.trim() || !Object.prototype.hasOwnProperty.call(variables, filter.globalVariable)) return [...rows];
   const expected = variables[filter.globalVariable];
   const expectedText = expected === null || expected === undefined ? "" : String(expected);
   return rows.filter((row) => {

@@ -3,6 +3,7 @@ import { buildPackagePayload, isSafeImageSrc, toPackageScreen } from "../src/cor
 import { createWorkspace, createScreen, createChartAsset, createChartSpec } from "../src/core/model/schema";
 import type { ChartItem, ComponentItem, ImageItem, ShapeItem, TextItem } from "../src/core/model/types";
 import { createLayoutAssetItems, createLayoutBackgroundItems } from "../src/core/design/layoutBackgrounds";
+import { attachGeo, runtimeSource } from "../src/core/export/assets";
 
 function item<T>(kind: string, extra: Record<string, unknown>): T {
   return {
@@ -37,6 +38,26 @@ function seed() {
 }
 
 describe("export/snapshot 快照与白名单", () => {
+  it("为 map 与三种地理图表注入本地 GeoJSON，普通图表不注入", () => {
+    for (const type of ["map", "geoScatter", "geoHeatmap", "geoFlow"] as const) {
+      const { ws, screen } = seed();
+      const chart = screen.items.find((entry) => entry.kind === "chart") as ChartItem;
+      chart.spec = createChartSpec(type);
+      const withMap = attachGeo(buildPackagePayload(ws, [screen.id]));
+      expect(withMap.geo?.china).toBeDefined();
+      expect(JSON.stringify(withMap.geo?.china).length).toBeGreaterThan(1000);
+    }
+    const { ws: sceneWorkspace, screen: sceneScreen } = seed();
+    sceneScreen.items.push(item<ComponentItem>("component", { componentId: "chartforge.map-scene-flat", componentVersion: 1, props: { layers: [] } }));
+    expect(attachGeo(buildPackagePayload(sceneWorkspace, [sceneScreen.id])).geo?.china).toBeDefined();
+    const { ws, screen } = seed();
+    const chart = screen.items.find((entry) => entry.kind === "chart") as ChartItem;
+    chart.spec = createChartSpec("line");
+    const withoutMaps = buildPackagePayload(ws, [screen.id]);
+    expect(attachGeo(withoutMaps)).toBe(withoutMaps);
+    expect(withoutMaps).not.toHaveProperty("geo");
+  });
+
   it("只导出选中的大屏，并带上格式与版本", () => {
     const { ws, screen } = seed();
     ws.screens.push(createScreen("另一块"));
@@ -84,12 +105,13 @@ describe("export/snapshot 快照与白名单", () => {
     expect(isSafeImageSrc("")).toBe(false);
   });
 
-  it("只允许进度条组、标题栏和装饰边框的精确离线版本", () => {
+  it("只允许受控数据/装饰组件与地图场景预设的精确离线版本", () => {
     const { screen } = seed();
     const supported: ComponentItem[] = [
       { id: "progress", name: "进度", kind: "component", componentId: "chartforge.progress-list", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 180, rotate: 0 }, props: { labelField: "region", valueField: "amount" }, dataBinding: { datasetId: "sales" } },
       { id: "title", name: "标题", kind: "component", componentId: "chartforge.section-title", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 72, rotate: 0 }, props: { title: "<script>literal</script>" } },
       { id: "frame", name: "边框", kind: "component", componentId: "chartforge.corner-frame", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 180, rotate: 0 }, props: { variant: "double" } },
+      { id: "map-scene", name: "地图场景", kind: "component", componentId: "chartforge.map-scene-tilted", componentVersion: 1, frame: { x: 0, y: 0, w: 640, h: 400, rotate: 0 }, props: { presentation: "tilted", pitch: 99, extra: "remove", layers: [{ id: "flow", type: "geoFlow", name: "OD", visible: true, style: { color: "#32d6ff", opacity: 2, size: 8 }, script: "evil()" }, { id: "bad", type: "plugin" }] }, dataBinding: { datasetId: "routes" } },
     ];
     screen.items.push(...supported);
 
@@ -98,8 +120,11 @@ describe("export/snapshot 快照与白名单", () => {
       ["chartforge.progress-list", 1],
       ["chartforge.section-title", 1],
       ["chartforge.corner-frame", 1],
+      ["chartforge.map-scene-tilted", 1],
     ]);
     expect(components[0]).toMatchObject({ props: { labelField: "region", valueField: "amount" }, dataBinding: { datasetId: "sales" } });
+    expect(components[3]).toMatchObject({ props: { presentation: "tilted", pitch: 60, layers: [{ id: "flow", type: "geoFlow", style: { opacity: 1 } }] }, dataBinding: { datasetId: "routes" } });
+    expect(JSON.stringify(components[3])).not.toContain("evil()");
 
     screen.items.push({ ...supported[0]!, id: "unsupported-version", name: "component", componentVersion: 2 });
     expect(() => toPackageScreen(screen, [])).toThrow("chartforge.progress-list");
@@ -144,6 +169,49 @@ describe("export/snapshot 快照与白名单", () => {
     expect(payload.screens[0]?.blueprint?.nodes.find((node) => node.id === "set")).toMatchObject({ id: "set", kind: "setVariable" });
     const serialized = JSON.stringify(payload);
     for (const secret of ["private.example", "unused.example", "header-secret", "body-secret", "query-secret"]) expect(serialized).not.toContain(secret);
+  });
+
+  it("includes registered local sample rows for unbound data widgets only", () => {
+    const { ws, screen } = seed();
+    screen.items.push(
+      item<ComponentItem>("component", { componentId: "chartforge.data-table", componentVersion: 1, props: { columns: [{ field: "name", label: "名称", format: "text" }, { field: "value", label: "数值", format: "number" }] } }),
+      item<ComponentItem>("component", { componentId: "chartforge.kpi", componentVersion: 1, props: { valueField: "value" } }),
+      item<ComponentItem>("component", { componentId: "chartforge.progress-list", componentVersion: 1, props: { labelField: "name", valueField: "value" } }),
+      item<ComponentItem>("component", { componentId: "chartforge.data-table", componentVersion: 1, props: {}, dataBinding: { datasetId: "live-data" } }),
+    );
+    const items = buildPackagePayload(ws, [screen.id]).screens[0]!.items.filter((entry) => entry.kind === "component");
+    expect(items.filter((entry) => entry.componentId === "chartforge.data-table" && !entry.dataBinding).map((entry) => entry.kind === "component" ? entry.sampleRows : undefined)).toEqual([
+      [{ name: "华东区", value: 1280 }, { name: "华南区", value: 960 }, { name: "华北区", value: 742 }],
+    ]);
+    expect(items.find((entry) => entry.componentId === "chartforge.kpi" && entry.kind === "component")?.kind === "component" && items.find((entry) => entry.componentId === "chartforge.kpi" && entry.kind === "component")?.sampleRows).toEqual([{ name: "本月营收", value: 1280 }]);
+    expect(items.find((entry) => entry.componentId === "chartforge.progress-list" && entry.kind === "component")?.kind === "component" && items.find((entry) => entry.componentId === "chartforge.progress-list" && entry.kind === "component")?.sampleRows).toHaveLength(4);
+    expect(items.find((entry) => entry.componentId === "chartforge.data-table" && entry.dataBinding)).not.toHaveProperty("sampleRows");
+  });
+
+  it("includes independently bound map-layer datasets in the offline snapshot", () => {
+    const { ws, screen } = seed();
+    ws.datasets.push(
+      { id: "container-data", name: "容器数据", source: { kind: "http", live: { url: "https://private.example/container", intervalSec: 30 } } } as never,
+      { id: "layer-regions", name: "区域数据", source: { kind: "http", live: { url: "https://private.example/regions", intervalSec: 30 } } } as never,
+    );
+    screen.items.push(item<ComponentItem>("component", {
+      componentId: "chartforge.map-scene-flat", componentVersion: 1,
+      dataBinding: { datasetId: "container-data" },
+      props: { layers: [{ id: "region", type: "regionFill", name: "区域", dataBinding: { datasetId: "layer-regions", fields: { category: "province", value: "score" } } }] },
+    }));
+    const payload = buildPackagePayload(ws, [screen.id], { datasetSnapshots: new Map([
+      ["container-data", { status: "success" as const, rows: [{ name: "container" }] }],
+      ["layer-regions", { status: "success" as const, rows: [{ province: "广东省", score: 8 }] }],
+    ]) });
+    expect(payload.datasets).toEqual([
+      { id: "container-data", rows: [{ name: "container" }] },
+      { id: "layer-regions", rows: [{ province: "广东省", score: 8 }] },
+    ]);
+    expect(payload.screens[0]?.items.find((entry) => entry.kind === "component" && entry.componentId === "chartforge.map-scene-flat"))
+      .toMatchObject({ props: { layers: [{ dataBinding: { datasetId: "layer-regions", fields: { category: "province", value: "score" } } }] } });
+    expect(runtimeSource()).toContain("datasetRows(layer.dataBinding, screen)");
+    expect(runtimeSource()).toContain("layer.dataBinding.fields || {}");
+    expect(runtimeSource()).toContain("layerRows.forEach(function (row)");
   });
 
   it("exports stale dataset rows and warns that the last successful snapshot is stale", () => {

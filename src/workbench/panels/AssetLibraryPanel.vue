@@ -17,9 +17,12 @@ const CHART_TYPE_LABELS: Record<ChartType, string> = {
   line: "折线图",
   bar: "柱状图",
   pie: "饼图",
-  map: "地图",
+  map: "区域填色地图",
   scatter: "散点图",
   radar: "雷达图",
+  geoScatter: "地理散点图",
+  geoHeatmap: "点热力图",
+  geoFlow: "OD 飞线图",
 };
 const CATEGORIES = Object.values(CHART_TYPE_LABELS);
 

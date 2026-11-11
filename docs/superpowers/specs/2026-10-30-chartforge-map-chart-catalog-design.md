@@ -1,6 +1,6 @@
 # ChartForge 组件目录分类与地图图表扩展设计
 
-> 状态：对话设计阶段已确认；待用户审阅本规格。规格获批前不写实施计划、不修改产品代码。
+> 状态：已被 `2026-10-30-chartforge-map-scenes-design.md` supersede；保留为上一轮二维地图图表方案的历史记录。
 > 工作区：`E:/project/github-project/echarts-project`；继续当前分支 `feature/chartforge-datav-lite`，保留已有未提交改动。
 
 ## 目标

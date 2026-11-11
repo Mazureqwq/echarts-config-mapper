@@ -1,5 +1,6 @@
-import type { ChartData, ChartType } from "@/core/model/types";
+import type { ChartData, ChartType, GeoChartType, GeoFieldMapping } from "@/core/model/types";
 import { matrixToChartData, validateChartData } from "@/core/chart/chartData";
+import { buildGeoChartDataFromRows } from "@/core/chart/geoData";
 import type { ChartDataResult, PipelineMap } from "./pipeline";
 
 export type PayloadResult = { ok: true; data: ChartData } | { ok: false; message: string };
@@ -25,6 +26,14 @@ export function buildChartDataFromRows(
   map: PipelineMap | undefined,
   type: ChartType
 ): ChartDataResult {
+  if (type === "geoScatter" || type === "geoHeatmap" || type === "geoFlow") {
+    const geoResult = buildGeoChartDataFromRows(rows, map?.geo, type);
+    const count = rows.length;
+    const counts = { raw: count, filtered: count, selected: count, sorted: count, limited: count };
+    return geoResult.ok
+      ? { ok: true, data: geoResult.data, counts }
+      : { ok: false, message: geoResult.message, counts };
+  }
   const first = rows[0] ?? {};
   const keys = Object.keys(first);
   const categoryField = map?.category || keys[0] || "";
@@ -65,7 +74,8 @@ export function buildChartDataFromRows(
   return { ok: true, data, counts: { raw: count, filtered: count, selected: count, sorted: count, limited: count } };
 }
 
-const KIND_SET = new Set(["category", "nameValue", "xy", "radar"]);
+const KIND_SET = new Set(["category", "nameValue", "xy", "radar", "geoScatter", "geoHeatmap", "geoFlow"]);
+const GEO_CHART_TYPES = new Set<ChartType>(["geoScatter", "geoHeatmap", "geoFlow"]);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -119,7 +129,7 @@ function withHeaderRow(type: ChartType): boolean {
  *   4. 一维标量数组：[10, 20] → 单列
  * 失败时返回中文可读原因，不再把 JS 报错抛给用户。
  */
-export function toChartData(raw: unknown, type: ChartType): PayloadResult {
+export function toChartData(raw: unknown, type: ChartType, mapping?: GeoFieldMapping): PayloadResult {
   if (raw === null || raw === undefined) {
     return { ok: false, message: "接口没有返回数据" };
   }
@@ -132,6 +142,11 @@ export function toChartData(raw: unknown, type: ChartType): PayloadResult {
 
   if (Array.isArray(raw)) {
     if (raw.length === 0) return { ok: false, message: "接口返回了空数组" };
+
+    if (GEO_CHART_TYPES.has(type as GeoChartType) && raw.every((row) => isRecord(row))) {
+      const result = buildGeoChartDataFromRows(raw as Record<string, unknown>[], mapping, type as GeoChartType);
+      return result.ok ? { ok: true, data: result.data } : { ok: false, message: result.message };
+    }
 
     let matrix: string[][];
 

@@ -2,11 +2,12 @@
 import { computed, ref, watch } from "vue";
 import { componentRegistry } from "@/core/components/builtins";
 import { validateBlueprint } from "@/core/blueprint/validate";
+import { blueprintUsesVariable, isValidBlueprintVariableName, renameBlueprintVariable } from "@/core/blueprint/variables";
 import type { BlueprintGraph, BlueprintNode, BlueprintVariable, ValueRef } from "@/core/blueprint/types";
 import type { DatasetDefinition } from "@/core/model/types";
 
-const props = defineProps<{ modelValue: BlueprintGraph; datasets: DatasetDefinition[] }>();
-const emit = defineEmits<{ (event: "save", graph: BlueprintGraph): void; (event: "close"): void }>();
+const props = withDefaults(defineProps<{ modelValue: BlueprintGraph; datasets: DatasetDefinition[]; boundVariableNames?: string[] }>(), { boundVariableNames: () => [] });
+const emit = defineEmits<{ (event: "save", graph: BlueprintGraph, renamedVariables: Record<string, string>): void; (event: "close"): void }>();
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const draft = ref<BlueprintGraph>({ nodes: [], edges: [], variables: [] });
 const selectedNodeId = ref("");
@@ -14,9 +15,11 @@ const connectFrom = ref("");
 const connectTo = ref("");
 const connectPort = ref("next");
 const editError = ref("");
+const renamedVariables = ref<Record<string, string>>({});
 
 watch(() => props.modelValue, (value) => {
   draft.value = clone(value);
+  renamedVariables.value = {};
   selectedNodeId.value = draft.value.nodes[0]?.id ?? "";
 }, { immediate: true, deep: true });
 
@@ -90,10 +93,35 @@ function addVariable(): void {
   while (draft.value.variables.some((variable) => variable.name === `variable${index}`)) index += 1;
   draft.value.variables.push({ name: `variable${index}`, type: "string", initialValue: "" });
 }
-function removeVariable(name: string): void { draft.value.variables = draft.value.variables.filter((variable) => variable.name !== name); }
-function setVariableName(variable: BlueprintVariable, event: Event): void { variable.name = (event.target as HTMLInputElement).value; }
+function variableIsReferenced(name: string): boolean {
+  const originalName = Object.entries(renamedVariables.value).find(([, currentName]) => currentName === name)?.[0] ?? name;
+  return blueprintUsesVariable(draft.value, name)
+    || props.boundVariableNames.includes(name)
+    || props.boundVariableNames.includes(originalName);
+}
+function removeVariable(name: string): void {
+  if (variableIsReferenced(name)) {
+    editError.value = `变量 ${name} 仍被蓝图节点或数据绑定引用，请先解除引用。`;
+    return;
+  }
+  draft.value.variables = draft.value.variables.filter((variable) => variable.name !== name);
+  editError.value = "";
+}
+function setVariableName(variable: BlueprintVariable, event: Event): void {
+  const nextName = (event.target as HTMLInputElement).value.trim();
+  const oldName = variable.name;
+  if (nextName === oldName) return;
+  if (!isValidBlueprintVariableName(nextName)) { editError.value = "变量名格式无效。"; return; }
+  if (draft.value.variables.some((entry) => entry.name === nextName)) { editError.value = "变量名已存在。"; return; }
+  const originalName = Object.entries(renamedVariables.value).find(([, currentName]) => currentName === oldName)?.[0] ?? oldName;
+  draft.value = renameBlueprintVariable(draft.value, oldName, nextName);
+  if (originalName === nextName) delete renamedVariables.value[originalName];
+  else renamedVariables.value[originalName] = nextName;
+  editError.value = "";
+}
 function setVariableType(variable: BlueprintVariable, event: Event): void {
   const type = (event.target as HTMLSelectElement).value as BlueprintVariable["type"];
+  if (type === "object" && props.boundVariableNames.includes(variable.name)) { editError.value = "对象变量不能用于数据绑定过滤，请先解除过滤绑定。"; return; }
   variable.type = type;
   variable.initialValue = type === "string" ? "" : type === "number" ? 0 : type === "boolean" ? false : {};
 }
@@ -143,7 +171,7 @@ function selectActionComponent(value: string): void {
 }
 function save(): void {
   if (editError.value || !validation.value.ok) return;
-  emit("save", clone(draft.value));
+  emit("save", clone(draft.value), { ...renamedVariables.value });
 }
 </script>
 
@@ -165,9 +193,9 @@ function save(): void {
         <button type="button" class="blueprint-editor__palette-button" @click="addVariable">＋ 添加变量</button>
         <div v-for="variable in draft.variables" :key="variable.name + draft.variables.length" class="blueprint-editor__variable">
           <input :value="variable.name" aria-label="变量名称" @change="setVariableName(variable, $event)" />
-          <select :value="variable.type" aria-label="变量类型" @change="setVariableType(variable, $event)"><option value="string">文本</option><option value="number">数字</option><option value="boolean">布尔</option><option value="object">对象</option></select>
+          <select :value="variable.type" aria-label="变量类型" @change="setVariableType(variable, $event)"><option value="string">文本</option><option value="number">数字</option><option value="boolean">布尔</option><option value="object" :disabled="props.boundVariableNames.includes(variable.name)">对象</option></select>
           <input :value="JSON.stringify(variable.initialValue)" aria-label="变量初始值" @change="setVariableValue(variable, $event)" />
-          <button type="button" aria-label="删除变量" @click="removeVariable(variable.name)">×</button>
+          <button type="button" aria-label="删除变量" :disabled="variableIsReferenced(variable.name)" @click="removeVariable(variable.name)">×</button>
         </div>
       </aside>
       <section class="blueprint-editor__graph">

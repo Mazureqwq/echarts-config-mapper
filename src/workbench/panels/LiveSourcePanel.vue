@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-import type { ChartItem, LiveFilterOp, LiveSource } from "@/core/model/types";
+import type { ChartItem, GeoChartType, GeoFieldMapping, LiveFilterOp, LiveSource } from "@/core/model/types";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { LIVE_MIN_INTERVAL_SEC, LIVE_MAX_INTERVAL_SEC } from "@/core/live/liveSource";
@@ -68,6 +68,17 @@ const limit = ref(0);
 const mapCategory = ref("");
 const mapValue = ref("");
 const mapSeries = ref("");
+const geoMapping = ref<GeoFieldMapping>({});
+type GeoFieldKey = keyof GeoFieldMapping;
+const GEO_FIELD_SPECS: Record<GeoChartType, readonly { key: GeoFieldKey; label: string }[]> = {
+  geoScatter: [{ key: "longitude", label: "经度" }, { key: "latitude", label: "纬度" }, { key: "name", label: "名称（可选）" }, { key: "value", label: "数值（可选）" }],
+  geoHeatmap: [{ key: "longitude", label: "经度" }, { key: "latitude", label: "纬度" }, { key: "value", label: "热力值" }],
+  geoFlow: [{ key: "originLongitude", label: "起点经度" }, { key: "originLatitude", label: "起点纬度" }, { key: "destinationLongitude", label: "终点经度" }, { key: "destinationLatitude", label: "终点纬度" }, { key: "name", label: "路线名称（可选）" }, { key: "value", label: "数值（可选）" }],
+};
+const geoFieldSpecs = computed(() => {
+  const type = props.item.spec.type;
+  return type === "geoScatter" || type === "geoHeatmap" || type === "geoFlow" ? GEO_FIELD_SPECS[type] : [];
+});
 
 const notice = ref("");
 
@@ -92,6 +103,7 @@ function syncFromItem(): void {
   mapCategory.value = src?.map?.category ?? "";
   mapValue.value = src?.map?.value ?? "";
   mapSeries.value = src?.map?.seriesField ?? "";
+  geoMapping.value = { ...(src?.map?.geo ?? {}) };
   notice.value = "";
   probe.value = null;
   snapshotNotice.value = "";
@@ -126,18 +138,21 @@ const fullSource = computed<LiveSource | undefined>(() => {
   const base = draft.value;
   if (!base) return undefined;
   const cleanFilters = filters.value.filter((f) => f.field.trim() !== "");
+  const geo = Object.fromEntries(Object.entries(geoMapping.value).filter(([, value]) => typeof value === "string" && value.trim())) as GeoFieldMapping;
+  const hasGeoMapping = Object.keys(geo).length > 0;
   return {
     ...base,
     ...(cleanFilters.length ? { filter: cleanFilters } : {}),
     ...(selectFields.value.length ? { select: selectFields.value } : {}),
     ...(sortField.value.trim() ? { sort: { field: sortField.value.trim(), ...(sortDesc.value ? { desc: true } : {}) } } : {}),
     ...(limit.value > 0 ? { limit: Math.min(5000, Math.round(limit.value)) } : {}),
-    ...(mapCategory.value || mapValue.value || mapSeries.value
+    ...(mapCategory.value || mapValue.value || mapSeries.value || hasGeoMapping
       ? {
           map: {
             ...(mapCategory.value ? { category: mapCategory.value } : {}),
             ...(mapValue.value ? { value: mapValue.value } : {}),
             ...(mapSeries.value ? { seriesField: mapSeries.value } : {}),
+            ...(hasGeoMapping ? { geo } : {}),
           },
         }
       : {}),
@@ -253,6 +268,14 @@ function toggleSelect(field: string): void {
   else selectFields.value.splice(i, 1);
 }
 
+function updateGeoMapping(key: GeoFieldKey, value: string): void {
+  const next = { ...geoMapping.value };
+  const normalized = value.trim();
+  if (normalized) next[key] = normalized;
+  else delete next[key];
+  geoMapping.value = next;
+}
+
 function clearProcessing(): void {
   filters.value = [];
   selectFields.value = [];
@@ -262,6 +285,7 @@ function clearProcessing(): void {
   mapCategory.value = "";
   mapValue.value = "";
   mapSeries.value = "";
+  geoMapping.value = {};
   notice.value = "已清空加工设置（记得点保存）";
 }
 
@@ -510,7 +534,8 @@ function useDefaultInterval(): void {
         </div>
 
         <div class="live__debug-block">
-          <div class="live__debug-title">字段映射（留空 = 按第一行自动推断）</div>
+          <div class="live__debug-title">字段映射（普通图表留空可自动推断）</div>
+          <template v-if="!geoFieldSpecs.length">
           <div class="live__row">
             <span>分类列</span>
             <select v-model="mapCategory" class="live__select cf-control cf-control--compact">
@@ -532,6 +557,17 @@ function useDefaultInterval(): void {
               <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
             </select>
           </div>
+          </template>
+          <template v-else>
+            <div class="live__field-hint">地理图表使用显式字段映射。启用选列时请保留这里选择的全部字段。</div>
+            <label v-for="field in geoFieldSpecs" :key="field.key" class="live__row">
+              <span>{{ field.label }}</span>
+              <select :value="geoMapping[field.key] ?? ''" class="live__select cf-control cf-control--compact" @change="updateGeoMapping(field.key, ($event.target as HTMLSelectElement).value)">
+                <option value="">未映射</option>
+                <option v-for="name in fields" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </label>
+          </template>
         </div>
 
         <div class="live__debug-block">

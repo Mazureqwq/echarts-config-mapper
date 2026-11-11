@@ -9,8 +9,9 @@ describe("component catalog projection", () => {
     const charts = entries.filter((entry) => entry.source === "chart");
     const components = entries.filter((entry) => entry.source === "component");
 
-    expect(charts.map((entry) => entry.chartType).sort()).toEqual(Object.keys(chartRegistry).sort());
-    expect(new Set(charts.map((entry) => entry.key)).size).toBe(Object.keys(chartRegistry).length);
+    const placeableChartTypes = Object.keys(chartRegistry).filter((type) => !["map", "geoScatter", "geoHeatmap", "geoFlow"].includes(type));
+    expect(charts.map((entry) => entry.chartType).sort()).toEqual(placeableChartTypes.sort());
+    expect(new Set(charts.map((entry) => entry.key)).size).toBe(placeableChartTypes.length);
     expect(components.map((entry) => `${entry.componentId}@${entry.componentVersion}`)).toEqual(
       componentRegistry.list().filter((definition) => definition.renderer.kind === "vue").map((definition) => `${definition.id}@${definition.version}`)
     );
@@ -37,6 +38,17 @@ describe("component catalog projection", () => {
     expect(entries[1]).toMatchObject({ group: "data", previewKey: "generic" });
     expect(componentRegistry.get("chartforge.kpi", 1)).toBe(registered);
     expect(componentRegistry.get("test.unannotated", 1)).toBeUndefined();
+  });
+
+  it("presents geographic capabilities as map-scene presets while keeping ordinary scatter in chart", () => {
+    const charts = getComponentCatalog().filter((entry) => entry.source === "chart");
+    const mapEntries = getComponentCatalog().filter((entry) => entry.group === "map");
+    expect(mapEntries.map((entry) => entry.key)).toEqual(["chartforge.map-scene-flat@1", "chartforge.map-scene-tilted@1"]);
+    expect(mapEntries.every((entry) => entry.source === "component")).toBe(true);
+    expect(charts.some((entry) => entry.source === "chart" && ["map", "geoScatter", "geoHeatmap", "geoFlow"].includes(entry.chartType))).toBe(false);
+    for (const type of ["line", "bar", "pie", "scatter", "radar"] as const) expect(charts.some((entry) => entry.source === "chart" && entry.chartType === type)).toBe(true);
+    expect(filterComponentCatalog(charts, "热力", "map")).toEqual([]);
+    expect(filterComponentCatalog(charts, "散点", "chart").map((entry) => entry.source === "chart" ? entry.chartType : "")).toEqual(["scatter"]);
   });
 
   it("searches trimmed text across names, descriptions, and tags without case sensitivity", () => {

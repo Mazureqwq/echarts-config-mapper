@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { formatPairs, parsePairs } from "@/core/live/apiSettings";
 import { validateLiveSource } from "@/core/live/liveSource";
-import type { DatasetDefinition, DatasetPipeline, DatasetSnapshot, HttpMethodName } from "@/core/model/types";
+import type { DatasetDefinition, DatasetPipeline, DatasetSnapshot, HttpMethodName, LiveFilterOp } from "@/core/model/types";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
@@ -21,7 +21,17 @@ const dataPath = ref("");
 const headersText = ref("");
 const queryText = ref("");
 const parametersText = ref("");
-const filterText = ref("[]");
+type DatasetFilterCondition = NonNullable<DatasetPipeline["filter"]>[number];
+const filterDraft = ref<DatasetFilterCondition[]>([]);
+const MAX_DATASET_FILTERS = 50;
+const FORBIDDEN_FILTER_FIELDS = new Set(["__proto__", "prototype", "constructor"]);
+const FILTER_OPERATORS: Array<{ value: LiveFilterOp; label: string }> = [
+  { value: "eq", label: "等于" }, { value: "ne", label: "不等于" },
+  { value: "gt", label: "大于" }, { value: "gte", label: "大于等于" },
+  { value: "lt", label: "小于" }, { value: "lte", label: "小于等于" },
+  { value: "contains", label: "包含" }, { value: "in", label: "属于列表" },
+  { value: "notEmpty", label: "非空" },
+];
 const selectText = ref("");
 const sortField = ref("");
 const sortDesc = ref(false);
@@ -61,7 +71,7 @@ function loadDraft(dataset: DatasetDefinition | null): void {
   name.value = dataset.name;
   sourceKind.value = dataset.source.kind;
   parametersText.value = formatPairs(dataset.parameters);
-  filterText.value = JSON.stringify(dataset.pipeline?.filter ?? [], null, 2);
+  filterDraft.value = (dataset.pipeline?.filter ?? []).map((filter) => ({ ...filter }));
   selectText.value = dataset.pipeline?.select?.join(", ") ?? "";
   sortField.value = dataset.pipeline?.sort?.field ?? "";
   sortDesc.value = dataset.pipeline?.sort?.desc === true;
@@ -119,7 +129,7 @@ function beginCreate(kind: "static" | "http"): void {
   headersText.value = "";
   queryText.value = "";
   parametersText.value = "";
-  filterText.value = "[]";
+  filterDraft.value = [];
   selectText.value = "";
   sortField.value = "";
   sortDesc.value = false;
@@ -136,21 +146,39 @@ function cancelCreate(): void {
   }
 }
 
+function addFilter(): void {
+  if (filterDraft.value.length >= MAX_DATASET_FILTERS) { error.value = `每个数据集最多配置 ${MAX_DATASET_FILTERS} 条过滤条件。`; return; }
+  filterDraft.value.push({ field: "", op: "eq", value: "" });
+  error.value = "";
+}
+
+function removeFilter(index: number): void {
+  filterDraft.value.splice(index, 1);
+  error.value = "";
+}
+
+function moveFilter(index: number, offset: -1 | 1): void {
+  const target = index + offset;
+  if (target < 0 || target >= filterDraft.value.length) return;
+  const next = [...filterDraft.value];
+  [next[index], next[target]] = [next[target], next[index]];
+  filterDraft.value = next;
+}
+
+function changeFilterOperator(index: number, event: Event): void {
+  const condition = filterDraft.value[index];
+  if (!condition) return;
+  const op = (event.target as HTMLSelectElement).value as LiveFilterOp;
+  filterDraft.value[index] = { ...condition, op, value: op === "notEmpty" ? "" : condition.value };
+}
+
 function buildPipeline(): DatasetPipeline | undefined {
-  const filterRaw = JSON.parse(filterText.value || "[]") as unknown;
-  if (!Array.isArray(filterRaw)) throw new Error("过滤条件必须是 JSON 数组");
-  const supportedOps = new Set(["eq", "ne", "gt", "gte", "lt", "lte", "contains", "in", "notEmpty"]);
-  const filter = filterRaw.map((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("每条过滤条件都必须是对象");
-    const row = entry as Record<string, unknown>;
-    if (typeof row.field !== "string" || !row.field.trim() || typeof row.op !== "string" || !supportedOps.has(row.op)) {
-      throw new Error("过滤条件需要有效字段和支持的运算符");
-    }
-    return {
-      field: row.field.trim(),
-      op: row.op as NonNullable<DatasetPipeline["filter"]>[number]["op"],
-      value: row.value === null || row.value === undefined ? "" : String(row.value),
-    };
+  if (filterDraft.value.length > MAX_DATASET_FILTERS) throw new Error(`每个数据集最多配置 ${MAX_DATASET_FILTERS} 条过滤条件`);
+  const filter = filterDraft.value.map((condition) => {
+    const field = condition.field.trim();
+    if (!field || FORBIDDEN_FILTER_FIELDS.has(field)) throw new Error("每条过滤条件都需要有效且安全的字段名");
+    if (!FILTER_OPERATORS.some((operator) => operator.value === condition.op)) throw new Error("过滤条件运算符无效");
+    return { field, op: condition.op, value: condition.op === "notEmpty" ? "" : String(condition.value ?? "") };
   });
   const select = selectText.value.split(",").map((field) => field.trim()).filter(Boolean);
   const pipeline: DatasetPipeline = {};
@@ -333,10 +361,37 @@ onBeforeUnmount(() => {
           数据集参数（覆盖接口同名参数）
           <textarea v-model="parametersText" class="cf-control cf-control--compact dataset-panel__textarea dataset-panel__textarea--small" spellcheck="false" placeholder="tenant=demo" />
         </label>
-        <label class="dataset-panel__field">
-          行过滤（JSON 数组，支持 eq / gt / contains 等）
-          <textarea v-model="filterText" class="cf-control cf-control--compact dataset-panel__textarea dataset-panel__textarea--small" spellcheck="false" placeholder='[{"field":"sales","op":"gt","value":"0"}]' />
-        </label>
+        <section class="dataset-panel__filters" aria-label="数据集行过滤">
+          <div class="dataset-panel__filter-head">
+            <strong>行过滤</strong>
+            <button class="cf-button cf-button--compact" type="button" :disabled="filterDraft.length >= MAX_DATASET_FILTERS" @click="addFilter">＋ 添加条件</button>
+          </div>
+          <p class="dataset-panel__filter-hint">多个条件按列表顺序以 AND 组合；同一数据集的所有绑定组件共用这些过滤条件。</p>
+          <datalist id="dataset-filter-fields"><option v-for="column in columns" :key="column" :value="column" /></datalist>
+          <div v-if="!filterDraft.length" class="dataset-panel__filter-empty">未设置行过滤，保留全部数据。</div>
+          <div v-for="(condition, index) in filterDraft" :key="index" class="dataset-panel__filter-row">
+            <div class="dataset-panel__filter-grid">
+              <label class="dataset-panel__field">字段
+                <input v-model.trim="condition.field" class="cf-control cf-control--compact" type="text" list="dataset-filter-fields" placeholder="sales" />
+              </label>
+              <label class="dataset-panel__field">运算符
+                <select class="cf-control cf-control--compact" :value="condition.op" @change="changeFilterOperator(index, $event)">
+                  <option v-for="operator in FILTER_OPERATORS" :key="operator.value" :value="operator.value">{{ operator.label }}</option>
+                </select>
+              </label>
+              <label v-if="condition.op !== 'notEmpty'" class="dataset-panel__field">值
+                <input v-model="condition.value" class="cf-control cf-control--compact" type="text" :placeholder="condition.op === 'in' ? '逗号分隔，例如 A, B' : '请输入匹配值'" />
+              </label>
+              <span v-else class="dataset-panel__filter-hint">仅检查字段是否非空。</span>
+            </div>
+            <div class="dataset-panel__filter-actions">
+              <span>条件 {{ index + 1 }}</span>
+              <button class="dataset-panel__filter-action" type="button" :disabled="index === 0" :aria-label="`过滤条件 ${index + 1} 上移`" title="上移" @click="moveFilter(index, -1)">↑</button>
+              <button class="dataset-panel__filter-action" type="button" :disabled="index === filterDraft.length - 1" :aria-label="`过滤条件 ${index + 1} 下移`" title="下移" @click="moveFilter(index, 1)">↓</button>
+              <button class="dataset-panel__filter-action dataset-panel__filter-action--remove" type="button" :aria-label="`删除过滤条件 ${index + 1}`" title="删除条件" @click="removeFilter(index)">删除</button>
+            </div>
+          </div>
+        </section>
         <label class="dataset-panel__field">
           选列（逗号分隔）
           <input v-model="selectText" class="cf-control cf-control--compact" type="text" placeholder="city, sales" />
@@ -416,6 +471,18 @@ onBeforeUnmount(() => {
 .dataset-panel__advanced { border-top: 1px solid var(--cf-border); padding-top: 8px; }
 .dataset-panel__advanced summary { margin-bottom: 8px; color: var(--cf-primary); cursor: pointer; font-size: 11px; }
 .dataset-panel__advanced[open] { display: flex; flex-direction: column; gap: 9px; }
+.dataset-panel__filters { display: flex; flex-direction: column; gap: 7px; }
+.dataset-panel__filter-head, .dataset-panel__filter-actions { display: flex; align-items: center; gap: 6px; }
+.dataset-panel__filter-head { justify-content: space-between; color: var(--cf-text); font-size: 10px; }
+.dataset-panel__filter-hint, .dataset-panel__filter-empty { margin: 0; color: var(--cf-text-2); font-size: 9px; line-height: 1.45; }
+.dataset-panel__filter-row { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--cf-border); border-radius: 5px; padding: 7px; background: color-mix(in srgb, var(--cf-panel) 90%, #000 10%); }
+.dataset-panel__filter-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; align-items: end; }
+.dataset-panel__filter-actions { justify-content: flex-end; color: var(--cf-text-2); font-size: 9px; }
+.dataset-panel__filter-actions span { margin-right: auto; }
+.dataset-panel__filter-action { min-width: 24px; min-height: 23px; border: 1px solid var(--cf-border); border-radius: 4px; background: transparent; color: var(--cf-text-2); cursor: pointer; font: inherit; }
+.dataset-panel__filter-action:hover:not(:disabled) { color: var(--cf-primary); border-color: var(--cf-primary); }
+.dataset-panel__filter-action:disabled { opacity: .4; cursor: not-allowed; }
+.dataset-panel__filter-action--remove { padding: 0 6px; color: var(--cf-danger); }
 .dataset-panel__actions { justify-content: space-between; }
 .dataset-panel__error { padding: 7px; border: 1px solid color-mix(in srgb, var(--cf-danger) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--cf-danger) 8%, transparent); color: var(--cf-danger); font-size: 10px; line-height: 1.45; }
 .dataset-panel__preview { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--cf-border); padding-top: 8px; }

@@ -77,7 +77,7 @@ function download(asset: ChartAsset): void {
 }
 
 function typeLabel(type: ChartType): string {
-  return { line: "折线", bar: "柱状", pie: "饼图", map: "地图", scatter: "散点", radar: "雷达" }[type] ?? type;
+  return { line: "折线", bar: "柱状", pie: "饼图", map: "区域填色地图", scatter: "散点", radar: "雷达", geoScatter: "地理散点图", geoHeatmap: "点热力图", geoFlow: "OD 飞线图" }[type] ?? type;
 }
 </script>
 

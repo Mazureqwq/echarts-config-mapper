@@ -10,7 +10,7 @@ import {
 import type { ChartItem, ChartType } from "../src/core/model/types";
 import { validateChartData } from "../src/core/chart/chartData";
 
-const ALL_TYPES: ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar"];
+const ALL_TYPES: ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar", "geoScatter", "geoHeatmap", "geoFlow"];
 
 describe("model/schema 工厂与规范化", () => {
   it("规范化保留 thumbnailVersion（旧数据没有该字段也不报错）", () => {
@@ -62,6 +62,7 @@ describe("model/schema 工厂与规范化", () => {
     expect(s.name).toBe("测试");
     expect(s.canvas.width).toBe(1920);
     expect(s.canvas.height).toBe(1080);
+    expect(s.canvas.background).toEqual({ kind: "color", color: "#12161d" });
     expect(s.items).toEqual([]);
     expect(typeof s.updatedAt).toBe("number");
   });
@@ -77,7 +78,7 @@ describe("model/schema 工厂与规范化", () => {
     expect(screen.canvas).toEqual({
       width: 1920,
       height: 1080,
-      background: { kind: "color", color: "#FFFFFF" },
+      background: { kind: "color", color: "#12161d" },
     });
     expect(screen.items).toHaveLength(1);
     expect(screen.items[0].kind).toBe("text");
@@ -101,7 +102,7 @@ describe("model/schema 工厂与规范化", () => {
 
   it("normalizeScreen 非法画布尺寸回退 1920×1080", () => {
     const ws = normalizeWorkspace({ version: 1, screens: [{ id: "a", canvas: { width: -5, height: 0 } }] });
-    expect(ws.screens[0].canvas).toEqual({ width: 1920, height: 1080, background: { kind: "color", color: "#FFFFFF" } });
+    expect(ws.screens[0].canvas).toEqual({ width: 1920, height: 1080, background: { kind: "color", color: "#12161d" } });
   });
 
   it("normalizeWorkspace 解析 category/tags，缺失时为空", () => {
@@ -141,6 +142,33 @@ describe("model/schema 工厂与规范化", () => {
     expect(names).toContain("广东省");
     expect(names).toContain("北京市");
     expect(names.every((n) => /(省|市|自治区)$/.test(n))).toBe(true);
+  });
+
+  it("规范化地图 ChartType、ChartData 和 geo 字段映射时只保留白名单字段", () => {
+    const ws = normalizeWorkspace({
+      version: 2,
+      assets: [{
+        id: "asset-geo", name: "地理散点",
+        spec: {
+          type: "geoScatter", option: {},
+          data: { kind: "geoScatter", rows: [{ longitude: 114, latitude: 22, name: "港岛" }] },
+          source: { url: "", path: "/geo", intervalSec: 30, map: { geo: { longitude: " lng ", latitude: "lat", name: "city", value: "weight", unsafe: "ignored" } } },
+        },
+      }],
+      screens: [{ id: "screen-geo", items: [{
+        id: "item-geo", name: "OD", kind: "chart",
+        frame: { x: 0, y: 0, w: 200, h: 120, rotate: 0 },
+        spec: { type: "geoFlow", option: {}, data: { kind: "geoFlow", rows: [] } },
+        dataBinding: { datasetId: "routes", fields: { geo: { originLongitude: " fromLng ", originLatitude: "fromLat", destinationLongitude: "toLng", destinationLatitude: "toLat", unsafe: "ignored" } } },
+      }] }],
+    });
+    expect(ws.version).toBe(2);
+    expect(ws.assets[0].spec.type).toBe("geoScatter");
+    expect(ws.assets[0].spec.data).toMatchObject({ kind: "geoScatter", rows: [{ longitude: 114, latitude: 22 }] });
+    expect(ws.assets[0].spec.source?.map?.geo).toEqual({ longitude: "lng", latitude: "lat", name: "city", value: "weight" });
+    const item = ws.screens[0].items[0];
+    expect(item.kind === "chart" && item.spec.type).toBe("geoFlow");
+    expect(item.kind === "chart" && item.dataBinding?.fields?.geo).toEqual({ originLongitude: "fromLng", originLatitude: "fromLat", destinationLongitude: "toLng", destinationLatitude: "toLat" });
   });
 
   it("既有 spec 缺失数据时规范化后补上初始示例数据", () => {

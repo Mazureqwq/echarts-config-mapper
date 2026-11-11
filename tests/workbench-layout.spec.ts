@@ -7,10 +7,12 @@ const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 const workbench = read("views/WorkbenchView.vue");
 const leftPanel = read("workbench/LeftPanel.vue");
+const layersPanel = read("workbench/LayersPanel.vue");
 const inspector = read("workbench/InspectorPanel.vue");
 const topBar = read("workbench/TopBar.vue");
 const canvasStage = read("workbench/CanvasStage.vue");
 const shortcutsHelp = read("workbench/ShortcutsHelp.vue");
+const chartConfig = read("workbench/panels/ChartConfigPanel.vue");
 const transformHandles = read("workbench/TransformHandles.vue");
 const appHeader = read("shared/ui/AppHeader.vue");
 const library = read("views/LibraryView.vue");
@@ -54,6 +56,16 @@ describe("DataV-inspired workbench layout", () => {
     expect(leftPanel).toContain("left-panel__content");
   });
 
+  it("renders existing canvas groups as a collapsible, selection-aware layer tree", () => {
+    expect(layersPanel).toContain('role="tree" aria-label="图层树"');
+    expect(layersPanel).toContain("buildLayerTree(doc.items)");
+    expect(layersPanel).toContain(":aria-expanded=");
+    expect(layersPanel).toContain("onSelectGroup");
+    expect(layersPanel).toContain("row.depth + 1");
+    expect(layersPanel).toContain("doc.selectedIds");
+    expect(layersPanel).toContain("doc.reorderItem(id, targetIndex)");
+  });
+
   it("exposes the workspace dataset editor from the resource rail", () => {
     expect(leftPanel).toContain('{ key: "datasets", label: "数据集"');
     expect(leftPanel).toContain('import DatasetPanel from "./panels/DatasetPanel.vue"');
@@ -63,6 +75,24 @@ describe("DataV-inspired workbench layout", () => {
     expect(datasetPanel).toContain("ws.updateDataset");
     expect(datasetPanel).toContain("ws.removeDataset");
     expect(datasetPanel).toContain("数据预览");
+    expect(datasetPanel).toContain("filterDraft");
+    expect(datasetPanel).toContain("moveFilter(index");
+    expect(datasetPanel).toContain("多个条件按列表顺序以 AND 组合");
+    expect(datasetPanel).not.toContain("行过滤（JSON 数组");
+  });
+
+  it("exposes screen-scoped global variables and keeps binding references controlled", () => {
+    expect(leftPanel).toContain('{ key: "variables", label: "变量"');
+    expect(leftPanel).toContain("GlobalVariablesPanel");
+    const variablesPanel = read("workbench/panels/GlobalVariablesPanel.vue");
+    expect(variablesPanel).toContain("doc.updateScreenBlueprint");
+    expect(variablesPanel).toContain("blueprintUsesVariable");
+    expect(variablesPanel).toContain("最多声明 100 个全局变量");
+    const bindingEditor = read("workbench/components/DatasetBindingEditor.vue");
+    expect(bindingEditor).toContain("filterVariables");
+    expect(bindingEditor).toContain("请先在左侧“变量”面板声明");
+    expect(bindingEditor).not.toContain('全局变量名<input');
+    expect(workbench).toContain("runtimeVariableDefaultsByScreen");
   });
 
   it("separates configuration, data and interaction while retaining existing editors", () => {
@@ -88,6 +118,19 @@ describe("DataV-inspired workbench layout", () => {
     expect(workbench).toContain("collapsePanelsOnCompactViewport");
   });
 
+  it("supports quick canvas search and chart configuration-item filtering", () => {
+    expect(topBar).toContain("查找画布元素 (Ctrl+F)");
+    expect(canvasStage).toContain('aria-label="搜索画布元素"');
+    expect(canvasStage).toContain("focusSearchResult");
+    expect(canvasStage.indexOf('if (ctrl && ev.key.toLowerCase() === "f")')).toBeLessThan(
+      canvasStage.indexOf("if (isTypingTarget(ev)) return;")
+    );
+    expect(shortcutsHelp).toContain("Ctrl+F：按名称、类型或 ID 定位画布元素");
+    expect(chartConfig).toContain('aria-label="搜索图表配置项"');
+    expect(chartConfig).toContain("filteredGroups");
+    expect(chartConfig).toContain("没有匹配的配置项");
+  });
+
   it("exposes accessible grid, smart-snap, and multi-selection alignment controls", () => {
     expect(canvasStage).toContain('aria-label="画布排列辅助工具"');
     expect(canvasStage).toContain('aria-label="显示对齐网格"');
@@ -95,7 +138,7 @@ describe("DataV-inspired workbench layout", () => {
     expect(canvasStage).toContain('aria-label="网格间距"');
     expect(canvasStage).toContain("canvas-stage__grid");
     expect(canvasStage).toContain("snapThresholdForZoom(ui.zoom)");
-    expect(canvasStage).toContain("snapDeltaToGrid");
+    expect(canvasStage).toContain("snapDeltaWithGridPriority");
     expect(canvasStage).toContain("findNearestSpacingHints");
     expect(canvasStage).toContain("Math.round(hint.distance)");
     expect(canvasStage).toContain("buildEqualSpacingCandidates");
@@ -106,7 +149,9 @@ describe("DataV-inspired workbench layout", () => {
     expect(canvasStage).toContain("snapPlacementPoint");
     expect(canvasStage).toContain("snapPlacementPoint(canvasPoint(ev))");
     expect(canvasStage).toContain("snapPlacementFrame(item.frame)");
-    expect(canvasStage).toContain('aria-label="智能参考线吸附开关"');
+    expect(canvasStage).toContain('aria-label="智能吸附开关"');
+    expect(canvasStage).toContain("canvas-stage__guide");
+    expect(canvasStage).toContain("#7dd3fc");
     expect(transformHandles).toContain("snapResizeFrameToGrid");
     expect(transformHandles).toContain("ui.gridSnapEnabled");
     expect(transformHandles).toContain("ui.gridSize");

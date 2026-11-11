@@ -27,6 +27,7 @@ export interface ChartDescriptor {
   dataKind: ChartSpec["data"]["kind"];
   configGroups: ConfigGroup[];
   columns: ColumnDef[];
+  catalogGroup: "chart" | "map";
   defaultSpec(): ChartSpec;
 }
 
@@ -102,7 +103,8 @@ function descriptor(
   label: string,
   dataKind: ChartSpec["data"]["kind"],
   configGroups: ConfigGroup[],
-  columns: ColumnDef[]
+  columns: ColumnDef[],
+  catalogGroup: ChartDescriptor["catalogGroup"] = "chart"
 ): ChartDescriptor {
   return {
     type,
@@ -110,6 +112,7 @@ function descriptor(
     dataKind,
     configGroups,
     columns,
+    catalogGroup,
     defaultSpec(): ChartSpec {
       return { type, option: {}, data: initialChartData(type) };
     },
@@ -157,7 +160,7 @@ export const chartRegistry: Record<ChartType, ChartDescriptor> = {
       ],
     },
   ], nameValueColumns),
-  map: descriptor("map", "地图", "nameValue", [
+  map: descriptor("map", "区域填色地图", "nameValue", [
     titleGroup,
     legendGroup,
     tooltipGroup,
@@ -169,7 +172,7 @@ export const chartRegistry: Record<ChartType, ChartDescriptor> = {
         { label: "显示拖拽手柄", path: "visualMap.calculable", control: "switch" },
       ],
     },
-  ], nameValueColumns),
+  ], nameValueColumns, "map"),
   scatter: descriptor("scatter", "散点图", "xy", [
     titleGroup,
     legendGroup,
@@ -183,6 +186,18 @@ export const chartRegistry: Record<ChartType, ChartDescriptor> = {
       ],
     },
   ], xyColumns),
+  geoScatter: descriptor("geoScatter", "地理散点图", "geoScatter", [titleGroup, tooltipGroup, { title: "散点", fields: [{ label: "符号大小", path: "series.0.symbolSize", control: "number" }] }], [
+    { key: "longitude", label: "经度", required: true }, { key: "latitude", label: "纬度", required: true },
+    { key: "name", label: "名称" }, { key: "value", label: "数值" },
+  ], "map"),
+  geoHeatmap: descriptor("geoHeatmap", "点热力图", "geoHeatmap", [titleGroup, tooltipGroup, { title: "热力", fields: [{ label: "模糊半径", path: "series.0.pointSize", control: "number" }, { label: "最大值", path: "visualMap.max", control: "number" }] }], [
+    { key: "longitude", label: "经度", required: true }, { key: "latitude", label: "纬度", required: true }, { key: "value", label: "强度", required: true },
+  ], "map"),
+  geoFlow: descriptor("geoFlow", "OD 飞线图", "geoFlow", [titleGroup, tooltipGroup, { title: "飞线", fields: [{ label: "线宽", path: "series.0.lineStyle.width", control: "number" }, { label: "显示流动效果", path: "series.0.effect.show", control: "switch" }] }], [
+    { key: "originLongitude", label: "起点经度", required: true }, { key: "originLatitude", label: "起点纬度", required: true },
+    { key: "destinationLongitude", label: "终点经度", required: true }, { key: "destinationLatitude", label: "终点纬度", required: true },
+    { key: "name", label: "名称" }, { key: "value", label: "数值" },
+  ], "map"),
   radar: descriptor("radar", "雷达图", "radar", [
     titleGroup,
     legendGroup,

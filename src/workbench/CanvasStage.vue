@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
 import { componentRegistry } from "@/core/components/builtins";
 import { createLayoutAssetItems } from "@/core/design/layoutBackgrounds";
@@ -7,7 +7,7 @@ import { GRID_SIZE_OPTIONS, useUiStore } from "@/stores/uiStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createItem } from "@/core/model/schema";
 import { boxSelect } from "@/core/geometry/hit";
-import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "@/core/geometry/snap";
+import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaWithGridPriority, snapThresholdForZoom } from "@/core/geometry/snap";
 import type { SnapCandidate, SnapGuide, SnapResult, SpacingHint } from "@/core/geometry/snap";
 import { chartRegistry } from "@/core/chart/registry";
 import type { ChartItem, ComponentItem, ScreenItem, ChartType } from "@/core/model/types";
@@ -57,6 +57,39 @@ const items = computed<ScreenItem[]>(() => doc.items);
 const selectedItems = computed<ScreenItem[]>(() =>
   doc.items.filter((i) => doc.selectedIds.includes(i.id))
 );
+const searchInput = ref<HTMLInputElement | null>(null);
+const searchQuery = ref("");
+const searchActiveIndex = ref(0);
+const searchResults = computed<ScreenItem[]>(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase();
+  return [...doc.items]
+    .reverse()
+    .filter((item) => !item.hidden)
+    .filter((item) => {
+      if (!query) return true;
+      const terms = [item.name, item.id, item.kind];
+      if (item.kind === "chart") terms.push(item.spec.type);
+      if (item.kind === "component") terms.push(item.componentId);
+      return terms.some((term) => term.toLocaleLowerCase().includes(query));
+    })
+    .slice(0, 30);
+});
+
+function searchItemKind(item: ScreenItem): string {
+  if (item.kind === "chart") return `图表 · ${item.spec.type}`;
+  if (item.kind === "component") return `组件 · ${item.componentId}`;
+  if (item.kind === "text") return "文本";
+  if (item.kind === "image") return "图片";
+  if (item.kind === "shape") return "形状";
+  return "画布元素";
+}
+
+watch(() => ui.searchVisible, (visible) => {
+  if (!visible) return;
+  searchQuery.value = "";
+  searchActiveIndex.value = 0;
+  void nextTick(() => searchInput.value?.focus());
+});
 const designThemeStyle = computed(() => themeCssVariables(getThemeById(doc.currentScreen?.themeId)));
 
 
@@ -194,18 +227,14 @@ function snapPlacementDelta(
   bounds: { x: number; y: number; w: number; h: number },
   includeEqualSpacing: boolean
 ): SnapResult {
-  const aligned = ui.snapEnabled
-    ? snapDelta(
-        { dx: 0, dy: 0 },
-        buildCandidates(bounds, includeEqualSpacing),
-        snapThresholdForZoom(ui.zoom)
-      )
-    : { dx: 0, dy: 0, guides: [] as SnapGuide[] };
-  if (!ui.gridSnapEnabled) return aligned;
-  return {
-    ...snapDeltaToGrid(aligned, bounds, ui.gridSize, new Set(aligned.guides.map((guide) => guide.axis))),
-    guides: aligned.guides,
-  };
+  const candidates = ui.snapEnabled ? buildCandidates(bounds, includeEqualSpacing) : [];
+  const threshold = snapThresholdForZoom(ui.zoom);
+  if (ui.gridSnapEnabled) {
+    return snapDeltaWithGridPriority({ dx: 0, dy: 0 }, bounds, candidates, ui.gridSize, threshold);
+  }
+  return ui.snapEnabled
+    ? snapDelta({ dx: 0, dy: 0 }, candidates, threshold)
+    : { dx: 0, dy: 0, guides: [] };
 }
 
 function snapPlacementPoint(point: Point): Point {
@@ -447,24 +476,16 @@ function onWindowMove(ev: MouseEvent): void {
     let dx = rawDx;
     let dy = rawDy;
     if (moveState.bounds) {
-      const aligned = ui.snapEnabled
-        ? snapDelta(
-            { dx, dy },
-            buildCandidates(moveState.bounds),
-            snapThresholdForZoom(ui.zoom)
-          )
-        : { dx, dy, guides: [] as SnapGuide[] };
+      const candidates = ui.snapEnabled ? buildCandidates(moveState.bounds) : [];
+      const threshold = snapThresholdForZoom(ui.zoom);
       const snapped = ui.gridSnapEnabled
-        ? snapDeltaToGrid(
-            aligned,
-            moveState.bounds,
-            ui.gridSize,
-            new Set(aligned.guides.map((guide) => guide.axis))
-          )
-        : aligned;
+        ? snapDeltaWithGridPriority({ dx, dy }, moveState.bounds, candidates, ui.gridSize, threshold)
+        : ui.snapEnabled
+          ? snapDelta({ dx, dy }, candidates, threshold)
+          : { dx, dy, guides: [] as SnapGuide[] };
       dx = snapped.dx;
       dy = snapped.dy;
-      guides.value = aligned.guides;
+      guides.value = snapped.guides;
     } else {
       guides.value = [];
     }
@@ -590,6 +611,42 @@ function onItemClick(ev: MouseEvent, item: ScreenItem): void {
   window.addEventListener("mouseup", onWindowUp);
 }
 
+function focusSearchResult(item: ScreenItem): void {
+  doc.selectedIds = item.groupId
+    ? doc.items.filter((candidate) => candidate.groupId === item.groupId).map((candidate) => candidate.id)
+    : [item.id];
+  ui.setPreviewing(false);
+  const rect = stageEl.value?.getBoundingClientRect();
+  if (rect) {
+    const scale = ui.zoom / 100;
+    ui.setPan({
+      x: rect.width / 2 - (item.frame.x + item.frame.w / 2) * scale,
+      y: rect.height / 2 - (item.frame.y + item.frame.h / 2) * scale,
+    });
+  }
+  ui.setSearchVisible(false);
+  void nextTick(() => stageEl.value?.focus());
+}
+
+function onSearchKeydown(ev: KeyboardEvent): void {
+  const count = searchResults.value.length;
+  if (ev.key === "ArrowDown" && count > 0) {
+    ev.preventDefault();
+    searchActiveIndex.value = (searchActiveIndex.value + 1) % count;
+  } else if (ev.key === "ArrowUp" && count > 0) {
+    ev.preventDefault();
+    searchActiveIndex.value = (searchActiveIndex.value + count - 1) % count;
+  } else if (ev.key === "Enter") {
+    ev.preventDefault();
+    const target = searchResults.value[searchActiveIndex.value];
+    if (target) focusSearchResult(target);
+  } else if (ev.key === "Escape") {
+    ev.preventDefault();
+    ui.setSearchVisible(false);
+    void nextTick(() => stageEl.value?.focus());
+  }
+}
+
 // ---- 键盘 ----
 function isTypingTarget(ev: KeyboardEvent): boolean {
   const t = ev.target as HTMLElement | null;
@@ -603,6 +660,12 @@ function isTypingTarget(ev: KeyboardEvent): boolean {
 }
 
 function onKeyDown(ev: KeyboardEvent): void {
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  if (ctrl && ev.key.toLowerCase() === "f") {
+    ev.preventDefault();
+    ui.setSearchVisible(true);
+    return;
+  }
   if (ev.code === "Space") {
     spacePressed = true;
     if (!isTypingTarget(ev)) ev.preventDefault();
@@ -610,7 +673,6 @@ function onKeyDown(ev: KeyboardEvent): void {
   }
   if (isTypingTarget(ev)) return;
   const step = arrowNudgeStep(ui.gridSnapEnabled, ui.gridSize, ev.shiftKey);
-  const ctrl = ev.ctrlKey || ev.metaKey;
   if (ctrl && !ev.shiftKey && ev.key.toLowerCase() === "z") {
     ev.preventDefault();
     doc.undo();
@@ -784,11 +846,11 @@ defineExpose({ canvasPoint, DROP_MIME });
         class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
         :class="{ 'canvas-stage__tool-btn--on': ui.snapEnabled }"
         :aria-pressed="ui.snapEnabled"
-        aria-label="智能参考线吸附开关"
-        title="与画布边缘、中心及其他元素对齐（按屏幕距离触发）"
+        aria-label="智能吸附开关"
+        title="自动与画布边缘、中心及其他元素对齐（按屏幕距离触发）"
         @click="ui.setSnapEnabled(!ui.snapEnabled)"
       >
-        参考线
+        智能吸附
       </button>
       <button
         class="cf-button cf-button--plain cf-button--small canvas-stage__tool-btn"
@@ -903,15 +965,14 @@ defineExpose({ canvasPoint, DROP_MIME });
         />
         <template v-if="!ui.previewing">
           <div
-            v-for="(g, i) in guides"
-            :key="`g${i}`"
+            v-for="(guide, i) in guides"
+            :key="`guide-${i}`"
             class="canvas-stage__guide"
-            :style="
-              g.axis === 'x'
-                ? { left: `${g.position}px`, top: '0', width: '1px', height: '100%' }
-                : { left: '0', top: `${g.position}px`, width: '100%', height: '1px' }
-            "
-          data-ui-only
+            :style="guide.axis === 'x'
+              ? { left: `${guide.position}px`, top: '0', width: '1px', height: '100%' }
+              : { left: '0', top: `${guide.position}px`, width: '100%', height: '1px' }"
+            aria-hidden="true"
+            data-ui-only
           />
           <div
             v-for="(hint, i) in spacingHints"
@@ -932,6 +993,45 @@ defineExpose({ canvasPoint, DROP_MIME });
         </template>
       </div>
 
+    </div>
+    <div
+      v-if="ui.searchVisible"
+      class="canvas-search"
+      data-ui-only
+      @click.self="ui.setSearchVisible(false)"
+    >
+      <section class="canvas-search__dialog" role="dialog" aria-modal="true" aria-label="画布快速查找" @keydown.stop="onSearchKeydown">
+        <div class="canvas-search__head">
+          <input
+            ref="searchInput"
+            v-model="searchQuery"
+            class="cf-control canvas-search__input"
+            type="search"
+            aria-label="搜索画布元素"
+            placeholder="按名称、类型或 ID 搜索…"
+            @input="searchActiveIndex = 0"
+          />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="canvas-search__results" role="listbox" aria-label="画布元素搜索结果">
+          <button
+            v-for="(item, index) in searchResults"
+            :key="item.id"
+            class="canvas-search__result"
+            :class="{ 'canvas-search__result--active': searchActiveIndex === index }"
+            type="button"
+            role="option"
+            :aria-selected="searchActiveIndex === index"
+            @mouseenter="searchActiveIndex = index"
+            @click="focusSearchResult(item)"
+          >
+            <span class="canvas-search__result-name">{{ item.name || item.kind }}</span>
+            <small>{{ searchItemKind(item) }} · {{ item.id }}</small>
+          </button>
+          <p v-if="searchResults.length === 0" class="canvas-search__empty">没有找到可定位的画布元素</p>
+        </div>
+        <footer class="canvas-search__foot">↑↓ 选择 <span>Enter 定位</span></footer>
+      </section>
     </div>
   </div>
 </template>
@@ -998,7 +1098,7 @@ defineExpose({ canvasPoint, DROP_MIME });
 }
 .canvas-stage__guide {
   position: absolute;
-  background: #f5222d;
+  background: #7dd3fc;
   pointer-events: none;
 }
 .canvas-stage__measure {
@@ -1102,5 +1202,92 @@ defineExpose({ canvasPoint, DROP_MIME });
   width: 1px;
   height: 16px;
   background: var(--cf-border);
+}
+.canvas-search {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: min(14vh, 120px) 16px 16px;
+  box-sizing: border-box;
+  background: rgba(8, 13, 21, 0.58);
+}
+.canvas-search__dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(72vh, 620px);
+  overflow: hidden;
+  border: 1px solid var(--cf-border);
+  border-radius: 12px;
+  background: var(--cf-panel);
+  color: var(--cf-text);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+.canvas-search__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--cf-border);
+}
+.canvas-search__input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.canvas-search__head kbd {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  color: var(--cf-text-2);
+  font-size: 11px;
+}
+.canvas-search__results {
+  max-height: min(56vh, 460px);
+  overflow: auto;
+  padding: 6px;
+}
+.canvas-search__result {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cf-text);
+  text-align: left;
+  cursor: pointer;
+}
+.canvas-search__result:hover,
+.canvas-search__result--active {
+  background: color-mix(in srgb, var(--cf-primary) 15%, transparent);
+}
+.canvas-search__result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.canvas-search__result small,
+.canvas-search__foot,
+.canvas-search__empty {
+  color: var(--cf-text-2);
+  font-size: 11px;
+}
+.canvas-search__foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--cf-border);
+}
+.canvas-search__empty {
+  margin: 0;
+  padding: 18px 12px;
+  text-align: center;
 }
 </style>

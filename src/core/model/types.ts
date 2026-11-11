@@ -1,6 +1,22 @@
 import type { BlueprintGraph } from "@/core/blueprint/types";
 
-export type ChartType = "line" | "bar" | "pie" | "map" | "scatter" | "radar";
+export type GeoChartType = "geoScatter" | "geoHeatmap" | "geoFlow";
+export type ChartType = "line" | "bar" | "pie" | "map" | "scatter" | "radar" | GeoChartType;
+
+export interface GeoFieldMapping {
+  longitude?: string;
+  latitude?: string;
+  name?: string;
+  value?: string;
+  originLongitude?: string;
+  originLatitude?: string;
+  destinationLongitude?: string;
+  destinationLatitude?: string;
+}
+
+export interface GeoPoint { longitude: number; latitude: number; name?: string; value?: number }
+export interface GeoHeatPoint { longitude: number; latitude: number; value: number }
+export interface GeoFlowLine { from: [number, number]; to: [number, number]; name?: string; value?: number }
 
 export interface Frame {
   x: number;
@@ -10,13 +26,35 @@ export interface Frame {
   rotate: number;
 }
 
+export type TextFontWeight = "normal" | "bold" | "100" | "200" | "300" | "400" | "500" | "600" | "700" | "800" | "900";
+export type TextOverflow = "clip" | "ellipsis";
+
+export interface TextShadowSpec {
+  color: string;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 export interface TextSpec {
   text: string;
   fontSize: number;
   color: string;
   align: "left" | "center" | "right";
-  weight: "normal" | "bold";
+  weight: TextFontWeight;
   lineHeight?: number;
+  fontFamily?: string;
+  fontStyle?: "normal" | "italic" | "oblique";
+  verticalAlign?: "top" | "middle" | "bottom";
+  letterSpacing?: number;
+  overflow?: TextOverflow;
+  lineClamp?: number;
+  backgroundColor?: string;
+  padding?: number;
+  radius?: number;
+  borderColor?: string;
+  borderWidth?: number;
+  shadow?: TextShadowSpec;
 }
 
 export interface ImageSpec {
@@ -76,7 +114,7 @@ export interface LiveSource {
   /** 取前 N 行（1–5000） */
   limit?: number;
   /** 字段映射；留空则按规则自动推断 */
-  map?: { category?: string; value?: string; seriesField?: string };
+  map?: { category?: string; value?: string; seriesField?: string; geo?: GeoFieldMapping };
 }
 
 export type LiveFilterOp =
@@ -111,7 +149,7 @@ export interface DatasetSnapshot {
 
 export interface DatasetBinding {
   datasetId: string;
-  fields?: { category?: string; value?: string; seriesField?: string };
+  fields?: { category?: string; value?: string; seriesField?: string; geo?: GeoFieldMapping };
   filterBy?: { field: string; globalVariable: string };
 }
 
@@ -119,7 +157,12 @@ export type ChartData =
   | { kind: "category"; categories: string[]; series: { name: string; values: number[] }[] }
   | { kind: "nameValue"; rows: { name: string; value: number }[] }
   | { kind: "xy"; rows: { x: number; y: number; name?: string; group?: string }[] }
-  | { kind: "radar"; indicators: { name: string; max: number }[]; series: { name: string; values: number[] }[] };
+  | { kind: "radar"; indicators: { name: string; max: number }[]; series: { name: string; values: number[] }[] }
+  | { kind: "geoScatter"; rows: GeoPoint[] }
+  | { kind: "geoHeatmap"; rows: GeoHeatPoint[] }
+  | { kind: "geoFlow"; rows: GeoFlowLine[] };
+
+export type GeoChartData = Extract<ChartData, { kind: GeoChartType }>;
 
 export interface ChartSpec {
   type: ChartType;

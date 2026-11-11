@@ -22,6 +22,7 @@ import type {
   Workspace,
 } from "@/core/model/types";
 import type { BlueprintGraph } from "@/core/blueprint/types";
+import { isValidBlueprintVariableName, renameBlueprintVariable } from "@/core/blueprint/variables";
 import { setPath } from "@/core/model/path";
 import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates";
 import { exportJson } from "@/core/storage/workspaceRepo";
@@ -395,11 +396,25 @@ export const useDocumentStore = defineStore("document", {
       item.props = normalizeComponentProps(definition, props);
       this.commit();
     },
-    updateScreenBlueprint(id: string, blueprint: BlueprintGraph): void {
+    updateScreenBlueprint(id: string, blueprint: BlueprintGraph, renamedVariables: Readonly<Record<string, string>> = {}): void {
       const screen = useWorkspaceStore().workspace.screens.find((entry) => entry.id === id);
       if (!screen) return;
+      for (const item of screen.items) {
+        if (!("dataBinding" in item)) continue;
+        const filter = item.dataBinding?.filterBy;
+        if (filter && renamedVariables[filter.globalVariable]) filter.globalVariable = renamedVariables[filter.globalVariable];
+      }
       screen.blueprint = deepClone(blueprint);
       this.commit();
+    },
+    renameScreenBlueprintVariable(id: string, oldName: string, newName: string): boolean {
+      const screen = useWorkspaceStore().workspace.screens.find((entry) => entry.id === id);
+      const blueprint = screen?.blueprint;
+      if (!screen || !blueprint || !blueprint.variables.some((variable) => variable.name === oldName)) return false;
+      if (!isValidBlueprintVariableName(newName) || blueprint.variables.some((variable) => variable.name === newName && variable.name !== oldName)) return false;
+      if (oldName === newName) return true;
+      this.updateScreenBlueprint(id, renameBlueprintVariable(blueprint, oldName, newName), { [oldName]: newName });
+      return true;
     },
     applyBlueprintVisibility(componentId: string, componentVersion: number, visible: boolean): void {
       const targets = this.items.filter((entry) => entry.kind === "component" && entry.componentId === componentId && entry.componentVersion === componentVersion);

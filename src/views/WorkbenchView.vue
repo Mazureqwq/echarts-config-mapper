@@ -25,6 +25,7 @@ const rightCollapsed = ref(false);
 const blueprintOpen = ref(false);
 const blueprintMessage = ref("");
 const runtimeVariablesByScreen = reactive<Record<string, Record<string, unknown>>>({});
+const runtimeVariableDefaultsByScreen: Record<string, Record<string, string>> = {};
 const currentRuntimeVariables = computed<Readonly<Record<string, unknown>>>(() => {
   const screenId = doc.currentScreen?.id;
   return screenId ? runtimeVariablesByScreen[screenId] ?? {} : {};
@@ -32,6 +33,15 @@ const currentRuntimeVariables = computed<Readonly<Record<string, unknown>>>(() =
 const currentBlueprint = computed<BlueprintGraph>(() =>
   doc.currentScreen?.blueprint ?? { nodes: [], edges: [], variables: [] }
 );
+const boundVariableNames = computed(() => {
+  const names = new Set<string>();
+  for (const item of doc.currentScreen?.items ?? []) {
+    if (!("dataBinding" in item)) continue;
+    const name = item.dataBinding?.filterBy?.globalVariable;
+    if (name) names.add(name);
+  }
+  return [...names];
+});
 
 function cloneJson<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 function variableMatches(variable: BlueprintVariable, value: unknown): boolean {
@@ -45,12 +55,16 @@ watch(
   ({ screenId, variables }) => {
     if (!screenId) return;
     const current = runtimeVariablesByScreen[screenId] ?? (runtimeVariablesByScreen[screenId] = {});
+    const defaults = runtimeVariableDefaultsByScreen[screenId] ?? (runtimeVariableDefaultsByScreen[screenId] = {});
     const declarations = variables ?? [];
     const names = new Set(declarations.map((variable) => variable.name));
     for (const variable of declarations) {
-      if (!(variable.name in current) || !variableMatches(variable, current[variable.name])) current[variable.name] = cloneJson(variable.initialValue);
+      const signature = JSON.stringify([variable.type, variable.initialValue]);
+      if (!(variable.name in current) || !variableMatches(variable, current[variable.name]) || defaults[variable.name] !== signature) current[variable.name] = cloneJson(variable.initialValue);
+      defaults[variable.name] = signature;
     }
     for (const name of Object.keys(current)) if (!names.has(name)) delete current[name];
+    for (const name of Object.keys(defaults)) if (!names.has(name)) delete defaults[name];
   },
   { immediate: true, deep: true }
 );
@@ -95,10 +109,31 @@ async function dispatchComponentEvent(item: ComponentItem, name: string, payload
   const result = await runBlueprint(screen.blueprint, { componentId: item.componentId, componentVersion: item.componentVersion, event: name, payload }, createBlueprintContext(), componentRegistry);
   blueprintMessage.value = result.ok ? "蓝图运行完成" : `蓝图未执行：${result.errors.join("；")}`;
 }
-function saveBlueprint(graph: BlueprintGraph): void {
+function preserveRuntimeVariableRenames(screenId: string, renamedVariables: Readonly<Record<string, string>>): void {
+  const values = runtimeVariablesByScreen[screenId];
+  const defaults = runtimeVariableDefaultsByScreen[screenId];
+  for (const [oldName, newName] of Object.entries(renamedVariables)) {
+    if (values && Object.prototype.hasOwnProperty.call(values, oldName)) {
+      values[newName] = values[oldName];
+      delete values[oldName];
+    }
+    if (defaults && Object.prototype.hasOwnProperty.call(defaults, oldName)) {
+      defaults[newName] = defaults[oldName];
+      delete defaults[oldName];
+    }
+  }
+}
+
+function handleVariableRename(oldName: string, newName: string): void {
+  const screenId = doc.currentScreenId;
+  if (screenId) preserveRuntimeVariableRenames(screenId, { [oldName]: newName });
+}
+
+function saveBlueprint(graph: BlueprintGraph, renamedVariables: Record<string, string> = {}): void {
   const screenId = doc.currentScreenId;
   if (!screenId) return;
-  doc.updateScreenBlueprint(screenId, graph);
+  preserveRuntimeVariableRenames(screenId, renamedVariables);
+  doc.updateScreenBlueprint(screenId, graph, renamedVariables);
   blueprintOpen.value = false;
   blueprintMessage.value = "蓝图已保存";
 }
@@ -232,7 +267,7 @@ onBeforeUnmount(() => {
         >
           <Icon name="menu" :size="17" />
         </button>
-        <LeftPanel v-else @collapse="leftCollapsed = true" />
+        <LeftPanel v-else @collapse="leftCollapsed = true" @variable-rename="handleVariableRename" />
       </aside>
       <main ref="stageWrap" class="workbench__stage" aria-label="画布工作区">
         <CanvasStage :variables="currentRuntimeVariables" :on-component-event="dispatchComponentEvent" />
@@ -258,6 +293,7 @@ onBeforeUnmount(() => {
       v-if="blueprintOpen && doc.currentScreen"
       :model-value="currentBlueprint"
       :datasets="ws.workspace.datasets"
+      :bound-variable-names="boundVariableNames"
       @save="saveBlueprint"
       @close="blueprintOpen = false"
     />

@@ -24,6 +24,21 @@ describe("component catalog actions", () => {
     expect(actions.addBasic).not.toHaveBeenCalled();
   });
 
+  it("routes map presets as registered scene components using the design MIME", () => {
+    for (const id of ["chartforge.map-scene-flat", "chartforge.map-scene-tilted"]) {
+      const preset = entries.find((entry) => entry.source === "component" && entry.componentId === id)!;
+      const actions = { addChart: vi.fn(), addComponent: vi.fn(), addBasic: vi.fn() };
+      insertCatalogEntry(preset, actions);
+      expect(actions.addComponent).toHaveBeenCalledOnce();
+      expect(actions.addComponent).toHaveBeenCalledWith(id, 1);
+      expect(actions.addChart).not.toHaveBeenCalled();
+      expect(catalogDragPayload(preset)).toEqual({
+        mime: DESIGN_DND_MIME,
+        data: JSON.stringify({ kind: "component", id, version: 1 }),
+      });
+    }
+  });
+
   it("routes a registered component by exact id and version", () => {
     const actions = { addChart: vi.fn(), addComponent: vi.fn(), addBasic: vi.fn() };
     insertCatalogEntry(component, actions);
@@ -70,7 +85,7 @@ describe("ComponentCatalogPanel", () => {
     expect(html).toContain('type="search"');
     expect(html).toContain('aria-label="搜索组件"');
     expect(html).toContain('role="group" aria-label="组件分类"');
-    for (const label of ["全部", "图表", "数据", "装饰", "基础"]) expect(html).toContain(label);
+    for (const label of ["全部", "图表", "地图", "数据", "装饰", "基础"]) expect(html).toContain(label);
     expect(html).toContain("catalog-card__preview");
     for (const variant of ["line", "bars", "pie", "map", "radar", "scatter"]) {
       expect(html).toContain(`catalog-card__preview--${variant}`);
@@ -81,6 +96,28 @@ describe("ComponentCatalogPanel", () => {
     expect(html).toContain("catalog-category__count");
     expect(html).toContain(`${getComponentCatalog().length} 项可添加`);
     expect(html).toContain("折线图可视化图表。");
+  });
+
+  it("renders only 2D and vector-extruded 2.5D map scene presets under the map category", async () => {
+    const entries = getComponentCatalog().filter((entry) => entry.group === "map");
+    const html = await renderToString(createSSRApp(ComponentCatalogPanel, { entries }));
+    expect(html).toContain("地图");
+    expect(html).toContain("2D 平面地图");
+    expect(html).toContain("2.5D 立体地图");
+    expect(entries.every((entry) => entry.source === "component")).toBe(true);
+    expect(html).not.toContain("区域填色地图可视化图表");
+    expect(html).not.toContain("OD 飞线图可视化图表");
+  });
+
+
+  it("renders fixed local SVG previews for flat and tilted map scene presets", async () => {
+    const entries = getComponentCatalog().filter((entry) => entry.group === "map");
+    const html = await renderToString(createSSRApp(ComponentCatalogPanel, { entries }));
+    expect(html.match(/preview-map-land/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain("catalog-card__preview--tilted");
+    expect(html).toContain("preview-map-boundary");
+    expect(html).toContain("preview-map-depth--4");
+    expect(html).not.toContain("geoScatter可视化图表。");
   });
 
   it("renders hostile-looking labels as escaped text rather than markup", async () => {

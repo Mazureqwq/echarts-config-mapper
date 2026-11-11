@@ -16,23 +16,30 @@ const activeGroup = ref<ComponentCatalogGroup | "all">("all");
 const GROUP_OPTIONS: readonly { value: ComponentCatalogGroup | "all"; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "chart", label: "图表" },
+  { value: "map", label: "地图" },
   { value: "data", label: "数据" },
   { value: "decoration", label: "装饰" },
   { value: "basic", label: "基础" },
 ];
 const GROUP_LABELS: Readonly<Record<ComponentCatalogGroup, string>> = {
   chart: "图表",
+  map: "地图",
   data: "数据",
   decoration: "装饰",
   basic: "基础",
 };
 
-type PreviewKind = "line" | "bars" | "pie" | "map" | "radar" | "scatter" | "table" | "kpi" | "progress" | "title" | "frame" | "text" | "image" | "shape" | "generic";
+type PreviewKind = "line" | "bars" | "pie" | "map" | "map-25d" | "geo-scatter" | "geo-heatmap" | "geo-flow" | "radar" | "scatter" | "table" | "kpi" | "progress" | "title" | "frame" | "text" | "image" | "shape" | "generic";
 const PREVIEW_VARIANTS: Readonly<Record<string, PreviewKind>> = {
   "chart-line": "line",
   "chart-bar": "bars",
   "chart-pie": "pie",
   "chart-map": "map",
+  "map-scene-flat": "map",
+  "map-scene-tilted": "map-25d",
+  "chart-geoScatter": "geo-scatter",
+  "chart-geoHeatmap": "geo-heatmap",
+  "chart-geoFlow": "geo-flow",
   "chart-scatter": "scatter",
   "chart-radar": "radar",
   "data-table": "table",
@@ -52,6 +59,10 @@ const PREVIEW_BARS: Readonly<Record<PreviewKind, readonly number[]>> = {
   bars: [55, 82, 48, 70, 95],
   pie: [72, 44, 90, 58, 78],
   map: [55, 72, 48, 85, 61],
+  "map-25d": [55, 72, 48, 85, 61],
+  "geo-scatter": [60, 72, 48, 85, 61],
+  "geo-heatmap": [55, 82, 48, 70, 95],
+  "geo-flow": [36, 64, 84, 52, 76],
   radar: [74, 58, 88, 50, 68],
   scatter: [36, 82, 54, 72, 46],
   table: [70, 70, 70, 70, 70],
@@ -139,7 +150,7 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
             @click="emit('select', entry)"
             @dragstart="onDragStart($event, entry)"
           >
-            <span class="catalog-card__preview" :class="`catalog-card__preview--${previewKind(entry)}`" aria-hidden="true">
+            <span class="catalog-card__preview" :class="['catalog-card__preview--' + previewKind(entry), { 'catalog-card__preview--tilted': entry.previewKey === 'map-scene-tilted' }]" aria-hidden="true">
               <svg v-if="previewKind(entry) === 'line'" class="preview-chart-svg" viewBox="0 0 100 64" aria-hidden="true">
                 <path class="preview-chart-grid" d="M12 14H94 M12 31H94 M12 48H94" />
                 <path class="preview-chart-axis" d="M12 8V54H95" />
@@ -163,11 +174,33 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
                 <rect class="preview-bar-b" x="82" y="25" width="9" height="28" rx="1.5" />
               </svg>
               <span v-else-if="previewKind(entry) === 'pie'" class="preview-pie" aria-hidden="true" />
+              <svg v-else-if="previewKind(entry) === 'map-25d'" class="preview-chart-svg preview-map preview-map--25d" viewBox="0 0 120 80" aria-hidden="true">
+                <path class="preview-map-depth preview-map-depth--4" transform="translate(4 10)" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <path class="preview-map-depth preview-map-depth--3" transform="translate(3 7)" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <path class="preview-map-depth preview-map-depth--2" transform="translate(2 4)" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <path class="preview-map-land" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <path class="preview-map-boundary" d="M30 25 L35 34 L29 43 L37 56 M46 20 L48 31 L41 40 L49 49 L43 61 M62 19 L59 30 L67 38 L60 48 L68 60 M78 23 L73 32 L82 40 L76 51 L84 59 M20 38 L35 36 L49 40 L63 37 L80 40 L101 39 M26 49 L42 48 L58 51 L76 48 L96 51" />
+                <path class="preview-map-island" d="M94 64 l2 -2 2 2 -2 2z M87 69 l1.5 -1.5 1.5 1.5 -1.5 1.5z" />
+                <ellipse class="preview-map-island" cx="37" cy="70" rx="3" ry="1.5" />
+              </svg>
               <svg v-else-if="previewKind(entry) === 'map'" class="preview-chart-svg preview-map" viewBox="0 0 120 80" aria-hidden="true">
                 <path class="preview-map-land" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
                 <path class="preview-map-boundary" d="M30 25 L35 34 L29 43 L37 56 M46 20 L48 31 L41 40 L49 49 L43 61 M62 19 L59 30 L67 38 L60 48 L68 60 M78 23 L73 32 L82 40 L76 51 L84 59 M20 38 L35 36 L49 40 L63 37 L80 40 L101 39 M26 49 L42 48 L58 51 L76 48 L96 51" />
                 <path class="preview-map-island" d="M94 64 l2 -2 2 2 -2 2z M87 69 l1.5 -1.5 1.5 1.5 -1.5 1.5z" />
                 <ellipse class="preview-map-island" cx="37" cy="70" rx="3" ry="1.5" />
+              </svg>
+              <svg v-else-if="previewKind(entry) === 'geo-scatter'" class="preview-chart-svg" viewBox="0 0 120 80" aria-hidden="true">
+                <path class="preview-map-land" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <circle class="preview-geo-scatter-point" cx="35" cy="37" r="3" /><circle class="preview-geo-scatter-point preview-geo-scatter-point--alt" cx="61" cy="34" r="4" /><circle class="preview-geo-scatter-point" cx="83" cy="46" r="3.2" /><circle class="preview-geo-scatter-point preview-geo-scatter-point--alt" cx="72" cy="55" r="2.5" />
+              </svg>
+              <svg v-else-if="previewKind(entry) === 'geo-heatmap'" class="preview-chart-svg" viewBox="0 0 120 80" aria-hidden="true">
+                <path class="preview-map-land" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <circle class="preview-geo-heat preview-geo-heat--low" cx="34" cy="38" r="8" /><circle class="preview-geo-heat preview-geo-heat--mid" cx="62" cy="36" r="12" /><circle class="preview-geo-heat preview-geo-heat--high" cx="82" cy="47" r="9" />
+              </svg>
+              <svg v-else-if="previewKind(entry) === 'geo-flow'" class="preview-chart-svg" viewBox="0 0 120 80" aria-hidden="true">
+                <path class="preview-map-land" d="M13 27 L22 21 L31 24 L37 16 L47 19 L54 12 L63 18 L72 16 L77 23 L88 21 L94 28 L105 31 L100 39 L106 45 L98 51 L93 61 L83 59 L77 66 L67 61 L58 67 L49 61 L40 64 L34 57 L25 57 L22 49 L15 46 L19 38 L12 35 Z" />
+                <path class="preview-geo-flow-line" d="M34 42 Q52 17 78 37" /><path class="preview-geo-flow-line preview-geo-flow-line--alt" d="M51 52 Q73 62 89 44" />
+                <circle class="preview-geo-flow-node" cx="34" cy="42" r="2.5" /><circle class="preview-geo-flow-node" cx="78" cy="37" r="2.5" /><circle class="preview-geo-flow-node preview-geo-flow-node--alt" cx="51" cy="52" r="2.5" /><circle class="preview-geo-flow-node preview-geo-flow-node--alt" cx="89" cy="44" r="2.5" />
               </svg>
               <svg v-else-if="previewKind(entry) === 'radar'" class="preview-chart-svg" viewBox="0 0 100 72" aria-hidden="true">
                 <polygon class="preview-radar-grid" points="50,7 88,28 74,65 26,65 12,28" />
@@ -245,6 +278,21 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
 .preview-map-land { fill: color-mix(in srgb, var(--cf-primary) 30%, var(--cf-panel)); stroke: var(--cf-primary); stroke-width: 1.5; stroke-linejoin: round; }
 .preview-map-boundary { fill: none; stroke: var(--cf-panel); stroke-width: 1.5; stroke-linecap: round; opacity: .95; }
 .preview-map-island { fill: var(--cf-primary); }
+.preview-map-depth { stroke-linejoin: round; stroke-width: 1.3; }
+.preview-map-depth--4 { fill: #16344d; stroke: #315b78; }
+.preview-map-depth--3 { fill: #214863; stroke: #46738e; }
+.preview-map-depth--2 { fill: #376985; stroke: #659ab3; }
+.catalog-card__preview--tilted .preview-map--25d { filter: drop-shadow(0 0 5px #25cfff66); }
+.preview-geo-scatter-point { fill: #f4c95d; stroke: #fff; stroke-width: 1.2; }
+.preview-geo-scatter-point--alt { fill: #56d6c3; }
+.preview-geo-heat { stroke: none; opacity: .72; }
+.preview-geo-heat--low { fill: #4ecdc4; }
+.preview-geo-heat--mid { fill: #f4c95d; opacity: .82; }
+.preview-geo-heat--high { fill: #ff826d; opacity: .88; }
+.preview-geo-flow-line { fill: none; stroke: #65d9ce; stroke-width: 2; stroke-linecap: round; }
+.preview-geo-flow-line--alt { stroke: #f4c95d; stroke-dasharray: 3 2; }
+.preview-geo-flow-node { fill: #fff; stroke: #65d9ce; stroke-width: 1.5; }
+.preview-geo-flow-node--alt { stroke: #f4c95d; }
 .preview-radar-grid { fill: color-mix(in srgb, var(--cf-primary) 4%, transparent); stroke: color-mix(in srgb, var(--cf-border) 80%, transparent); stroke-width: 1; }
 .preview-radar-grid--inner { fill: none; }
 .preview-radar-secondary { fill: color-mix(in srgb, #42c7b8 18%, transparent); stroke: #42c7b8; stroke-width: 1.8; }

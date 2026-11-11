@@ -7,9 +7,9 @@ export const BUILT_IN_THEMES: readonly DesignTheme[] = [
   {
     id: "monitor-dark",
     name: "监控大屏 · 深色",
-    description: "适用于指挥中心与实时监控，深色底、冷色强调。",
+    description: "适用于指挥中心与实时监控，石墨深色底、冷色强调。",
     tokens: {
-      canvas: "#081522", panel: "#0d2234", text: "#e8f4ff", muted: "#89a8be", accent: "#29d3ff", border: "#214258",
+      canvas: "#12161d", panel: "#0d2234", text: "#e8f4ff", muted: "#89a8be", accent: "#29d3ff", border: "#214258",
       chartPalette: ["#29d3ff", "#5b8cff", "#33d6a6", "#f5bd4f", "#ff7185", "#a987ff", "#55c8d8"],
       titleStyle: { color: "#e8f4ff", fontWeight: "700", letterSpacing: "1px" },
       borderStyle: { color: "#214258", width: "1px", radius: "8px" },

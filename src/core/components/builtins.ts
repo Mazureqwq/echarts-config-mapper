@@ -3,6 +3,8 @@ import KpiWidget from "@/workbench/components/KpiWidget.vue";
 import ProgressListWidget from "@/workbench/components/ProgressListWidget.vue";
 import SectionTitleWidget from "@/workbench/components/SectionTitleWidget.vue";
 import CornerFrameWidget from "@/workbench/components/CornerFrameWidget.vue";
+import MapSceneWidget from "@/workbench/components/MapSceneWidget.vue";
+import { createDefaultMapSceneProps } from "./mapScene";
 import { createComponentRegistry } from "./registry";
 import type { ComponentAction, ComponentDefinition, LegacyItemKind } from "./types";
 
@@ -48,6 +50,11 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
       rowKey: "",
       striped: true,
     },
+    sampleRows: [
+      { name: "华东区", value: 1280 },
+      { name: "华南区", value: 960 },
+      { name: "华北区", value: 742 },
+    ],
     props: [
       { key: "columns", label: "列配置（JSON）", type: "json", defaultValue: [
         { field: "name", label: "名称", format: "text", align: "left" },
@@ -74,6 +81,7 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
     },
     defaultFrame: { x: 100, y: 100, w: 300, h: 170, rotate: 0 },
     defaults: { valueField: "value", label: "指标", format: "number", aggregation: "sum" },
+    sampleRows: [{ name: "本月营收", value: 1280 }],
     props: [
       { key: "valueField", label: "数值字段", type: "string", defaultValue: "value" },
       { key: "label", label: "指标名称", type: "string", defaultValue: "指标" },
@@ -98,6 +106,12 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
     },
     defaultFrame: { x: 100, y: 100, w: 520, h: 280, rotate: 0 },
     defaults: { labelField: "name", valueField: "value", maxValue: 100, showValue: true, trackColor: "", fillColor: "" },
+    sampleRows: [
+      { name: "华东区", value: 86 },
+      { name: "华南区", value: 72 },
+      { name: "华北区", value: 64 },
+      { name: "西南区", value: 93 },
+    ],
     props: [
       { key: "labelField", label: "名称字段", type: "string", defaultValue: "name" },
       { key: "valueField", label: "数值字段", type: "string", defaultValue: "value" },
@@ -110,6 +124,35 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
     actions: BASE_ACTIONS,
     renderer: { kind: "vue", view: ProgressListWidget },
     exportRendererId: "chartforge-progress-list-v1",
+  },
+];
+
+const mapSceneDefinitions: readonly ComponentDefinition[] = [
+  {
+    id: "chartforge.map-scene-flat", version: 1, name: "2D 平面地图", category: "map",
+    catalog: { group: "map", description: "本地离线平面地图容器，可在容器内组合地理图层。", tags: ["地图", "2D", "区域", "图层"], previewKey: "map-scene-flat" },
+    defaultFrame: { x: 100, y: 100, w: 640, h: 400, rotate: 0 },
+    defaults: createDefaultMapSceneProps("flat"),
+    props: [
+      { key: "presentation", label: "地图预设", type: "select", defaultValue: "flat", options: ["flat", "tilted"] },
+      { key: "pitch", label: "倾斜角度", type: "number", defaultValue: 0 },
+      { key: "view", label: "地图视图", type: "json", defaultValue: createDefaultMapSceneProps("flat").view },
+      { key: "layers", label: "地图图层", type: "json", defaultValue: [] },
+    ],
+    events: [], actions: BASE_ACTIONS, renderer: { kind: "vue", view: MapSceneWidget }, exportRendererId: "chartforge-map-scene-v1",
+  },
+  {
+    id: "chartforge.map-scene-tilted", version: 1, name: "2.5D 立体地图", category: "map",
+    catalog: { group: "map", description: "由本地省界矢量轮廓表现顶面与挤出厚度的离线地图容器，非真实高程地形。", tags: ["地图", "2.5D", "立体", "矢量挤出", "图层"], previewKey: "map-scene-tilted" },
+    defaultFrame: { x: 100, y: 100, w: 640, h: 400, rotate: 0 },
+    defaults: createDefaultMapSceneProps("tilted"),
+    props: [
+      { key: "presentation", label: "地图预设", type: "select", defaultValue: "tilted", options: ["flat", "tilted"] },
+      { key: "pitch", label: "旧版 pitch（兼容字段）", type: "number", defaultValue: 28 },
+      { key: "view", label: "地图视图", type: "json", defaultValue: createDefaultMapSceneProps("tilted").view },
+      { key: "layers", label: "地图图层", type: "json", defaultValue: [] },
+    ],
+    events: [], actions: BASE_ACTIONS, renderer: { kind: "vue", view: MapSceneWidget }, exportRendererId: "chartforge-map-scene-v1",
   },
 ];
 
@@ -167,5 +210,6 @@ const decorationWidgetDefinitions: readonly ComponentDefinition[] = [
 export const componentRegistry = createComponentRegistry([
   ...legacyComponentDefinitions,
   ...dataWidgetDefinitions,
+  ...mapSceneDefinitions,
   ...decorationWidgetDefinitions,
 ]);

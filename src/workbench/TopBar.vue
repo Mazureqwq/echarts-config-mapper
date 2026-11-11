@@ -130,6 +130,7 @@ function goPlay(): void {
       <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.history.canRedo" title="重做 (Ctrl+Y)" @click="doc.redo()">
         <Icon name="redo" :size="15" />
       </button>
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" title="查找画布元素 (Ctrl+F)" @click="ui.setSearchVisible(true)">查找元素</button>
       <span class="topbar__sep" />
       <button
         class="cf-button cf-button--plain cf-button--small topbar__btn"

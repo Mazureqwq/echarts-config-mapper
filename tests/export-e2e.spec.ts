@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { buildArtifact } from "../src/core/export/artifact";
 import { buildPackagePayload } from "../src/core/export/snapshot";
+import { attachGeo } from "../src/core/export/assets";
 import { RUNTIME_CODE } from "../src/core/export/runtime";
+import { buildMapSceneOption } from "../src/core/components/mapScene";
+import { DatasetRuntime } from "../src/core/data/datasetRuntime";
 import { createZip, filesToEntries } from "../src/core/export/zip";
 import { createWorkspace, createScreen, createChartSpec } from "../src/core/model/schema";
-import type { ChartItem, ComponentItem, ImageItem } from "../src/core/model/types";
+import { getBuiltInBackgroundPreset } from "../src/core/design/backgroundPresets";
+import type { ChartItem, ComponentItem, DatasetDefinition, DatasetSnapshot, ImageItem, TextItem } from "../src/core/model/types";
 import { createLayoutAssetItems, createLayoutBackgroundItems } from "../src/core/design/layoutBackgrounds";
 
 const ECHARTS_STUB = "var echarts={registerMap:function(){},init:function(){return{setOption:function(){},resize:function(){},dispose:function(){}}}};";
@@ -219,6 +223,252 @@ describe("export 端到端：产物 → zip → 回读", () => {
     expect(chartOptions.at(-1)?.series[0]?.data).toEqual([11]);
   });
 
+
+  it("runs independent and inherited map-layer datasets offline and refreshes their variable filters", async () => {
+    const workspace = createWorkspace();
+    const screen = createScreen("离线地理绑定");
+    const rows = [
+      { region: "North", longitude: 121.47, latitude: 31.23, name: "Shanghai", value: 7, originLongitude: 120, originLatitude: 30, destinationLongitude: 121.47, destinationLatitude: 31.23 },
+      { region: "North", longitude: 181, latitude: 91, name: "Invalid", value: 999, originLongitude: 500, originLatitude: 30, destinationLongitude: 121, destinationLatitude: 200 },
+      { region: "South", longitude: 113.26, latitude: 23.13, name: "Guangzhou", value: 11, originLongitude: 114.17, originLatitude: 22.31, destinationLongitude: 113.26, destinationLatitude: 23.13 },
+      { region: "East", longitude: 114.3, latitude: 30.6, name: "Wuhan", value: 13, originLongitude: 113.9, originLatitude: 30.5, destinationLongitude: 114.3, destinationLatitude: 30.6 },
+    ];
+    const geoFields = { longitude: "longitude", latitude: "latitude", name: "name", value: "value", originLongitude: "originLongitude", originLatitude: "originLatitude", destinationLongitude: "destinationLongitude", destinationLatitude: "destinationLatitude" };
+    const regionRows = [{ region: "North", zone: "North zone", total: 70 }, { region: "South", zone: "South zone", total: 110 }];
+    const pointRows = [{ region: "North", x: 10, y: 20, place: "North hub", size: 70 }, { region: "South", x: 30, y: 40, place: "South hub", size: 110 }];
+    const routeRows = [{ region: "North", fromX: 1, fromY: 2, toX: 3, toY: 4, route: "North route", weight: 70 }, { region: "South", fromX: 5, fromY: 6, toX: 7, toY: 8, route: "South route", weight: 110 }];
+    workspace.datasets.push(
+      { id: "geo-sales", name: "地理销售", source: { kind: "static", data: rows } } as never,
+      { id: "geo-regions", name: "区域图层", source: { kind: "static", data: regionRows } } as never,
+      { id: "geo-points", name: "网点图层", source: { kind: "static", data: pointRows } } as never,
+      { id: "geo-routes", name: "航线图层", source: { kind: "static", data: routeRows } } as never,
+    );
+    screen.items.push({
+      id: "geo-table", name: "区域选择", kind: "component", componentId: "chartforge.data-table", componentVersion: 1,
+      frame: { x: 0, y: 0, w: 300, h: 180, rotate: 0 },
+      props: { columns: [{ field: "region", label: "区域", format: "text" }] }, dataBinding: { datasetId: "geo-sales" },
+    } as ComponentItem);
+    for (const type of ["geoScatter", "geoHeatmap", "geoFlow"] as const) {
+      screen.items.push({
+        id: `chart-${type}`, name: type, kind: "chart", frame: { x: 320, y: 0, w: 300, h: 180, rotate: 0 },
+        spec: createChartSpec(type), dataBinding: { datasetId: "geo-sales", fields: { geo: geoFields }, filterBy: { field: "region", globalVariable: "selectedRegion" } },
+      } as ChartItem);
+    }
+    screen.items.push({
+      id: "chart-missing", name: "missing", kind: "chart", frame: { x: 640, y: 0, w: 300, h: 180, rotate: 0 },
+      spec: createChartSpec("geoScatter"), dataBinding: { datasetId: "geo-sales", fields: {}, filterBy: { field: "region", globalVariable: "selectedRegion" } },
+    } as ChartItem);
+    screen.items.push({
+      id: "map-scene", name: "地图场景", kind: "component", componentId: "chartforge.map-scene-tilted", componentVersion: 1,
+      frame: { x: 960, y: 0, w: 360, h: 220, rotate: 0 },
+      props: { presentation: "tilted", pitch: 0, layers: [
+        { id: "region", type: "regionFill", name: "区域", visible: true, style: { color: "#336699", opacity: 0.8, size: 12 }, dataBinding: { datasetId: "geo-regions", fields: { category: "zone", value: "total" }, filterBy: { field: "region", globalVariable: "selectedRegion" } } },
+        { id: "missing-region-column", type: "regionFill", name: "缺失区域列", visible: true, style: { color: "#ffffff", opacity: 1, size: 12 }, dataBinding: { datasetId: "geo-regions", fields: { category: "missingZone", value: "total" } } },
+        { id: "scatter", type: "geoScatter", name: "网点", visible: true, style: { color: "#ffcc66", opacity: 0.9, size: 12 }, dataBinding: { datasetId: "geo-points", fields: { geo: { longitude: "x", latitude: "y", name: "place", value: "size" } }, filterBy: { field: "region", globalVariable: "selectedRegion" } } },
+        { id: "heat", type: "geoHeatmap", name: "热力", visible: true, style: { color: "#ff6b6b", opacity: 0.8, size: 18 } },
+        { id: "flow", type: "geoFlow", name: "流向", visible: true, style: { color: "#32d6ff", opacity: 0.7, size: 8 }, dataBinding: { datasetId: "geo-routes", fields: { geo: { originLongitude: "fromX", originLatitude: "fromY", destinationLongitude: "toX", destinationLatitude: "toY", name: "route", value: "weight" } }, filterBy: { field: "region", globalVariable: "selectedRegion" } } },
+        { id: "missing-mapping", type: "geoScatter", name: "缺失映射", visible: true, style: { color: "#ffffff", opacity: 1, size: 12 }, dataBinding: { datasetId: "geo-points", fields: { geo: { longitude: "x" } } } },
+        { id: "missing-column", type: "geoScatter", name: "缺失列", visible: true, style: { color: "#ffffff", opacity: 1, size: 12 }, dataBinding: { datasetId: "geo-points", fields: { geo: { longitude: "missingX", latitude: "y", name: "place" } } } },
+      ] },
+      dataBinding: { datasetId: "geo-sales", fields: { category: "region", value: "value", geo: geoFields }, filterBy: { field: "region", globalVariable: "selectedRegion" } },
+    } as ComponentItem);
+    screen.blueprint = {
+      variables: [{ name: "selectedRegion", type: "string", initialValue: "North" }],
+      nodes: [
+        { id: "table-event", kind: "componentEvent", componentId: "chartforge.data-table", componentVersion: 1, event: "rowSelect" },
+        { id: "set-region", kind: "setVariable", name: "selectedRegion", value: { source: "event", path: "row.region" } },
+      ],
+      edges: [{ id: "event-to-variable", from: { nodeId: "table-event", port: "next" }, to: { nodeId: "set-region", port: "next" } }],
+    };
+    workspace.screens.push(screen);
+    const payload = attachGeo(buildPackagePayload(workspace, [screen.id], { datasetSnapshots: new Map([
+      ["geo-sales", { status: "success" as const, rows }],
+      ["geo-regions", { status: "success" as const, rows: regionRows }],
+      ["geo-points", { status: "success" as const, rows: pointRows }],
+      ["geo-routes", { status: "success" as const, rows: routeRows }],
+    ]) }));
+    expect(payload.datasets.map((dataset) => dataset.id)).toEqual(["geo-sales", "geo-regions", "geo-points", "geo-routes"]);
+    const [inlineArtifact, folderArtifact] = await Promise.all([
+      buildArtifact({ payload, echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "inline" }),
+      buildArtifact({ payload, echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "folder" }),
+    ]);
+    const inlineHtml = inlineArtifact.files.find((file) => file.path === "index.html")!.content;
+    const folderHtml = folderArtifact.files.find((file) => file.path === "index.html")!.content;
+    const folderRuntime = folderArtifact.files.find((file) => file.path === "assets/app.js")!.content;
+    expect(inlineHtml).toContain('"china":');
+    expect(folderHtml).toContain('"china":');
+    expect(inlineHtml).toContain("connect-src 'none'");
+    expect(folderHtml).toContain("connect-src 'none'");
+    for (const output of [inlineHtml, folderHtml, folderRuntime]) {
+      expect(output).not.toMatch(/(?:src|href)=["']https?:\/\//i);
+      expect(output).not.toMatch(/\b(?:fetch|XMLHttpRequest|WebSocket)\b/);
+      expect(output).not.toContain("eval(");
+      expect(output).not.toContain("new Function");
+    }
+    const root = new MemoryElement("div");
+    const payloadNode = new MemoryElement("script"); payloadNode.textContent = JSON.stringify(payload);
+    const doc = { title: "", getElementById: (id: string) => id === "cf-root" ? root : id === "cf-payload" ? payloadNode : null, createElement: (tag: string) => new MemoryElement(tag), addEventListener: () => undefined };
+    const chartOptions = new Map<string, Array<Record<string, any>>>();
+    const chartInstances = new Map<string, Record<string, any>>();
+    const registeredMaps: unknown[] = [];
+    const windowStub: Record<string, any> = {
+      innerWidth: 1920, innerHeight: 1080, location: { search: "" }, matchMedia: () => ({ matches: true }),
+      addEventListener: () => undefined, setInterval: () => 1, clearInterval: () => undefined,
+      echarts: {
+        registerMap: (_name: string, geo: unknown) => registeredMaps.push(geo),
+        init: (element: MemoryElement) => {
+          const id = element.attributes["data-item"] || "";
+          let currentOption: Record<string, any> = {};
+          const handlers: Record<string, (event?: Record<string, unknown>) => void> = {};
+          const instance = {
+            setOption: (option: Record<string, any>, opts?: Record<string, any>) => {
+              if (opts?.notMerge === false && Array.isArray(option.geo) && Array.isArray(currentOption.geo)) currentOption = { ...currentOption, geo: option.geo.map((geo: Record<string, any>, index: number) => ({ ...currentOption.geo[index], ...geo })) };
+              else currentOption = JSON.parse(JSON.stringify(option));
+              const entries = chartOptions.get(id) || []; entries.push(JSON.parse(JSON.stringify(currentOption))); chartOptions.set(id, entries);
+            },
+            getOption: () => JSON.parse(JSON.stringify(currentOption)),
+            on: (event: string, handler: (event?: Record<string, unknown>) => void) => { handlers[event] = handler; },
+            simulateRoam: () => { currentOption.geo[3].center = [110, 30]; currentOption.geo[3].zoom = 1.4; handlers.georoam?.({ componentIndex: 3 }); },
+            resize: () => undefined, dispose: () => undefined,
+          };
+          chartInstances.set(id, instance);
+          return instance;
+        },
+      },
+    };
+    const { runInNewContext } = await import("node:vm");
+    runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
+    expect(registeredMaps).toHaveLength(1);
+    expect(chartOptions.get("chart-geoScatter")?.[0]?.series[0]?.data).toEqual([{ name: "Shanghai", value: [121.47, 31.23, 7] }]);
+    expect(chartOptions.get("chart-geoHeatmap")?.[0]?.series[0]?.data).toEqual([[121.47, 31.23, 7]]);
+    expect(chartOptions.get("chart-geoFlow")?.[0]?.series[0]?.data).toEqual([{ name: "Shanghai", coords: [[120, 30], [121.47, 31.23]], value: 7 }]);
+    expect(chartOptions.get("chart-missing")?.[0]?.series[0]?.data).toEqual([]);
+    const mapOption = chartOptions.get("map-scene")?.[0];
+    expect(Array.isArray(mapOption?.geo)).toBe(true);
+    expect(mapOption?.geo).toHaveLength(4);
+    expect(mapOption?.geo.slice(0, -1).every((geo: Record<string, any>) => geo.label.show === false)).toBe(true);
+    expect(mapOption?.geo.at(-1)?.label.show).toBe(true);
+    expect(mapOption?.series.map((series: Record<string, unknown>) => series.type)).toEqual(["map", "scatter", "heatmap", "lines"]);
+    expect(mapOption?.series.every((series: Record<string, any>) => series.geoIndex === 3)).toBe(true);
+    chartInstances.get("map-scene")?.simulateRoam();
+    const syncedGeo = chartInstances.get("map-scene")?.getOption().geo as Array<Record<string, any>>;
+    expect(syncedGeo.slice(0, 3).every((geo) => geo.center[0] === 110 && geo.center[1] === 30 && geo.zoom === 1.4 && geo.roam === false)).toBe(true);
+    expect(syncedGeo[3]?.center).toEqual([110, 30]);
+    expect(chartOptions.get("map-scene")?.[0]?.series[0]?.data).toEqual([{ name: "North zone", value: 70 }]);
+    expect(chartOptions.get("map-scene")?.[0]?.series[1]?.data).toEqual([{ name: "North hub", value: [10, 20, 70] }]);
+    expect(chartOptions.get("map-scene")?.[0]?.series[2]?.data).toEqual([[121.47, 31.23, 7]]);
+    expect(chartOptions.get("map-scene")?.[0]?.series[3]?.data).toEqual([{ name: "North route", coords: [[1, 2], [3, 4]], value: 70 }]);
+
+    const table = findItem(root, "geo-table")!.children[0]!;
+    table.children[1]!.children[2]!.click();
+    expect(chartOptions.get("chart-geoScatter")?.at(-1)?.series[0]?.data).toEqual([{ name: "Guangzhou", value: [113.26, 23.13, 11] }]);
+    expect(chartOptions.get("chart-geoFlow")?.at(-1)?.series[0]?.data).toEqual([{ name: "Guangzhou", coords: [[114.17, 22.31], [113.26, 23.13]], value: 11 }]);
+    expect(chartOptions.get("map-scene")?.at(-1)?.series[0]?.data).toEqual([{ name: "South zone", value: 110 }]);
+    expect(chartOptions.get("map-scene")?.at(-1)?.series[1]?.data).toEqual([{ name: "South hub", value: [30, 40, 110] }]);
+    expect(chartOptions.get("map-scene")?.at(-1)?.series[2]?.data).toEqual([[113.26, 23.13, 11]]);
+    expect(chartOptions.get("map-scene")?.at(-1)?.series[3]?.data).toEqual([{ name: "South route", coords: [[5, 6], [7, 8]], value: 110 }]);
+
+    const mapScene = findItem(root, "map-scene")!;
+    const editorMissingColumns = buildMapSceneOption({ layers: [
+      { id: "missing-region-column", type: "regionFill", name: "缺失区域列", visible: true, style: {}, dataBinding: { datasetId: "geo-regions", fields: { category: "missingZone", value: "total" } } },
+      { id: "missing-column", type: "geoScatter", name: "缺失列", visible: true, style: {}, dataBinding: { datasetId: "geo-points", fields: { geo: { longitude: "missingX", latitude: "y", name: "place" } } } },
+    ] }, [], {}, { "missing-region-column": regionRows, "missing-column": pointRows }).errors;
+    expect(editorMissingColumns).toEqual([
+      "缺失区域列：加工后数据缺少已映射的区域名称或数值列",
+      "缺失列：加工后缺少已映射的地理字段列：missingX",
+    ]);
+    const mapStatus = collectElements(mapScene).find((element) => element.attributes.role === "status")?.textContent;
+    expect(mapStatus).toContain("缺失映射：缺少经度/纬度映射");
+    for (const diagnostic of editorMissingColumns) expect(mapStatus).toContain(diagnostic);
+
+    table.children[1]!.children[3]!.click();
+    const emptyIndependentLayers = chartOptions.get("map-scene")?.at(-1);
+    expect(emptyIndependentLayers?.series.map((series: Record<string, unknown>) => series.type)).toEqual(["scatter", "heatmap", "lines"]);
+    expect(emptyIndependentLayers?.series[0]?.data).toEqual([]);
+    expect(emptyIndependentLayers?.series[1]?.data).toEqual([[114.3, 30.6, 13]]);
+    expect(emptyIndependentLayers?.series[2]?.data).toEqual([]);
+  });
+
+  it("exports map layers consistently from static pipeline rows and processed HTTP snapshots", async () => {
+    const pipeline: DatasetDefinition["pipeline"] = {
+      filter: [{ field: "active", op: "eq", value: "yes" }],
+      select: ["region", "lon", "lat", "place", "weight", "rank"],
+      sort: { field: "rank", desc: true },
+      limit: 1,
+    };
+    const staticRows = [
+      { region: "North", active: "yes", lon: 121.47, lat: 31.23, place: "Static North", weight: 2, rank: 2, private: "drop" },
+      { region: "South", active: "yes", lon: 114.3, lat: 22.3, place: "Static South", weight: 9, rank: 9, private: "drop" },
+      { region: "West", active: "no", lon: 100, lat: 10, place: "Filtered Static", weight: 99, rank: 99, private: "drop" },
+    ];
+    const httpRows = [
+      { region: "North", active: "yes", lon: 121, lat: 31, place: "HTTP North", weight: 1, rank: 1, private: "drop" },
+      { region: "South", active: "yes", lon: 113.8, lat: 22.2, place: "HTTP South", weight: 5, rank: 5, private: "drop" },
+      { region: "West", active: "no", lon: 100, lat: 10, place: "Filtered HTTP", weight: 99, rank: 99, private: "drop" },
+    ];
+    const staticDataset: DatasetDefinition = { id: "static-points", name: "静态点位", source: { kind: "static", data: staticRows }, pipeline };
+    const httpDataset: DatasetDefinition = {
+      id: "http-points", name: "HTTP 点位", source: { kind: "http", live: { url: "", path: "/points", intervalSec: 30, dataPath: "records" } }, pipeline,
+    };
+    const datasetRuntime = new DatasetRuntime([staticDataset, httpDataset], {
+      resolveApi: () => ({ baseUrl: "https://api.example.test", query: {} }),
+      fetchImpl: async () => ({ records: httpRows }),
+      setIntervalImpl: () => 1,
+      clearIntervalImpl: () => undefined,
+      isHidden: () => false,
+      now: () => 1234,
+    });
+    let staticSnapshot: DatasetSnapshot | undefined;
+    let httpSnapshot: DatasetSnapshot | undefined;
+    const stopStatic = datasetRuntime.subscribe("static-points", "map-static", (snapshot) => { staticSnapshot = snapshot; });
+    const stopHttp = datasetRuntime.subscribe("http-points", "map-http", (snapshot) => { httpSnapshot = snapshot; });
+    await datasetRuntime.refresh("http-points");
+    expect(staticSnapshot).toMatchObject({ status: "success", rows: [{ region: "South", place: "Static South", weight: 9 }] });
+    expect(httpSnapshot).toMatchObject({ status: "success", rows: [{ region: "South", place: "HTTP South", weight: 5 }] });
+
+    const workspace = createWorkspace();
+    workspace.datasets.push(staticDataset, httpDataset);
+    const screen = createScreen("管线地图绑定");
+    screen.items.push({
+      id: "pipeline-map", name: "管线地图", kind: "component", componentId: "chartforge.map-scene-flat", componentVersion: 1,
+      frame: { x: 0, y: 0, w: 500, h: 320, rotate: 0 },
+      props: { presentation: "flat", pitch: 0, layers: [
+        { id: "static-layer", type: "geoScatter", name: "静态管线", visible: true, style: {}, dataBinding: { datasetId: "static-points", fields: { geo: { longitude: "lon", latitude: "lat", name: "place", value: "weight" } }, filterBy: { field: "region", globalVariable: "selectedRegion" } } },
+        { id: "http-layer", type: "geoScatter", name: "HTTP 快照", visible: true, style: {}, dataBinding: { datasetId: "http-points", fields: { geo: { longitude: "lon", latitude: "lat", name: "place", value: "weight" } }, filterBy: { field: "region", globalVariable: "selectedRegion" } } },
+      ] },
+    } as ComponentItem);
+    screen.blueprint = { variables: [{ name: "selectedRegion", type: "string", initialValue: "South" }], nodes: [], edges: [] };
+    workspace.screens.push(screen);
+    const payload = attachGeo(buildPackagePayload(workspace, [screen.id], {
+      datasetSnapshots: new Map([["http-points", httpSnapshot!]]),
+    }));
+    const packagedStatic = payload.datasets.find((dataset) => dataset.id === "static-points")!;
+    const packagedHttp = payload.datasets.find((dataset) => dataset.id === "http-points")!;
+    expect(packagedStatic.rows).toEqual(staticSnapshot!.rows);
+    expect(packagedHttp.rows).toEqual(httpSnapshot!.rows);
+    expect(packagedStatic.rows[0]).not.toHaveProperty("private");
+    datasetRuntime.dispose();
+    stopStatic();
+    stopHttp();
+
+    const artifact = await buildArtifact({ payload, echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "inline" });
+    expect(artifact.files.some((file) => file.path === "index.html")).toBe(true);
+    const root = new MemoryElement("div");
+    const payloadNode = new MemoryElement("script"); payloadNode.textContent = JSON.stringify(payload);
+    const doc = { title: "", getElementById: (id: string) => id === "cf-root" ? root : id === "cf-payload" ? payloadNode : null, createElement: (tag: string) => new MemoryElement(tag), addEventListener: () => undefined };
+    const chartOptions: Array<Record<string, any>> = [];
+    const windowStub: Record<string, any> = {
+      innerWidth: 1280, innerHeight: 720, location: { search: "" }, matchMedia: () => ({ matches: true }),
+      addEventListener: () => undefined, setInterval: () => 1, clearInterval: () => undefined,
+      echarts: { registerMap: () => undefined, init: () => ({ setOption: (option: Record<string, any>) => chartOptions.push(JSON.parse(JSON.stringify(option))), resize: () => undefined, dispose: () => undefined }) },
+    };
+    const { runInNewContext } = await import("node:vm");
+    runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
+    expect(chartOptions.at(-1)?.series.map((series: Record<string, unknown>) => series.type)).toEqual(["scatter", "scatter"]);
+    expect(chartOptions.at(-1)?.series[0]?.data).toEqual([{ name: "Static South", value: [114.3, 22.3, 9] }]);
+    expect(chartOptions.at(-1)?.series[1]?.data).toEqual([{ name: "HTTP South", value: [113.8, 22.2, 5] }]);
+  });
+
   it("renders layout backgrounds in self-contained ZIP and inline exports", async () => {
     const workspace = createWorkspace();
     const screen = createScreen("深色布局离线验收");
@@ -288,5 +538,94 @@ describe("export 端到端：产物 → zip → 回读", () => {
     expect(findItem(root, title.id)?.attributes["data-component"]).toBe("chartforge.section-title");
     expect(findItem(root, corner.id)?.className).toContain("cf-component");
     expect(findItem(root, corner.id)?.attributes["data-component"]).toBe("chartforge.corner-frame");
+  });
+
+  it("renders extended text styling and a built-in SVG background in offline output", async () => {
+    const workspace = createWorkspace();
+    const screen = createScreen("离线文字与背景");
+    screen.canvas.background = getBuiltInBackgroundPreset("blueprint-grid")!;
+    screen.items.push({
+      id: "styled-text",
+      name: "标题",
+      kind: "text",
+      frame: { x: 40, y: 30, w: 420, h: 90, rotate: 0 },
+      text: "运营总览",
+      fontFamily: "Microsoft YaHei",
+      fontSize: 32,
+      color: "#e9f7ff",
+      align: "center",
+      weight: "600",
+      fontStyle: "italic",
+      verticalAlign: "middle",
+      lineHeight: 1.5,
+      letterSpacing: 2,
+      overflow: "ellipsis",
+      lineClamp: 2,
+      backgroundColor: "#10263b",
+      padding: 8,
+      radius: 6,
+      borderColor: "#29d3ff",
+      borderWidth: 1,
+      shadow: { color: "#29d3ff", blur: 8, offsetX: 0, offsetY: 2 },
+    } as TextItem);
+    workspace.screens.push(screen);
+    const payload = buildPackagePayload(workspace, [screen.id]);
+    const root = new MemoryElement("div");
+    const payloadNode = new MemoryElement("script"); payloadNode.textContent = JSON.stringify(payload);
+    const doc = {
+      title: "",
+      getElementById: (id: string) => id === "cf-root" ? root : id === "cf-payload" ? payloadNode : null,
+      createElement: (tag: string) => new MemoryElement(tag),
+      addEventListener: () => undefined,
+    };
+    const windowStub: Record<string, any> = {
+      innerWidth: 1920, innerHeight: 1080, location: { search: "" }, matchMedia: () => ({ matches: true }),
+      addEventListener: () => undefined, setInterval: () => 1, clearInterval: () => undefined,
+      echarts: { registerMap: () => undefined, init: () => ({ setOption: () => undefined, resize: () => undefined, dispose: () => undefined }) },
+    };
+    const { runInNewContext } = await import("node:vm");
+    runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
+    const text = findItem(root, "styled-text")!;
+    const textSpan = collectElements(text).find((element) => element.tagName.toLowerCase() === "span")!;
+    const stage = collectElements(root).find((element) => element.className.includes("cf-stage"));
+    expect(text.textContent).toContain("运营总览");
+    expect(textSpan.style.fontFamily).toBe("Microsoft YaHei");
+    expect(textSpan.style.fontWeight).toBe("600");
+    expect(textSpan.style.textShadow).toBe("0px 2px 8px #29d3ff");
+    expect(textSpan.style.webkitLineClamp).toBe("2");
+    expect(stage?.style.backgroundImage).toContain("data:image/svg+xml;base64,");
+  });
+
+  it("renders sample rows for unbound data widgets in offline output", async () => {
+    const workspace = createWorkspace();
+    const screen = createScreen("未绑定数据组件示例");
+    screen.items.push(
+      { id: "sample-table", name: "示例表格", kind: "component", componentId: "chartforge.data-table", componentVersion: 1, frame: { x: 0, y: 0, w: 300, h: 180, rotate: 0 }, props: { columns: [{ field: "name", label: "名称", format: "text" }, { field: "value", label: "数值", format: "number" }] } } as ComponentItem,
+      { id: "sample-kpi", name: "示例指标", kind: "component", componentId: "chartforge.kpi", componentVersion: 1, frame: { x: 320, y: 0, w: 240, h: 150, rotate: 0 }, props: { valueField: "value", label: "本月营收", format: "number", aggregation: "sum" } } as ComponentItem,
+      { id: "sample-progress", name: "示例进度", kind: "component", componentId: "chartforge.progress-list", componentVersion: 1, frame: { x: 580, y: 0, w: 300, h: 200, rotate: 0 }, props: { labelField: "name", valueField: "value", maxValue: 100, showValue: true } } as ComponentItem,
+    );
+    workspace.screens.push(screen);
+    const payload = buildPackagePayload(workspace, [screen.id]);
+    const root = new MemoryElement("div");
+    const payloadNode = new MemoryElement("script"); payloadNode.textContent = JSON.stringify(payload);
+    const doc = {
+      title: "",
+      getElementById: (id: string) => id === "cf-root" ? root : id === "cf-payload" ? payloadNode : null,
+      createElement: (tag: string) => new MemoryElement(tag),
+      addEventListener: () => undefined,
+    };
+    const windowStub: Record<string, any> = {
+      innerWidth: 1920, innerHeight: 1080, location: { search: "" }, matchMedia: () => ({ matches: true }),
+      addEventListener: () => undefined, setInterval: () => 1, clearInterval: () => undefined,
+      echarts: { registerMap: () => undefined, init: () => ({ setOption: () => undefined, resize: () => undefined, dispose: () => undefined }) },
+    };
+    const { runInNewContext } = await import("node:vm");
+    runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
+    expect(findItem(root, "sample-table")?.textContent).toContain("华东区");
+    expect(findItem(root, "sample-table")?.textContent).toContain("1,280");
+    expect(findItem(root, "sample-kpi")?.textContent).toContain("1,280");
+    expect(findItem(root, "sample-progress")?.textContent).toContain("西南区");
+    expect(findItem(root, "sample-progress")?.textContent).toContain("93");
+    expect(findItem(root, "sample-kpi")?.textContent).toContain("示例数据");
   });
 });

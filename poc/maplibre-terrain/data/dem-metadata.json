@@ -1,0 +1,45 @@
+{
+  "title": "ETOPO 2022 v1 15 arc-second global relief model (Ice Surface)",
+  "provider": "NOAA National Centers for Environmental Information (NCEI)",
+  "datasetId": "ETOPO_2022_v1_15s",
+  "sourceUrl": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/ETOPO_2022_v1_15s.html",
+  "metadataUrl": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ngdc.mgg.dem%3Aetopo_2022",
+  "sourceResolution": "15 arc-seconds",
+  "license": "CC0 1.0 (per NOAA NCEI metadata; retain source citation and verify metadata before broader redistribution)",
+  "disclaimer": "ETOPO is a global relief model; its source inputs and accuracy vary by location. This POC is not a navigational or surveying product.",
+  "requestUrl": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/ETOPO_2022_v1_15s.csv?z%5B(30.14512718337612)%3A(29.535229562948455)%5D%5B(90)%3A(90.703125)%5D",
+  "variable": "z (meters above/below mean sea level)",
+  "queryBoundsWgs84": [
+    90,
+    29.535229562948455,
+    90.703125,
+    30.14512718337612
+  ],
+  "tile": {
+    "z": 9,
+    "x": 384,
+    "y": 211,
+    "width": 256,
+    "height": 256,
+    "encoding": "MapLibre Terrarium RGB"
+  },
+  "rawSample": {
+    "file": "etopo-2022-ETOPO_2022_v1_15s-z9-384-211.csv",
+    "bytes": 1006815,
+    "sha256": "776d0ece9e269793034ddd594370d4199100a6b6160d625a7f27bdfaa75f5b3a",
+    "rows": 24843,
+    "width": 169,
+    "height": 147,
+    "minElevationMeters": 3973.4326,
+    "maxElevationMeters": 6868.099
+  },
+  "processing": "Bilinear interpolation from the NOAA 15-arc-second gridded subset to 256x256 Web Mercator pixel centers; no synthetic/random values or extrapolated grid are introduced.",
+  "output": {
+    "file": "dem-z9-384-211.png",
+    "bytes": 199522,
+    "sha256": "f6d21f20dbd8fe009ceebdec24ad9d6f5d6f71e0329719767b6dce1a9331d5c3",
+    "minElevationMeters": 3976.88,
+    "maxElevationMeters": 6807.26,
+    "meanElevationMeters": 5109.34
+  }
+}

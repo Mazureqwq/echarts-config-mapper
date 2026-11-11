@@ -20,7 +20,8 @@ const displayValue = () => formatWidgetValue(value(), props.format);
     <p v-if="snapshot.status === 'loading'" class="kpi-widget__status" role="status">正在加载数据…</p>
     <p v-else-if="snapshot.status === 'error'" class="kpi-widget__status kpi-widget__status--error" role="status">{{ snapshot.error || "数据加载失败" }}</p>
     <p v-else-if="snapshot.status === 'stale'" class="kpi-widget__status kpi-widget__status--stale" role="status">数据过期，显示最近一次成功值</p>
-    <p v-else-if="snapshot.status === 'idle'" class="kpi-widget__status" role="status">尚未绑定或加载数据</p>
+    <p v-else-if="snapshot.status === 'idle' && rows.length" class="kpi-widget__status" role="status">示例数据 · 绑定数据集后自动替换</p>
+    <p v-else-if="snapshot.status === 'idle'" class="kpi-widget__status" role="status">尚未绑定数据</p>
   </div>
 </template>
 

@@ -10,6 +10,7 @@ import type {
   DatasetBinding,
   DatasetDefinition,
   DatasetPipeline,
+  GeoFieldMapping,
   Frame,
   ImageItem,
   ImageSpec,
@@ -25,15 +26,16 @@ import type {
 import type { BlueprintGraph, BlueprintNode } from "../blueprint/types";
 import type { ComponentDefinition } from "../components/types";
 import { componentRegistry } from "../components/builtins";
+import { normalizeMapSceneProps } from "../components/mapScene";
 import { initialChartData } from "../chart/chartData";
 import { normalizeDesignAssets } from "../design/assets";
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
-export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#FFFFFF" };
+export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#12161d" };
 export const DEFAULT_SCREEN_NAME = "未命名大屏";
 export const CANVAS_SIZE = { width: 1920, height: 1080 } as const;
 
-const CHART_TYPES: readonly ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar"];
+const CHART_TYPES: readonly ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar", "geoScatter", "geoHeatmap", "geoFlow"];
 const ITEM_KINDS = ["chart", "text", "image", "shape"] as const;
 
 function uuid(): string {
@@ -110,6 +112,10 @@ export function createItem(
         color: "#333333",
         align: "left",
         weight: "normal",
+        fontFamily: "system-ui",
+        fontStyle: "normal",
+        verticalAlign: "top",
+        overflow: "clip",
       };
       const item: TextItem = { ...base, name: "文本", kind: "text", ...text };
       return item;
@@ -167,12 +173,12 @@ function normalizeBackground(raw: unknown): Background {
     if (raw.kind === "image") {
       return { kind: "image", src: str(raw.src, "") };
     }
-    return { kind: "color", color: str(raw.color, "#FFFFFF") };
+    return { kind: "color", color: str(raw.color, "#12161d") };
   }
   return { ...DEFAULT_BACKGROUND };
 }
 
-const DATA_KINDS = ["category", "nameValue", "xy", "radar"] as const;
+const DATA_KINDS = ["category", "nameValue", "xy", "radar", "geoScatter", "geoHeatmap", "geoFlow"] as const;
 
 function normalizeData(raw: unknown, type: ChartType): ChartData {
   if (isRecord(raw) && (DATA_KINDS as readonly string[]).includes(str(raw.kind, ""))) {
@@ -196,6 +202,17 @@ function stringMap(raw: unknown): Record<string, string> | undefined {
 const FILTER_OPS = ["eq", "ne", "gt", "gte", "lt", "lte", "contains", "in", "notEmpty"] as const;
 
 /** 数据源规范化：绝对地址与相对路径至少要有一个，其余字段逐项校验兜底 */
+function normalizeGeoFieldMapping(raw: unknown): GeoFieldMapping | undefined {
+  if (!isRecord(raw)) return undefined;
+  const keys = ["longitude", "latitude", "name", "value", "originLongitude", "originLatitude", "destinationLongitude", "destinationLatitude"] as const;
+  const normalized: GeoFieldMapping = {};
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim()) normalized[key] = value.trim();
+  }
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
 function normalizeLiveSource(raw: unknown): LiveSource | undefined {
   if (!isRecord(raw)) return undefined;
   const url = typeof raw.url === "string" ? raw.url : "";
@@ -234,11 +251,12 @@ function normalizeLiveSource(raw: unknown): LiveSource | undefined {
       : undefined;
 
   const mapRaw = isRecord(raw.map) ? raw.map : undefined;
+  const geo = mapRaw ? normalizeGeoFieldMapping(mapRaw.geo) : undefined;
   const map =
     mapRaw &&
-    ["category", "value", "seriesField"].some(
+    (geo || ["category", "value", "seriesField"].some(
       (k) => typeof mapRaw[k] === "string" && String(mapRaw[k]).trim() !== ""
-    )
+    ))
       ? {
           ...(typeof mapRaw.category === "string" && mapRaw.category.trim()
             ? { category: mapRaw.category.trim() }
@@ -249,6 +267,7 @@ function normalizeLiveSource(raw: unknown): LiveSource | undefined {
           ...(typeof mapRaw.seriesField === "string" && mapRaw.seriesField.trim()
             ? { seriesField: mapRaw.seriesField.trim() }
             : {}),
+          ...(geo ? { geo } : {}),
         }
       : undefined;
 
@@ -327,6 +346,7 @@ function normalizeDatasetBinding(raw: unknown): DatasetBinding | undefined {
 
   let fields: DatasetBinding["fields"];
   if (isRecord(raw.fields)) {
+    const geo = normalizeGeoFieldMapping(raw.fields.geo);
     const normalized = {
       ...(typeof raw.fields.category === "string" && raw.fields.category.trim()
         ? { category: raw.fields.category.trim() }
@@ -337,6 +357,7 @@ function normalizeDatasetBinding(raw: unknown): DatasetBinding | undefined {
       ...(typeof raw.fields.seriesField === "string" && raw.fields.seriesField.trim()
         ? { seriesField: raw.fields.seriesField.trim() }
         : {}),
+      ...(geo ? { geo } : {}),
     };
     if (Object.keys(normalized).length) fields = normalized;
   }
@@ -351,6 +372,10 @@ function normalizeDatasetBinding(raw: unknown): DatasetBinding | undefined {
 }
 
 export function normalizeComponentProps(definition: ComponentDefinition, raw: unknown): Record<string, unknown> {
+  if (definition.id === "chartforge.map-scene-flat" || definition.id === "chartforge.map-scene-tilted") {
+    const fallback = definition.id.endsWith("tilted") ? "tilted" : "flat";
+    return normalizeMapSceneProps(raw, fallback);
+  }
   const input = isRecord(raw) ? raw : {};
   const output: Record<string, unknown> = {};
   for (const prop of definition.props) {
@@ -447,17 +472,43 @@ function normalizeItem(raw: unknown): ScreenItem | null {
         ...(typeof raw.sourceAssetId === "string" ? { sourceAssetId: raw.sourceAssetId } : {}),
       } satisfies ChartItem;
     }
-    case "text":
+    case "text": {
+      const weights = ["normal", "bold", "100", "200", "300", "400", "500", "600", "700", "800", "900"];
+      const families = ["system-ui", "Arial", "Microsoft YaHei", "SimHei", "SimSun", "serif", "monospace"];
+      const safeColor = (value: unknown): value is string => typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value);
+      const shadowRaw = isRecord(raw.shadow) ? raw.shadow : null;
+      const shadow = shadowRaw && safeColor(shadowRaw.color)
+        ? {
+            color: shadowRaw.color,
+            blur: Math.min(64, Math.max(0, num(shadowRaw.blur, 0))),
+            offsetX: Math.min(64, Math.max(-64, num(shadowRaw.offsetX, 0))),
+            offsetY: Math.min(64, Math.max(-64, num(shadowRaw.offsetY, 0))),
+          }
+        : undefined;
+      const weight = typeof raw.weight === "number" ? String(raw.weight) : raw.weight;
       return {
         ...base,
         kind: "text",
         text: str(raw.text, "文本"),
-        fontSize: num(raw.fontSize, 24),
+        fontSize: Math.min(1000, Math.max(1, num(raw.fontSize, 24))),
         color: str(raw.color, "#333333"),
         align: raw.align === "center" || raw.align === "right" ? raw.align : "left",
-        weight: raw.weight === "bold" ? "bold" : "normal",
-        ...(typeof raw.lineHeight === "number" ? { lineHeight: raw.lineHeight } : {}),
+        weight: weights.includes(String(weight)) ? String(weight) as TextItem["weight"] : "normal",
+        ...(typeof raw.lineHeight === "number" ? { lineHeight: Math.min(4, Math.max(0.5, raw.lineHeight)) } : {}),
+        ...(typeof raw.fontFamily === "string" && families.includes(raw.fontFamily) ? { fontFamily: raw.fontFamily } : {}),
+        ...(raw.fontStyle === "italic" || raw.fontStyle === "oblique" ? { fontStyle: raw.fontStyle } : {}),
+        ...(raw.verticalAlign === "middle" || raw.verticalAlign === "bottom" ? { verticalAlign: raw.verticalAlign } : {}),
+        ...(typeof raw.letterSpacing === "number" ? { letterSpacing: Math.min(64, Math.max(-16, raw.letterSpacing)) } : {}),
+        ...(raw.overflow === "ellipsis" ? { overflow: "ellipsis" as const } : {}),
+        ...(typeof raw.lineClamp === "number" ? { lineClamp: Math.min(30, Math.max(1, Math.round(raw.lineClamp))) } : {}),
+        ...(safeColor(raw.backgroundColor) ? { backgroundColor: raw.backgroundColor } : {}),
+        ...(typeof raw.padding === "number" ? { padding: Math.min(128, Math.max(0, raw.padding)) } : {}),
+        ...(typeof raw.radius === "number" ? { radius: Math.min(128, Math.max(0, raw.radius)) } : {}),
+        ...(safeColor(raw.borderColor) ? { borderColor: raw.borderColor } : {}),
+        ...(typeof raw.borderWidth === "number" ? { borderWidth: Math.min(16, Math.max(0, raw.borderWidth)) } : {}),
+        ...(shadow ? { shadow } : {}),
       } satisfies TextItem;
+    }
     case "image":
       return {
         ...base,

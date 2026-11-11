@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { hitTest, boxSelect } from "../src/core/geometry/hit";
 import { resizeFrame, rotateFrame, snapResizeFrameToGrid } from "../src/core/geometry/transform";
-import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapThresholdForZoom } from "../src/core/geometry/snap";
+import { arrowNudgeStep, buildEqualSpacingCandidates, findNearestSpacingHints, snapDelta, snapDeltaToGrid, snapDeltaWithGridPriority, snapThresholdForZoom } from "../src/core/geometry/snap";
 import type { SnapCandidate } from "../src/core/geometry/snap";
 import type { ChartItem, Frame } from "../src/core/model/types";
 
@@ -142,11 +142,51 @@ describe("geometry/snap", () => {
     expect(snapDelta({ dx: 0, dy: 0 }, candidates, snapThresholdForZoom(200)).dx).toBe(0);
   });
 
-  it("将选区按画布原点吸附到网格，并允许智能参考线优先", () => {
+  it("将选区按画布原点吸附到网格", () => {
     const bounds = { x: 3, y: 9, w: 100, h: 80 };
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16)).toEqual({ dx: -3, dy: 7 });
-    expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 16, new Set(["x"]))).toEqual({ dx: 3, dy: 7 });
     expect(snapDeltaToGrid({ dx: 3, dy: 2 }, bounds, 0)).toEqual({ dx: 3, dy: 2 });
+  });
+
+  it("网格优先于智能对齐线，并仅显示与网格重合的对齐线", () => {
+    const bounds = { x: 3, y: 9, w: 100, h: 80 };
+    const out = snapDeltaWithGridPriority(
+      { dx: 8, dy: 4 },
+      bounds,
+      [
+        { axis: "x", moving: 3, static: 13 },
+        { axis: "y", moving: 9, static: 10 },
+      ],
+      10,
+      8
+    );
+    expect(out.dx).toBe(7);
+    expect(out.dy).toBe(1);
+    expect(out.guides).toEqual([{ axis: "y", position: 10 }]);
+  });
+
+  it("网格与智能参考线完全对齐时保留对齐反馈", () => {
+    const out = snapDeltaWithGridPriority(
+      { dx: 8, dy: 4 },
+      { x: 3, y: 9, w: 100, h: 80 },
+      [{ axis: "x", moving: 3, static: 10 }],
+      10,
+      8
+    );
+    expect(out.dx).toBe(7);
+    expect(out.guides).toEqual([{ axis: "x", position: 10 }]);
+  });
+
+  it("对齐目标在网格刻度中间时不显示误导性的参考线", () => {
+    const out = snapDeltaWithGridPriority(
+      { dx: 0, dy: 0 },
+      { x: 16, y: 16, w: 89, h: 89 },
+      [{ axis: "x", moving: 60.5, static: 60.5 }],
+      16,
+      8
+    );
+    expect(out.dx).toBe(0);
+    expect(out.guides).toEqual([]);
   });
 
   it("网格吸附启用时方向键按网格步进，Shift 保留精细调整", () => {

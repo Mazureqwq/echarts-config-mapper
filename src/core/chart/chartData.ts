@@ -7,8 +7,20 @@ function num(cell: string | undefined): number {
   return Number.isFinite(v) ? v : 0;
 }
 
+function strictNum(cell: string | undefined): number {
+  if (cell === undefined || cell.trim() === "") return Number.NaN;
+  const value = Number(cell);
+  return Number.isFinite(value) ? value : Number.NaN;
+}
+
 export function matrixToChartData(matrix: Matrix, type: ChartType): ChartData {
   switch (type) {
+    case "geoScatter":
+      return { kind: "geoScatter", rows: matrix.map((r) => ({ longitude: strictNum(r[0]), latitude: strictNum(r[1]), ...(r[2] ? { name: r[2] } : {}), ...(r[3] !== undefined && r[3] !== "" ? { value: strictNum(r[3]) } : {}) })) };
+    case "geoHeatmap":
+      return { kind: "geoHeatmap", rows: matrix.map((r) => ({ longitude: strictNum(r[0]), latitude: strictNum(r[1]), value: strictNum(r[2]) })) };
+    case "geoFlow":
+      return { kind: "geoFlow", rows: matrix.map((r) => ({ from: [strictNum(r[0]), strictNum(r[1])], to: [strictNum(r[2]), strictNum(r[3])], ...(r[4] ? { name: r[4] } : {}), ...(r[5] !== undefined && r[5] !== "" ? { value: strictNum(r[5]) } : {}) })) };
     case "pie":
     case "map":
       return {
@@ -60,6 +72,12 @@ export function dataToMatrix(data: ChartData): Matrix {
       ];
     case "nameValue":
       return data.rows.map((r) => [r.name, String(r.value)]);
+    case "geoScatter":
+      return data.rows.map((r) => [String(r.longitude), String(r.latitude), r.name ?? "", r.value === undefined ? "" : String(r.value)]);
+    case "geoHeatmap":
+      return data.rows.map((r) => [String(r.longitude), String(r.latitude), String(r.value)]);
+    case "geoFlow":
+      return data.rows.map((r) => [String(r.from[0]), String(r.from[1]), String(r.to[0]), String(r.to[1]), r.name ?? "", r.value === undefined ? "" : String(r.value)]);
     case "xy": {
       const withExtra = data.rows.some((r) => r.name !== undefined || r.group !== undefined);
       return data.rows.map((r) =>
@@ -82,6 +100,12 @@ export function dataToMatrix(data: ChartData): Matrix {
  */
 export function initialChartData(type: ChartType): ChartData {
   switch (type) {
+    case "geoScatter":
+      return { kind: "geoScatter", rows: [{ longitude: 114.17, latitude: 22.31, name: "香港", value: 7 }, { longitude: 113.26, latitude: 23.13, name: "广州", value: 5 }] };
+    case "geoHeatmap":
+      return { kind: "geoHeatmap", rows: [{ longitude: 114.17, latitude: 22.31, value: 12 }, { longitude: 113.26, latitude: 23.13, value: 8 }] };
+    case "geoFlow":
+      return { kind: "geoFlow", rows: [{ from: [113.26, 23.13], to: [114.17, 22.31], name: "广州 → 香港", value: 12 }] };
     case "map":
       return {
         kind: "nameValue",
@@ -158,6 +182,12 @@ export function validateChartData(data: ChartData): boolean {
       return data.rows.every((r) => Number.isFinite(r.x) && Number.isFinite(r.y));
     case "radar":
       return data.series.every((s) => s.values.length === data.indicators.length);
+    case "geoScatter":
+      return data.rows.every((r) => Number.isFinite(r.longitude) && r.longitude >= -180 && r.longitude <= 180 && Number.isFinite(r.latitude) && r.latitude >= -90 && r.latitude <= 90 && (r.value === undefined || Number.isFinite(r.value)));
+    case "geoHeatmap":
+      return data.rows.every((r) => Number.isFinite(r.longitude) && r.longitude >= -180 && r.longitude <= 180 && Number.isFinite(r.latitude) && r.latitude >= -90 && r.latitude <= 90 && Number.isFinite(r.value));
+    case "geoFlow":
+      return data.rows.every((r) => Number.isFinite(r.from[0]) && r.from[0] >= -180 && r.from[0] <= 180 && Number.isFinite(r.from[1]) && r.from[1] >= -90 && r.from[1] <= 90 && Number.isFinite(r.to[0]) && r.to[0] >= -180 && r.to[0] <= 180 && Number.isFinite(r.to[1]) && r.to[1] >= -90 && r.to[1] <= 90 && (r.value === undefined || Number.isFinite(r.value)));
     default:
       return false;
   }
@@ -196,6 +226,12 @@ export function dataToOption(data: ChartData, type: ChartType): Record<string, u
         series: [{ type: "pie", name: "", data: points }],
       };
     }
+    case "geoScatter":
+      return { ...common, geo: { map: "china", roam: true }, series: [{ type: "scatter", coordinateSystem: "geo", symbolSize: 9, data: data.rows.map((r) => ({ name: r.name, value: r.value === undefined ? [r.longitude, r.latitude] : [r.longitude, r.latitude, r.value] })) }] };
+    case "geoHeatmap":
+      return { ...common, geo: { map: "china", roam: true }, visualMap: { min: 0, calculable: true }, series: [{ type: "heatmap", coordinateSystem: "geo", data: data.rows.map((r) => [r.longitude, r.latitude, r.value]) }] };
+    case "geoFlow":
+      return { ...common, geo: { map: "china", roam: true }, series: [{ type: "lines", coordinateSystem: "geo", data: data.rows.map((r) => ({ name: r.name, coords: [r.from, r.to], ...(r.value !== undefined ? { value: r.value } : {}) })) }] };
     case "xy": {
       const groups = new Map<string, unknown[]>();
       for (const row of data.rows) {
@@ -219,7 +255,7 @@ export function dataToOption(data: ChartData, type: ChartType): Record<string, u
       return {
         ...common,
         radar: {
-          indicators: data.indicators.map((i) => ({ name: i.name, max: i.max })),
+          indicator: data.indicators.map((i) => ({ name: i.name, max: i.max })),
         },
         series: [
           {

@@ -64,20 +64,45 @@ const boxStyle = computed<CSSProperties>(() => {
   return style;
 });
 
-const textStyle = computed<CSSProperties>(() => {
+const textBoxStyle = computed<CSSProperties>(() => {
   const it = props.item;
   if (it.kind !== "text") return {};
   return {
-    fontSize: `${it.fontSize}px`,
-    color: it.color,
-    textAlign: it.align,
-    fontWeight: it.weight,
-    lineHeight: it.lineHeight !== undefined ? String(it.lineHeight) : "1.4",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: it.verticalAlign === "middle" ? "center" : it.verticalAlign === "bottom" ? "flex-end" : "flex-start",
+    boxSizing: "border-box",
     width: "100%",
     height: "100%",
     overflow: "hidden",
+    padding: `${it.padding ?? 0}px`,
+    backgroundColor: it.backgroundColor,
+    border: it.borderWidth ? `${it.borderWidth}px solid ${it.borderColor ?? "transparent"}` : undefined,
+    borderRadius: it.radius ? `${it.radius}px` : undefined,
+  };
+});
+
+const textContentStyle = computed<CSSProperties>(() => {
+  const it = props.item;
+  if (it.kind !== "text") return {};
+  return {
+    display: it.overflow === "ellipsis" ? "-webkit-box" : "block",
+    overflow: "hidden",
+    textOverflow: it.overflow === "ellipsis" ? "ellipsis" : "clip",
+    WebkitBoxOrient: "vertical",
+    WebkitLineClamp: it.overflow === "ellipsis" ? String(it.lineClamp ?? 2) : undefined,
+    fontFamily: it.fontFamily ?? "system-ui",
+    fontSize: `${it.fontSize}px`,
+    fontStyle: it.fontStyle ?? "normal",
+    fontWeight: it.weight,
+    letterSpacing: it.letterSpacing ? `${it.letterSpacing}px` : undefined,
+    lineHeight: it.lineHeight !== undefined ? String(it.lineHeight) : "1.4",
+    color: it.color,
+    textAlign: it.align,
+    textShadow: it.shadow ? `${it.shadow.offsetX}px ${it.shadow.offsetY}px ${it.shadow.blur}px ${it.shadow.color}` : undefined,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    width: "100%",
   };
 });
 
@@ -165,6 +190,10 @@ onBeforeUnmount(() => {
 const boundRows = computed(() =>
   filterRowsByBinding(datasetSnapshot.value.rows, datasetBinding.value, props.variables)
 );
+const componentRows = computed(() => {
+  if (datasetBinding.value) return boundRows.value;
+  return componentDefinition.value?.sampleRows?.map((row) => ({ ...row })) ?? [];
+});
 
 function emitComponentEvent(name: string, payload: unknown): void {
   const definition = componentDefinition.value;
@@ -176,7 +205,10 @@ const chartDataError = computed(() => {
   const item = props.item;
   if (item.kind !== "chart" || !item.dataBinding) return "";
   const result = buildChartDataFromRows(boundRows.value, item.dataBinding.fields, item.spec.type);
-  return result.ok ? "" : result.message;
+  if (!result.ok) return result.message;
+  const isGeo = item.spec.type === "geoScatter" || item.spec.type === "geoHeatmap" || item.spec.type === "geoFlow";
+  if (isGeo && datasetSnapshot.value.status === "success" && boundRows.value.length === 0) return "当前筛选没有匹配的地理数据";
+  return "";
 });
 
 const chartPalette = computed(() => getThemeById(doc.currentScreen?.themeId)?.tokens.chartPalette ?? []);
@@ -186,9 +218,10 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
   if (it.kind !== "chart") return null;
   if (!it.dataBinding) return buildOption(applyThemeChartPalette(it.spec, chartPalette.value));
   const result = buildChartDataFromRows(boundRows.value, it.dataBinding.fields, it.spec.type);
-  return result.ok
-    ? buildOption(applyThemeChartPalette({ ...it.spec, data: result.data }, chartPalette.value))
-    : null;
+  if (!result.ok) return null;
+  const isGeo = it.spec.type === "geoScatter" || it.spec.type === "geoHeatmap" || it.spec.type === "geoFlow";
+  if (isGeo && datasetSnapshot.value.status === "success" && boundRows.value.length === 0) return null;
+  return buildOption(applyThemeChartPalette({ ...it.spec, data: result.data }, chartPalette.value));
 });
 </script>
 
@@ -203,7 +236,7 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
       数据过期
     </div>
     <template v-if="item.kind === 'text' && legacyAdapterAvailable">
-      <div :style="textStyle">{{ item.text }}</div>
+      <div :style="textBoxStyle"><span :style="textContentStyle">{{ item.text }}</span></div>
     </template>
     <template v-else-if="item.kind === 'image' && legacyAdapterAvailable">
       <img v-if="imageSrc" :src="imageSrc" :style="imageStyle" alt="" draggable="false" />
@@ -219,7 +252,7 @@ const chartOption = computed<Record<string, unknown> | null>(() => {
         v-bind="item.props"
         :item="item"
         :snapshot="datasetSnapshot"
-        :rows="boundRows"
+        :rows="componentRows"
         :variables="variables"
         :emit-event="emitComponentEvent"
       />

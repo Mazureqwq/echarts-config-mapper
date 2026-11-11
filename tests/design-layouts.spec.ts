@@ -23,6 +23,19 @@ const EXPECTED_IDS = [
   "monitor-panel-frame",
   "monitor-title-band",
   "monitor-corner-accent",
+  "monitor-ring-orbit",
+  "monitor-header-strip",
+  "monitor-data-wave",
+  "monitor-dot-field",
+  "monitor-bracket-frame",
+  "monitor-radar-sweep",
+  "monitor-hex-mesh",
+  "monitor-signal-bars",
+  "monitor-energy-divider",
+  "monitor-vertical-lights",
+  "monitor-corner-nodes",
+  "monitor-status-dots",
+  "monitor-data-path",
 ];
 
 function expectFrameInside(item: ScreenItem, canvas: ScreenCanvas): void {
@@ -45,11 +58,11 @@ function expectSameSlotFrames(items: ScreenItem[], slots: TemplateSlot[]): void 
 }
 
 describe("layout background recipes", () => {
-  it("registers exactly the two layouts and three local assets", () => {
+  it("registers exactly the two layouts and sixteen local assets", () => {
     expect(listLayoutBackgroundEntries()).toBe(LAYOUT_BACKGROUND_ENTRIES);
     expect(LAYOUT_BACKGROUND_ENTRIES.map(({ id }) => id)).toEqual(EXPECTED_IDS);
     expect(LAYOUT_BACKGROUND_ENTRIES.filter(({ kind }) => kind === "layout")).toHaveLength(2);
-    expect(LAYOUT_BACKGROUND_ENTRIES.filter(({ kind }) => kind === "asset")).toHaveLength(3);
+    expect(LAYOUT_BACKGROUND_ENTRIES.filter(({ kind }) => kind === "asset")).toHaveLength(16);
     expect(LAYOUT_BACKGROUND_ENTRIES.every(({ name, description, previewKey }) =>
       Boolean(name.trim() && description.trim() && previewKey) && !/^https?:/i.test(previewKey)
     )).toBe(true);

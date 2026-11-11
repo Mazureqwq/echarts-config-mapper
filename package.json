@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "server": "node server/index.mjs",
     "mock": "node server/index.mjs",
     "deploy:pro": "pnpm build && ssh root@47.109.193.165 \"rm -rf /var/www/echarts-project/*\" && scp -r dist/* root@47.109.193.165:/var/www/echarts-project/ && ssh root@47.109.193.165 \"/usr/local/openresty/nginx/sbin/nginx -s reload\""
@@ -19,10 +20,12 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/node": "^24.12.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vitejs/plugin-vue-jsx": "^5.1.5",
     "@vue/tsconfig": "^0.9.0",
+    "maplibre-gl": "6.17.0",
     "pinia": "^3.0.4",
     "typescript": "~5.9.3",
     "vite": "^8.0.1",

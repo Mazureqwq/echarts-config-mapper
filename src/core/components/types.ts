@@ -2,14 +2,14 @@ import type { Component } from "vue";
 import type { ChartType, ComponentItem, DatasetSnapshot, Frame } from "@/core/model/types";
 
 export type LegacyItemKind = "chart" | "text" | "image" | "shape";
-export type ComponentCatalogGroup = "chart" | "data" | "decoration" | "basic";
+export type ComponentCatalogGroup = "chart" | "map" | "data" | "decoration" | "basic";
 export type ComponentThemeToken = "panel" | "text" | "muted" | "accent" | "border";
 export type SectionTitleVariant = "underline" | "bar" | "bracket";
 export type CornerFrameVariant = "corner" | "outline" | "double";
 export type ComponentPayloadFieldType = "string" | "number" | "boolean" | "object";
 
 export interface ComponentCatalogMetadata {
-  readonly group: "data" | "decoration";
+  readonly group: "map" | "data" | "decoration";
   readonly description: string;
   readonly tags: readonly string[];
   readonly previewKey: string;
@@ -61,6 +61,8 @@ export interface ComponentDefinition {
   readonly catalog?: ComponentCatalogMetadata;
   readonly defaultFrame: Frame;
   readonly defaults: Record<string, unknown>;
+  /** Local preview rows used only when a data component has no dataset binding. */
+  readonly sampleRows?: readonly Record<string, unknown>[];
   readonly props: readonly ComponentProp[];
   readonly events: readonly ComponentEvent[];
   readonly actions: readonly ComponentAction[];

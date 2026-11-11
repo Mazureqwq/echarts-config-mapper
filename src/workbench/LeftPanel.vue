@@ -8,17 +8,19 @@ import ComponentCatalogPanel from "./components/ComponentCatalogPanel.vue";
 import ElementsPanel from "./ElementsPanel.vue";
 import LayersPanel from "./LayersPanel.vue";
 import DatasetPanel from "./panels/DatasetPanel.vue";
+import GlobalVariablesPanel from "./panels/GlobalVariablesPanel.vue";
 import AssetLibraryPanel from "./panels/AssetLibraryPanel.vue";
 import DesignLibraryPanel from "./panels/DesignLibraryPanel.vue";
 import Icon from "@/shared/ui/Icon.vue";
 
-const emit = defineEmits<{ (e: "collapse"): void }>();
+const emit = defineEmits<{ (e: "collapse"): void; (e: "variable-rename", oldName: string, newName: string): void }>();
 const doc = useDocumentStore();
-const tab = ref<"charts" | "datasets" | "assets" | "materials" | "design" | "layers">("charts");
+const tab = ref<"charts" | "datasets" | "variables" | "assets" | "materials" | "design" | "layers">("charts");
 
 const TABS = [
   { key: "charts", label: "组件", icon: "chart" },
   { key: "datasets", label: "数据集", icon: "package" },
+  { key: "variables", label: "变量", icon: "layers" },
   { key: "assets", label: "图表库", icon: "package" },
   { key: "materials", label: "素材", icon: "image" },
   { key: "design", label: "设计库", icon: "layers" },
@@ -97,6 +99,7 @@ function onRailKeydown(event: KeyboardEvent, current: (typeof TABS)[number]["key
       <div class="left-panel__body">
         <ComponentCatalogPanel v-if="tab === 'charts'" @select="onCatalogSelect" />
         <DatasetPanel v-else-if="tab === 'datasets'" />
+        <GlobalVariablesPanel v-else-if="tab === 'variables'" @rename="(oldName, newName) => emit('variable-rename', oldName, newName)" />
         <AssetLibraryPanel v-else-if="tab === 'assets'" />
         <ElementsPanel v-else-if="tab === 'materials'" section="materials" />
         <DesignLibraryPanel v-else-if="tab === 'design'" />

@@ -94,10 +94,19 @@ const CHART_TYPE_LABELS: Array<{ type: ChartType; label: string }> = [
   { type: "line", label: "折线图" },
   { type: "bar", label: "柱状图" },
   { type: "pie", label: "饼图" },
-  { type: "map", label: "地图" },
+  { type: "map", label: "区域填色地图" },
   { type: "scatter", label: "散点图" },
   { type: "radar", label: "雷达图" },
+  { type: "geoScatter", label: "地理散点图" },
+  { type: "geoHeatmap", label: "点热力图" },
+  { type: "geoFlow", label: "OD 飞线图" },
 ];
+const LEGACY_MAP_CHART_TYPES: readonly ChartType[] = ["map", "geoScatter", "geoHeatmap", "geoFlow"];
+function chartTypeOptions(item: ChartItem): Array<{ type: ChartType; label: string }> {
+  const available = CHART_TYPE_LABELS.filter((entry) => !LEGACY_MAP_CHART_TYPES.includes(entry.type));
+  const current = CHART_TYPE_LABELS.find((entry) => entry.type === item.spec.type);
+  return current && LEGACY_MAP_CHART_TYPES.includes(item.spec.type) ? [current, ...available] : available;
+}
 
 const pendingType = ref<ChartType | null>(null);
 const typeTargetId = ref<string | null>(null);
@@ -219,7 +228,7 @@ function confirmSaveAsset(): void {
               :value="focusItem.spec.type"
               @change="onTypeSelect(focusItem.id, $event)"
             >
-              <option v-for="c in CHART_TYPE_LABELS" :key="c.type" :value="c.type">
+              <option v-for="c in chartTypeOptions(focusItem)" :key="c.type" :value="c.type">
                 {{ c.label }}
               </option>
             </select>
@@ -314,7 +323,7 @@ function confirmSaveAsset(): void {
                 :value="single.spec.type"
                 @change="onTypeSelect(single.id, $event)"
               >
-                <option v-for="c in CHART_TYPE_LABELS" :key="c.type" :value="c.type">
+                <option v-for="c in chartTypeOptions(single)" :key="c.type" :value="c.type">
                   {{ c.label }}
                 </option>
               </select>
@@ -347,7 +356,7 @@ function confirmSaveAsset(): void {
       <template v-if="focusItem">
         <div class="inspector__section">
           <div class="inspector__section-title">工作区数据集绑定</div>
-          <DatasetBindingEditor :model-value="focusItem.dataBinding" :show-fields="true" @update:model-value="doc.updateItemDataBinding(focusItem.id, $event)" />
+          <DatasetBindingEditor :model-value="focusItem.dataBinding" :show-fields="true" :chart-type="focusItem.spec.type" @update:model-value="doc.updateItemDataBinding(focusItem.id, $event)" />
         </div>
         <div class="inspector__section">
           <div class="inspector__section-title">静态数据</div>
@@ -361,7 +370,7 @@ function confirmSaveAsset(): void {
       <template v-else-if="singleChart">
         <div class="inspector__section">
           <div class="inspector__section-title">工作区数据集绑定</div>
-          <DatasetBindingEditor :model-value="singleChart.dataBinding" :show-fields="true" @update:model-value="doc.updateItemDataBinding(singleChart.id, $event)" />
+          <DatasetBindingEditor :model-value="singleChart.dataBinding" :show-fields="true" :chart-type="singleChart.spec.type" @update:model-value="doc.updateItemDataBinding(singleChart.id, $event)" />
           <p class="inspector__binding-hint">绑定数据集后优先使用共享数据；下方图表数据与实时源仍保留为可编辑备用配置。</p>
         </div>
         <div v-if="singleChart.sourceAssetId" class="inspector__source">

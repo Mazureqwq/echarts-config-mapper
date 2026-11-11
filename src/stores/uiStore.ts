@@ -17,6 +17,7 @@ export const useUiStore = defineStore("ui", {
     gridSnapEnabled: false,
     gridSize: 24 as GridSize,
     helpVisible: false,
+    searchVisible: false,
     editingId: null as string | null,
   }),
   getters: {
@@ -52,6 +53,9 @@ export const useUiStore = defineStore("ui", {
     },
     setHelpVisible(v: boolean) {
       this.helpVisible = v;
+    },
+    setSearchVisible(v: boolean) {
+      this.searchVisible = v;
     },
     setView(view: AppView) {
       this.view = view;

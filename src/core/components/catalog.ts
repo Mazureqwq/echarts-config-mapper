@@ -30,13 +30,15 @@ export function componentCatalogEntries(definitions: readonly ComponentDefinitio
 }
 
 export function getComponentCatalog(): readonly ComponentCatalogEntry[] {
-  const charts: ComponentCatalogEntry[] = (Object.keys(chartRegistry) as ChartType[]).map((chartType) => {
+  const charts: ComponentCatalogEntry[] = (Object.keys(chartRegistry) as ChartType[])
+    .filter((chartType) => !["map", "geoScatter", "geoHeatmap", "geoFlow"].includes(chartType))
+    .map((chartType) => {
     const descriptor = chartRegistry[chartType];
     return {
       key: `chart:${chartType}`,
       source: "chart",
       chartType,
-      group: "chart",
+      group: descriptor.catalogGroup,
       name: descriptor.label,
       description: `${descriptor.label}可视化图表。`,
       tags: ["图表", chartType],

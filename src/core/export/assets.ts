@@ -21,9 +21,14 @@ export function runtimeSource(): string {
   return RUNTIME_CODE;
 }
 
-/** 只有产物里真的存在地图图表时才注入 GeoJSON，省 54 KB */
+/** 只有产物里存在旧地图图表或地图场景容器时才注入本地 GeoJSON，省 54 KB */
 export function attachGeo(payload: PackagePayload): PackagePayload {
-  const needsGeo = payload.screens.some((s) => s.items.some((i) => i.kind === "chart" && i.type === "map"));
+  const geoChartTypes = ["map", "geoScatter", "geoHeatmap", "geoFlow"];
+  const mapSceneIds = ["chartforge.map-scene-flat", "chartforge.map-scene-tilted"];
+  const needsGeo = payload.screens.some((s) => s.items.some((i) =>
+    (i.kind === "chart" && geoChartTypes.includes(i.type)) ||
+    (i.kind === "component" && mapSceneIds.includes(i.componentId) && i.componentVersion === 1)
+  ));
   if (!needsGeo) return payload;
   return { ...payload, geo: { china: chinaGeo } };
 }

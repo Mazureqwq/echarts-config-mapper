@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChartForge · 离线真实 DEM / WebGL POC</title>
+    <meta name="description" content="隔离验证：MapLibre GL JS + NOAA ETOPO 真实 DEM，本地离线地形。" />
+    <!-- POC_CSP -->
+    <style>
+      :root { color-scheme: dark; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
+      * { box-sizing: border-box; }
+      html, body, #map { width: 100%; height: 100%; margin: 0; }
+      body { overflow: hidden; background: #08111d; }
+      #map { position: fixed; inset: 0; }
+      .hud { position: fixed; z-index: 2; left: 20px; top: 18px; max-width: 390px; padding: 16px 18px; border: 1px solid rgba(116, 220, 211, .26); border-radius: 14px; color: #e5f0f4; background: rgba(9, 21, 34, .82); box-shadow: 0 12px 40px rgba(0,0,0,.28); backdrop-filter: blur(12px); }
+      .eyebrow { color: #6ce0d0; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { margin: 6px 0 8px; font-size: 17px; font-weight: 650; }
+      .meta { margin: 0; color: #a9bdc9; font-size: 11px; line-height: 1.65; }
+      #status { display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 6px 9px; border-radius: 99px; color: #b5c5ce; background: rgba(255,255,255,.07); font-size: 10px; }
+      #status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #8c9ba6; }
+      #status[data-state="ready"] { color: #8ee8cf; background: rgba(43,176,142,.13); }
+      #status[data-state="ready"]::before { background: #62e0bd; box-shadow: 0 0 12px #62e0bd; }
+      #status[data-state="error"] { color: #ff9c98; background: rgba(210,70,70,.15); }
+      #status[data-state="error"]::before { background: #ff7770; }
+      .notice { position: fixed; z-index: 2; right: 18px; bottom: 16px; max-width: 390px; padding: 9px 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; color: #90a4b1; background: rgba(9,21,34,.75); font-size: 10px; line-height: 1.5; }
+      .maplibregl-ctrl-group { overflow: hidden; border: 1px solid rgba(116,220,211,.2) !important; border-radius: 10px !important; background: rgba(9,21,34,.8) !important; }
+      .maplibregl-ctrl-group button { filter: invert(.84) sepia(.2) saturate(.7); }
+      @media (max-width: 560px) { .hud { left: 10px; top: 10px; max-width: calc(100vw - 20px); padding: 12px 14px; } .notice { right: 10px; bottom: 10px; max-width: calc(100vw - 20px); } }
+    </style>
+  </head>
+  <body>
+    <div id="map" aria-label="西藏真实 DEM 地形图"></div>
+    <section class="hud">
+      <div class="eyebrow">M2 controlled offline POC</div>
+      <h1>青藏高原 · 真实 DEM WebGL 地形</h1>
+      <p class="meta">高程源：NOAA NCEI ETOPO 2022（15″）；单块本地 raster-dem；中国省界来自项目现有 GeoJSON。拖拽旋转、滚轮缩放。</p>
+      <div id="status" data-state="loading">载入地图与 DEM…</div>
+    </section>
+    <aside class="notice">仅为受控技术验证，不是正式地图组件。底图、DEM、边界和 worker 均应自包含；禁止访问外部瓦片服务。</aside>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

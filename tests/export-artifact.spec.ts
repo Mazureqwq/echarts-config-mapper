@@ -105,10 +105,10 @@ describe("export/artifact 单文件产物", () => {
   it("内联产物包含三种静态组件的本地样式与白名单派发", async () => {
     const out = await buildArtifact({ payload: payloadWith("大屏"), echartsCode: ECHARTS_STUB, runtimeCode: RUNTIME_CODE, mode: "inline" });
     const html = out.files.find((file) => file.path === "index.html")!.content;
-    for (const marker of ["cf-progress-list", "cf-progress-track", "cf-section-title", "cf-corner-frame"]) {
+    for (const marker of ["cf-progress-list", "cf-progress-track", "cf-section-title", "cf-corner-frame", "cf-map-scene"]) {
       expect(html).toContain(marker);
     }
-    for (const id of ["chartforge.progress-list", "chartforge.section-title", "chartforge.corner-frame"]) {
+    for (const id of ["chartforge.progress-list", "chartforge.section-title", "chartforge.corner-frame", "chartforge.map-scene-flat", "chartforge.map-scene-tilted"]) {
       expect(RUNTIME_CODE).toContain(id);
     }
     expect(html).toContain("connect-src 'none'");

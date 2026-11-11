@@ -6,6 +6,7 @@ import { clearComponentColorOverride, resolveComponentColor, sanitizeHexColor } 
 import type { ComponentProp, ComponentThemeToken } from "@/core/components/types";
 import type { ComponentItem, DatasetBinding } from "@/core/model/types";
 import DatasetBindingEditor from "./DatasetBindingEditor.vue";
+import MapSceneInspector from "./MapSceneInspector.vue";
 import { useDocumentStore } from "@/stores/documentStore";
 
 const props = defineProps<{ item: ComponentItem }>();
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   (event: "update:data-binding", value: DatasetBinding | undefined): void;
 }>();
 const definition = computed(() => componentRegistry.get(props.item.componentId, props.item.componentVersion));
+const isMapScene = computed(() => props.item.componentId === "chartforge.map-scene-flat" || props.item.componentId === "chartforge.map-scene-tilted");
 const error = ref("");
 
 function valueText(prop: ComponentProp): string {
@@ -61,7 +63,8 @@ function updateProp(prop: ComponentProp, event: Event): void {
 
 <template>
   <div class="component-inspector">
-    <template v-if="definition">
+    <MapSceneInspector v-if="definition && isMapScene" :item="item" @update:props="emit('update:props', $event)" @update:data-binding="emit('update:data-binding', $event)" />
+    <template v-else-if="definition">
       <label v-for="prop in definition.props" :key="prop.key" class="component-inspector__field">
         {{ prop.label }}
         <input v-if="prop.type === 'string'" class="cf-control cf-control--compact" type="text" :value="String(item.props[prop.key] ?? prop.defaultValue ?? '')" @input="updateProp(prop, $event)" />

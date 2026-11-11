@@ -1,0 +1,2161 @@
+{
+  "format": "chartforge/v1",
+  "kind": "screen",
+  "payload": {
+    "id": "screen-logistics-national-20261030",
+    "name": "智慧物流·全国运营态势",
+    "canvas": {
+      "width": 1920,
+      "height": 1080,
+      "background": {
+        "kind": "color",
+        "color": "#06131c"
+      }
+    },
+    "items": [
+      {
+        "id": "bg-header",
+        "name": "顶部标题带",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 32,
+          "y": 24,
+          "w": 1856,
+          "h": 94,
+          "rotate": 0
+        },
+        "fill": "rgba(7,27,41,0.98)",
+        "stroke": "#1d6176",
+        "strokeWidth": 1,
+        "radius": 16
+      },
+      {
+        "id": "bg-left",
+        "name": "左侧指标面板",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 32,
+          "y": 140,
+          "w": 424,
+          "h": 880,
+          "rotate": 0
+        },
+        "fill": "rgba(5,20,31,0.97)",
+        "stroke": "#164358",
+        "strokeWidth": 1,
+        "radius": 12
+      },
+      {
+        "id": "bg-center",
+        "name": "中央态势面板",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 472,
+          "y": 140,
+          "w": 976,
+          "h": 880,
+          "rotate": 0
+        },
+        "fill": "rgba(5,20,31,0.90)",
+        "stroke": "#164358",
+        "strokeWidth": 1,
+        "radius": 12
+      },
+      {
+        "id": "bg-right",
+        "name": "右侧分析面板",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 1464,
+          "y": 140,
+          "w": 424,
+          "h": 880,
+          "rotate": 0
+        },
+        "fill": "rgba(5,20,31,0.97)",
+        "stroke": "#164358",
+        "strokeWidth": 1,
+        "radius": 12
+      },
+      {
+        "id": "card-kpi",
+        "name": "核心指标卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 52,
+          "y": 218,
+          "w": 384,
+          "h": 214,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-live",
+        "name": "在线状态卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 52,
+          "y": 442,
+          "w": 384,
+          "h": 106,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-left-bar",
+        "name": "区域订单卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 52,
+          "y": 608,
+          "w": 384,
+          "h": 192,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-left-line",
+        "name": "24小时趋势卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 52,
+          "y": 850,
+          "w": 384,
+          "h": 148,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-map",
+        "name": "全国运力地图卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 494,
+          "y": 218,
+          "w": 932,
+          "h": 638,
+          "rotate": 0
+        },
+        "fill": "rgba(6,23,35,0.72)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-center-kpi-0",
+        "name": "地图底部指标",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 494,
+          "y": 868,
+          "w": 300,
+          "h": 130,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.92)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-center-kpi-1",
+        "name": "地图底部指标",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 806,
+          "y": 868,
+          "w": 300,
+          "h": 130,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.92)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-center-kpi-2",
+        "name": "地图底部指标",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 1118,
+          "y": 868,
+          "w": 300,
+          "h": 130,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.92)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-right-line",
+        "name": "趋势分析卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 1484,
+          "y": 238,
+          "w": 384,
+          "h": 230,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-right-ring",
+        "name": "订单结构卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 1484,
+          "y": 510,
+          "w": 384,
+          "h": 220,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "card-right-bar",
+        "name": "区域履约卡片",
+        "kind": "shape",
+        "shape": "rect",
+        "frame": {
+          "x": 1484,
+          "y": 772,
+          "w": 384,
+          "h": 226,
+          "rotate": 0
+        },
+        "fill": "rgba(10,35,49,0.82)",
+        "stroke": "#1b5366",
+        "strokeWidth": 1,
+        "radius": 10
+      },
+      {
+        "id": "accent-0",
+        "name": "面板强调线",
+        "kind": "shape",
+        "shape": "line",
+        "frame": {
+          "x": 50,
+          "y": 142,
+          "w": 388,
+          "h": 0,
+          "rotate": 0
+        },
+        "stroke": "#35d7cf",
+        "strokeWidth": 2
+      },
+      {
+        "id": "accent-1",
+        "name": "面板强调线",
+        "kind": "shape",
+        "shape": "line",
+        "frame": {
+          "x": 490,
+          "y": 142,
+          "w": 940,
+          "h": 0,
+          "rotate": 0
+        },
+        "stroke": "#35d7cf",
+        "strokeWidth": 2
+      },
+      {
+        "id": "accent-2",
+        "name": "面板强调线",
+        "kind": "shape",
+        "shape": "line",
+        "frame": {
+          "x": 1482,
+          "y": 142,
+          "w": 388,
+          "h": 0,
+          "rotate": 0
+        },
+        "stroke": "#35d7cf",
+        "strokeWidth": 2
+      },
+      {
+        "id": "screen-title",
+        "name": "大屏主标题",
+        "kind": "text",
+        "frame": {
+          "x": 76,
+          "y": 32,
+          "w": 900,
+          "h": 44,
+          "rotate": 0
+        },
+        "text": "智慧物流 · 全国运营态势",
+        "fontSize": 34,
+        "color": "#effcff",
+        "align": "left",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis",
+        "letterSpacing": 1
+      },
+      {
+        "id": "screen-subtitle",
+        "name": "大屏英文副标题",
+        "kind": "text",
+        "frame": {
+          "x": 78,
+          "y": 78,
+          "w": 950,
+          "h": 24,
+          "rotate": 0
+        },
+        "text": "NATIONAL LOGISTICS OPERATION CENTER  /  实时运营 · 演示数据",
+        "fontSize": 12,
+        "color": "#6da9b9",
+        "align": "left",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis",
+        "letterSpacing": 1
+      },
+      {
+        "id": "screen-date",
+        "name": "监控时间",
+        "kind": "text",
+        "frame": {
+          "x": 1450,
+          "y": 48,
+          "w": 390,
+          "h": 34,
+          "rotate": 0
+        },
+        "text": "监控时间  2026-10-30  13:32:30",
+        "fontSize": 14,
+        "color": "#9cc3d0",
+        "align": "right",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "title-left",
+        "name": "左侧栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 58,
+          "y": 156,
+          "w": 372,
+          "h": 54,
+          "rotate": 0
+        },
+        "props": {
+          "title": "核心运营指标",
+          "subtitle": "关键链路实时监测",
+          "variant": "bar",
+          "accentColor": "#31d8cf"
+        }
+      },
+      {
+        "id": "title-left-bar",
+        "name": "区域订单栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 58,
+          "y": 558,
+          "w": 372,
+          "h": 44,
+          "rotate": 0
+        },
+        "props": {
+          "title": "区域订单量",
+          "subtitle": "近 7 日 · 单位：千单",
+          "variant": "underline",
+          "accentColor": "#34d9d1"
+        }
+      },
+      {
+        "id": "title-left-line",
+        "name": "订单趋势栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 58,
+          "y": 806,
+          "w": 372,
+          "h": 42,
+          "rotate": 0
+        },
+        "props": {
+          "title": "订单趋势",
+          "subtitle": "近 24 小时",
+          "variant": "underline",
+          "accentColor": "#34d9d1"
+        }
+      },
+      {
+        "id": "title-center",
+        "name": "全国地图栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 504,
+          "y": 156,
+          "w": 912,
+          "h": 54,
+          "rotate": 0
+        },
+        "props": {
+          "title": "全国运力网络",
+          "subtitle": "省域订单分布 · 核心枢纽与干线流向",
+          "variant": "bar",
+          "accentColor": "#31d8cf"
+        }
+      },
+      {
+        "id": "title-right",
+        "name": "右侧栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 1490,
+          "y": 156,
+          "w": 372,
+          "h": 54,
+          "rotate": 0
+        },
+        "props": {
+          "title": "经营分析",
+          "subtitle": "趋势、结构与履约表现",
+          "variant": "bar",
+          "accentColor": "#31d8cf"
+        }
+      },
+      {
+        "id": "title-right-line",
+        "name": "流量趋势栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 1490,
+          "y": 202,
+          "w": 372,
+          "h": 34,
+          "rotate": 0
+        },
+        "props": {
+          "title": "运单与签收趋势",
+          "subtitle": "近 8 个周期",
+          "variant": "underline",
+          "accentColor": "#34d9d1"
+        }
+      },
+      {
+        "id": "title-right-ring",
+        "name": "订单结构栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 1490,
+          "y": 474,
+          "w": 372,
+          "h": 34,
+          "rotate": 0
+        },
+        "props": {
+          "title": "订单来源结构",
+          "subtitle": "来源占比",
+          "variant": "underline",
+          "accentColor": "#34d9d1"
+        }
+      },
+      {
+        "id": "title-right-bar",
+        "name": "区域履约栏目标题",
+        "kind": "component",
+        "componentId": "chartforge.section-title",
+        "componentVersion": 1,
+        "frame": {
+          "x": 1490,
+          "y": 736,
+          "w": 372,
+          "h": 34,
+          "rotate": 0
+        },
+        "props": {
+          "title": "区域履约率",
+          "subtitle": "目标：95%",
+          "variant": "underline",
+          "accentColor": "#34d9d1"
+        }
+      },
+      {
+        "id": "ring-a",
+        "name": "环形指标",
+        "kind": "chart",
+        "frame": {
+          "x": 66,
+          "y": 230,
+          "w": 112,
+          "h": 112,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "pie",
+          "data": {
+            "kind": "nameValue",
+            "rows": [
+              {
+                "name": "已完成",
+                "value": 62
+              },
+              {
+                "name": "待完成",
+                "value": 38
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "show": false
+            },
+            "legend": {
+              "show": false
+            },
+            "series": [
+              {
+                "radius": [
+                  "72%",
+                  "87%"
+                ],
+                "center": [
+                  "50%",
+                  "50%"
+                ],
+                "label": {
+                  "show": false
+                },
+                "labelLine": {
+                  "show": false
+                },
+                "itemStyle": {
+                  "borderWidth": 2,
+                  "borderColor": "#0a2331"
+                },
+                "data": [
+                  {
+                    "itemStyle": {
+                      "color": "#35e2cd"
+                    }
+                  },
+                  {
+                    "itemStyle": {
+                      "color": "#183847"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "ring-value-0",
+        "name": "指标数值",
+        "kind": "text",
+        "frame": {
+          "x": 79,
+          "y": 266,
+          "w": 86,
+          "h": 32,
+          "rotate": 0
+        },
+        "text": "62%",
+        "fontSize": 21,
+        "color": "#f3ffff",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "ring-label-0",
+        "name": "指标名称",
+        "kind": "text",
+        "frame": {
+          "x": 64,
+          "y": 344,
+          "w": 116,
+          "h": 24,
+          "rotate": 0
+        },
+        "text": "订单达成",
+        "fontSize": 12,
+        "color": "#9fc5d0",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "ring-b",
+        "name": "环形指标",
+        "kind": "chart",
+        "frame": {
+          "x": 186,
+          "y": 230,
+          "w": 112,
+          "h": 112,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "pie",
+          "data": {
+            "kind": "nameValue",
+            "rows": [
+              {
+                "name": "已完成",
+                "value": 83
+              },
+              {
+                "name": "待完成",
+                "value": 17
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "show": false
+            },
+            "legend": {
+              "show": false
+            },
+            "series": [
+              {
+                "radius": [
+                  "72%",
+                  "87%"
+                ],
+                "center": [
+                  "50%",
+                  "50%"
+                ],
+                "label": {
+                  "show": false
+                },
+                "labelLine": {
+                  "show": false
+                },
+                "itemStyle": {
+                  "borderWidth": 2,
+                  "borderColor": "#0a2331"
+                },
+                "data": [
+                  {
+                    "itemStyle": {
+                      "color": "#4d9cff"
+                    }
+                  },
+                  {
+                    "itemStyle": {
+                      "color": "#183847"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "ring-value-1",
+        "name": "指标数值",
+        "kind": "text",
+        "frame": {
+          "x": 199,
+          "y": 266,
+          "w": 86,
+          "h": 32,
+          "rotate": 0
+        },
+        "text": "83%",
+        "fontSize": 21,
+        "color": "#f3ffff",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "ring-label-1",
+        "name": "指标名称",
+        "kind": "text",
+        "frame": {
+          "x": 184,
+          "y": 344,
+          "w": 116,
+          "h": 24,
+          "rotate": 0
+        },
+        "text": "准时交付",
+        "fontSize": 12,
+        "color": "#9fc5d0",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "ring-c",
+        "name": "环形指标",
+        "kind": "chart",
+        "frame": {
+          "x": 306,
+          "y": 230,
+          "w": 112,
+          "h": 112,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "pie",
+          "data": {
+            "kind": "nameValue",
+            "rows": [
+              {
+                "name": "已完成",
+                "value": 97
+              },
+              {
+                "name": "待完成",
+                "value": 3
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "show": false
+            },
+            "legend": {
+              "show": false
+            },
+            "series": [
+              {
+                "radius": [
+                  "72%",
+                  "87%"
+                ],
+                "center": [
+                  "50%",
+                  "50%"
+                ],
+                "label": {
+                  "show": false
+                },
+                "labelLine": {
+                  "show": false
+                },
+                "itemStyle": {
+                  "borderWidth": 2,
+                  "borderColor": "#0a2331"
+                },
+                "data": [
+                  {
+                    "itemStyle": {
+                      "color": "#9b83ff"
+                    }
+                  },
+                  {
+                    "itemStyle": {
+                      "color": "#183847"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "ring-value-2",
+        "name": "指标数值",
+        "kind": "text",
+        "frame": {
+          "x": 319,
+          "y": 266,
+          "w": 86,
+          "h": 32,
+          "rotate": 0
+        },
+        "text": "97%",
+        "fontSize": 21,
+        "color": "#f3ffff",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "ring-label-2",
+        "name": "指标名称",
+        "kind": "text",
+        "frame": {
+          "x": 304,
+          "y": 344,
+          "w": 116,
+          "h": 24,
+          "rotate": 0
+        },
+        "text": "设备在线",
+        "fontSize": 12,
+        "color": "#9fc5d0",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "live-head",
+        "name": "在线状态标题",
+        "kind": "text",
+        "frame": {
+          "x": 72,
+          "y": 450,
+          "w": 330,
+          "h": 26,
+          "rotate": 0
+        },
+        "text": "●  全网节点运行正常",
+        "fontSize": 14,
+        "color": "#37e4c3",
+        "align": "left",
+        "weight": "600",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "live-sites",
+        "name": "节点在线数",
+        "kind": "text",
+        "frame": {
+          "x": 72,
+          "y": 482,
+          "w": 165,
+          "h": 22,
+          "rotate": 0
+        },
+        "text": "在线枢纽  38 / 40",
+        "fontSize": 12,
+        "color": "#9ec4d0",
+        "align": "left",
+        "weight": "normal",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "live-delay",
+        "name": "平均时效",
+        "kind": "text",
+        "frame": {
+          "x": 254,
+          "y": 482,
+          "w": 165,
+          "h": 22,
+          "rotate": 0
+        },
+        "text": "平均时效  1.8 天",
+        "fontSize": 12,
+        "color": "#9ec4d0",
+        "align": "left",
+        "weight": "normal",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "left-region-orders",
+        "name": "近七日区域订单",
+        "kind": "chart",
+        "frame": {
+          "x": 58,
+          "y": 610,
+          "w": 372,
+          "h": 185,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "bar",
+          "data": {
+            "kind": "category",
+            "categories": [
+              "华东",
+              "华南",
+              "华北",
+              "西南",
+              "华中",
+              "东北"
+            ],
+            "series": [
+              {
+                "name": "本周",
+                "values": [
+                  82,
+                  68,
+                  60,
+                  54,
+                  47,
+                  32
+                ]
+              },
+              {
+                "name": "上周",
+                "values": [
+                  69,
+                  57,
+                  55,
+                  46,
+                  41,
+                  29
+                ]
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "color": [
+              "#35d7cf",
+              "#4c87da"
+            ],
+            "tooltip": {
+              "trigger": "axis"
+            },
+            "legend": {
+              "show": true,
+              "top": 2,
+              "right": 4,
+              "textStyle": {
+                "color": "#91adbb",
+                "fontSize": 10
+              },
+              "itemWidth": 9,
+              "itemHeight": 8
+            },
+            "grid": {
+              "left": 34,
+              "right": 12,
+              "top": 30,
+              "bottom": 24,
+              "containLabel": false
+            },
+            "xAxis": {
+              "type": "category",
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 10
+              },
+              "axisLine": {
+                "lineStyle": {
+                  "color": "#244858"
+                }
+              },
+              "axisTick": {
+                "show": false
+              }
+            },
+            "yAxis": {
+              "type": "value",
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 9
+              },
+              "splitNumber": 3,
+              "splitLine": {
+                "lineStyle": {
+                  "color": "#173442",
+                  "type": "dashed"
+                }
+              },
+              "axisLine": {
+                "show": false
+              }
+            },
+            "series": [
+              {
+                "barWidth": 8,
+                "itemStyle": {
+                  "borderRadius": [
+                    3,
+                    3,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "barWidth": 8,
+                "itemStyle": {
+                  "borderRadius": [
+                    3,
+                    3,
+                    0,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "left-order-trend",
+        "name": "近二十四小时订单趋势",
+        "kind": "chart",
+        "frame": {
+          "x": 58,
+          "y": 850,
+          "w": 372,
+          "h": 144,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "line",
+          "data": {
+            "kind": "category",
+            "categories": [
+              "00",
+              "03",
+              "06",
+              "09",
+              "12",
+              "15",
+              "18",
+              "21"
+            ],
+            "series": [
+              {
+                "name": "订单量",
+                "values": [
+                  22,
+                  18,
+                  35,
+                  54,
+                  46,
+                  73,
+                  62,
+                  91
+                ]
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "color": [
+              "#36dfc1"
+            ],
+            "tooltip": {
+              "trigger": "axis"
+            },
+            "legend": {
+              "show": false
+            },
+            "grid": {
+              "left": 34,
+              "right": 12,
+              "top": 14,
+              "bottom": 22
+            },
+            "xAxis": {
+              "type": "category",
+              "boundaryGap": false,
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 9
+              },
+              "axisLine": {
+                "lineStyle": {
+                  "color": "#244858"
+                }
+              },
+              "axisTick": {
+                "show": false
+              }
+            },
+            "yAxis": {
+              "type": "value",
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 9
+              },
+              "splitNumber": 2,
+              "splitLine": {
+                "lineStyle": {
+                  "color": "#173442",
+                  "type": "dashed"
+                }
+              },
+              "axisLine": {
+                "show": false
+              }
+            },
+            "series": [
+              {
+                "symbol": "none",
+                "smooth": true,
+                "lineStyle": {
+                  "width": 2.4,
+                  "color": "#36dfc1"
+                },
+                "areaStyle": {
+                  "color": "rgba(54,223,193,0.16)"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "china-region-map",
+        "name": "全国省域订单分布",
+        "kind": "chart",
+        "frame": {
+          "x": 520,
+          "y": 224,
+          "w": 880,
+          "h": 624,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "map",
+          "data": {
+            "kind": "nameValue",
+            "rows": [
+              {
+                "name": "广东省",
+                "value": 982
+              },
+              {
+                "name": "江苏省",
+                "value": 918
+              },
+              {
+                "name": "浙江省",
+                "value": 864
+              },
+              {
+                "name": "山东省",
+                "value": 782
+              },
+              {
+                "name": "四川省",
+                "value": 728
+              },
+              {
+                "name": "河南省",
+                "value": 690
+              },
+              {
+                "name": "北京市",
+                "value": 633
+              },
+              {
+                "name": "上海市",
+                "value": 615
+              },
+              {
+                "name": "湖北省",
+                "value": 558
+              },
+              {
+                "name": "福建省",
+                "value": 510
+              },
+              {
+                "name": "湖南省",
+                "value": 482
+              },
+              {
+                "name": "安徽省",
+                "value": 446
+              },
+              {
+                "name": "辽宁省",
+                "value": 398
+              },
+              {
+                "name": "陕西省",
+                "value": 365
+              },
+              {
+                "name": "云南省",
+                "value": 320
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "trigger": "item",
+              "formatter": "{b}  ·  {c} 千单"
+            },
+            "visualMap": {
+              "show": false,
+              "min": 300,
+              "max": 1000,
+              "inRange": {
+                "color": [
+                  "#123248",
+                  "#145b6c",
+                  "#1eb99f"
+                ]
+              }
+            },
+            "series": [
+              {
+                "layoutCenter": [
+                  "50%",
+                  "51%"
+                ],
+                "layoutSize": "90%",
+                "label": {
+                  "show": false
+                },
+                "itemStyle": {
+                  "areaColor": "#123247",
+                  "borderColor": "#4ab6c9",
+                  "borderWidth": 1.1
+                },
+                "emphasis": {
+                  "label": {
+                    "show": true,
+                    "color": "#eaffff",
+                    "fontSize": 11
+                  },
+                  "itemStyle": {
+                    "areaColor": "#218d91"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "china-flows",
+        "name": "全国运输干线",
+        "kind": "chart",
+        "frame": {
+          "x": 520,
+          "y": 224,
+          "w": 880,
+          "h": 624,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "geoFlow",
+          "data": {
+            "kind": "geoFlow",
+            "rows": [
+              {
+                "from": [
+                  116.4074,
+                  39.9042
+                ],
+                "to": [
+                  121.4737,
+                  31.2304
+                ],
+                "name": "北京—上海",
+                "value": 96
+              },
+              {
+                "from": [
+                  113.2644,
+                  23.1291
+                ],
+                "to": [
+                  121.4737,
+                  31.2304
+                ],
+                "name": "广州—上海",
+                "value": 84
+              },
+              {
+                "from": [
+                  104.0665,
+                  30.5723
+                ],
+                "to": [
+                  114.3055,
+                  30.5928
+                ],
+                "name": "成都—武汉",
+                "value": 69
+              },
+              {
+                "from": [
+                  118.7969,
+                  32.0603
+                ],
+                "to": [
+                  120.1551,
+                  30.2741
+                ],
+                "name": "南京—杭州",
+                "value": 63
+              },
+              {
+                "from": [
+                  114.0579,
+                  22.5431
+                ],
+                "to": [
+                  113.2644,
+                  23.1291
+                ],
+                "name": "深圳—广州",
+                "value": 57
+              },
+              {
+                "from": [
+                  117.0009,
+                  36.6758
+                ],
+                "to": [
+                  116.4074,
+                  39.9042
+                ],
+                "name": "济南—北京",
+                "value": 48
+              },
+              {
+                "from": [
+                  108.9398,
+                  34.3416
+                ],
+                "to": [
+                  104.0665,
+                  30.5723
+                ],
+                "name": "西安—成都",
+                "value": 42
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "trigger": "item"
+            },
+            "geo": {
+              "map": "china",
+              "roam": false,
+              "layoutCenter": [
+                "50%",
+                "51%"
+              ],
+              "layoutSize": "90%",
+              "itemStyle": {
+                "areaColor": "rgba(0,0,0,0)",
+                "borderColor": "rgba(78,201,218,0.28)",
+                "borderWidth": 0.4
+              },
+              "emphasis": {
+                "itemStyle": {
+                  "areaColor": "rgba(0,0,0,0)"
+                }
+              }
+            },
+            "series": [
+              {
+                "lineStyle": {
+                  "color": "#39e1d1",
+                  "width": 1.5,
+                  "opacity": 0.74,
+                  "curveness": 0.22
+                },
+                "effect": {
+                  "show": true,
+                  "period": 5,
+                  "trailLength": 0.18,
+                  "symbol": "circle",
+                  "symbolSize": 3,
+                  "color": "#a7fff2"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "china-hubs",
+        "name": "全国枢纽节点",
+        "kind": "chart",
+        "frame": {
+          "x": 520,
+          "y": 224,
+          "w": 880,
+          "h": 624,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "geoScatter",
+          "data": {
+            "kind": "geoScatter",
+            "rows": [
+              {
+                "longitude": 116.4074,
+                "latitude": 39.9042,
+                "name": "北京",
+                "value": 96
+              },
+              {
+                "longitude": 121.4737,
+                "latitude": 31.2304,
+                "name": "上海",
+                "value": 91
+              },
+              {
+                "longitude": 113.2644,
+                "latitude": 23.1291,
+                "name": "广州",
+                "value": 83
+              },
+              {
+                "longitude": 114.0579,
+                "latitude": 22.5431,
+                "name": "深圳",
+                "value": 77
+              },
+              {
+                "longitude": 104.0665,
+                "latitude": 30.5723,
+                "name": "成都",
+                "value": 72
+              },
+              {
+                "longitude": 118.7969,
+                "latitude": 32.0603,
+                "name": "南京",
+                "value": 64
+              },
+              {
+                "longitude": 114.3055,
+                "latitude": 30.5928,
+                "name": "武汉",
+                "value": 61
+              },
+              {
+                "longitude": 120.1551,
+                "latitude": 30.2741,
+                "name": "杭州",
+                "value": 58
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "trigger": "item"
+            },
+            "geo": {
+              "map": "china",
+              "roam": false,
+              "layoutCenter": [
+                "50%",
+                "51%"
+              ],
+              "layoutSize": "90%",
+              "itemStyle": {
+                "areaColor": "rgba(0,0,0,0)",
+                "borderColor": "rgba(78,201,218,0.28)",
+                "borderWidth": 0.4
+              },
+              "emphasis": {
+                "itemStyle": {
+                  "areaColor": "rgba(0,0,0,0)"
+                }
+              }
+            },
+            "series": [
+              {
+                "symbolSize": 10,
+                "itemStyle": {
+                  "color": "#fff0a6",
+                  "opacity": 0.95,
+                  "shadowBlur": 12,
+                  "shadowColor": "#ffda6b"
+                },
+                "label": {
+                  "show": false
+                },
+                "emphasis": {
+                  "label": {
+                    "show": true,
+                    "color": "#efffff"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "map-tag",
+        "name": "地图状态角标",
+        "kind": "text",
+        "frame": {
+          "x": 520,
+          "y": 228,
+          "w": 400,
+          "h": 28,
+          "rotate": 0
+        },
+        "text": "离线底图  ·  全国  ·  15 个省域样例",
+        "fontSize": 12,
+        "color": "#8fc6d4",
+        "align": "left",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "map-legend",
+        "name": "地图图例",
+        "kind": "text",
+        "frame": {
+          "x": 520,
+          "y": 820,
+          "w": 560,
+          "h": 24,
+          "rotate": 0
+        },
+        "text": "●  订单密度     ━  干线流向     ◉  城市枢纽",
+        "fontSize": 12,
+        "color": "#9bc3cf",
+        "align": "left",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "map-source",
+        "name": "底图说明",
+        "kind": "text",
+        "frame": {
+          "x": 1150,
+          "y": 820,
+          "w": 230,
+          "h": 24,
+          "rotate": 0
+        },
+        "text": "China GeoJSON · LOCAL",
+        "fontSize": 11,
+        "color": "#537c8c",
+        "align": "right",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis",
+        "letterSpacing": 0.5
+      },
+      {
+        "id": "center-kpi-val-0",
+        "name": "全国运营指标",
+        "kind": "text",
+        "frame": {
+          "x": 528,
+          "y": 884,
+          "w": 264,
+          "h": 48,
+          "rotate": 0
+        },
+        "text": "38",
+        "fontSize": 30,
+        "color": "#38dfc9",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "center-kpi-label-0",
+        "name": "全国运营指标名称",
+        "kind": "text",
+        "frame": {
+          "x": 528,
+          "y": 936,
+          "w": 264,
+          "h": 26,
+          "rotate": 0
+        },
+        "text": "活跃枢纽",
+        "fontSize": 13,
+        "color": "#94b5c2",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "center-kpi-val-1",
+        "name": "全国运营指标",
+        "kind": "text",
+        "frame": {
+          "x": 840,
+          "y": 884,
+          "w": 264,
+          "h": 48,
+          "rotate": 0
+        },
+        "text": "96.4%",
+        "fontSize": 30,
+        "color": "#5caaff",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "center-kpi-label-1",
+        "name": "全国运营指标名称",
+        "kind": "text",
+        "frame": {
+          "x": 840,
+          "y": 936,
+          "w": 264,
+          "h": 26,
+          "rotate": 0
+        },
+        "text": "准时送达",
+        "fontSize": 13,
+        "color": "#94b5c2",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "center-kpi-val-2",
+        "name": "全国运营指标",
+        "kind": "text",
+        "frame": {
+          "x": 1152,
+          "y": 884,
+          "w": 264,
+          "h": 48,
+          "rotate": 0
+        },
+        "text": "12.8万",
+        "fontSize": 30,
+        "color": "#bd95ff",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "center-kpi-label-2",
+        "name": "全国运营指标名称",
+        "kind": "text",
+        "frame": {
+          "x": 1152,
+          "y": 936,
+          "w": 264,
+          "h": 26,
+          "rotate": 0
+        },
+        "text": "今日运单",
+        "fontSize": 13,
+        "color": "#94b5c2",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "right-flow-trend",
+        "name": "运单签收趋势",
+        "kind": "chart",
+        "frame": {
+          "x": 1490,
+          "y": 240,
+          "w": 372,
+          "h": 222,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "line",
+          "data": {
+            "kind": "category",
+            "categories": [
+              "08:00",
+              "09:00",
+              "10:00",
+              "11:00",
+              "12:00",
+              "13:00",
+              "14:00",
+              "15:00"
+            ],
+            "series": [
+              {
+                "name": "运单",
+                "values": [
+                  42,
+                  56,
+                  48,
+                  78,
+                  72,
+                  96,
+                  88,
+                  112
+                ]
+              },
+              {
+                "name": "签收",
+                "values": [
+                  31,
+                  43,
+                  39,
+                  61,
+                  58,
+                  79,
+                  75,
+                  93
+                ]
+              },
+              {
+                "name": "异常",
+                "values": [
+                  8,
+                  12,
+                  9,
+                  15,
+                  11,
+                  18,
+                  14,
+                  12
+                ]
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "color": [
+              "#39dbc4",
+              "#559bff",
+              "#f4c45f"
+            ],
+            "tooltip": {
+              "trigger": "axis"
+            },
+            "legend": {
+              "show": true,
+              "top": 0,
+              "right": 2,
+              "textStyle": {
+                "color": "#91adbb",
+                "fontSize": 9
+              },
+              "itemWidth": 9,
+              "itemHeight": 8
+            },
+            "grid": {
+              "left": 35,
+              "right": 10,
+              "top": 30,
+              "bottom": 25
+            },
+            "xAxis": {
+              "type": "category",
+              "boundaryGap": false,
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 8
+              },
+              "axisLine": {
+                "lineStyle": {
+                  "color": "#244858"
+                }
+              },
+              "axisTick": {
+                "show": false
+              }
+            },
+            "yAxis": {
+              "type": "value",
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 8
+              },
+              "splitNumber": 3,
+              "splitLine": {
+                "lineStyle": {
+                  "color": "#173442",
+                  "type": "dashed"
+                }
+              },
+              "axisLine": {
+                "show": false
+              }
+            },
+            "series": [
+              {
+                "symbol": "none",
+                "smooth": true,
+                "lineStyle": {
+                  "width": 2
+                }
+              },
+              {
+                "symbol": "none",
+                "smooth": true,
+                "lineStyle": {
+                  "width": 2
+                }
+              },
+              {
+                "symbol": "none",
+                "smooth": true,
+                "lineStyle": {
+                  "width": 1.5,
+                  "type": "dashed"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "right-order-source",
+        "name": "订单来源结构",
+        "kind": "chart",
+        "frame": {
+          "x": 1490,
+          "y": 516,
+          "w": 372,
+          "h": 210,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "pie",
+          "data": {
+            "kind": "nameValue",
+            "rows": [
+              {
+                "name": "直营网点",
+                "value": 42
+              },
+              {
+                "name": "电商平台",
+                "value": 28
+              },
+              {
+                "name": "企业客户",
+                "value": 19
+              },
+              {
+                "name": "其他渠道",
+                "value": 11
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "tooltip": {
+              "trigger": "item",
+              "formatter": "{b}  {d}%"
+            },
+            "legend": {
+              "show": true,
+              "orient": "vertical",
+              "right": 4,
+              "top": "middle",
+              "textStyle": {
+                "color": "#9bb8c4",
+                "fontSize": 10
+              },
+              "itemWidth": 8,
+              "itemHeight": 8
+            },
+            "color": [
+              "#35d7c2",
+              "#3c97e8",
+              "#9e81ed",
+              "#efc45b"
+            ],
+            "series": [
+              {
+                "radius": [
+                  "50%",
+                  "73%"
+                ],
+                "center": [
+                  "38%",
+                  "52%"
+                ],
+                "label": {
+                  "show": false
+                },
+                "labelLine": {
+                  "show": false
+                },
+                "itemStyle": {
+                  "borderColor": "#0a2331",
+                  "borderWidth": 2
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "right-donut-center",
+        "name": "订单来源总占比",
+        "kind": "text",
+        "frame": {
+          "x": 1545,
+          "y": 594,
+          "w": 126,
+          "h": 32,
+          "rotate": 0
+        },
+        "text": "100%",
+        "fontSize": 22,
+        "color": "#efffff",
+        "align": "center",
+        "weight": "700",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "right-donut-caption",
+        "name": "订单来源中心说明",
+        "kind": "text",
+        "frame": {
+          "x": 1545,
+          "y": 624,
+          "w": 126,
+          "h": 20,
+          "rotate": 0
+        },
+        "text": "渠道订单",
+        "fontSize": 11,
+        "color": "#8fb0bd",
+        "align": "center",
+        "weight": "500",
+        "fontFamily": "Microsoft YaHei",
+        "verticalAlign": "middle",
+        "overflow": "ellipsis"
+      },
+      {
+        "id": "right-area-fulfilment",
+        "name": "区域履约率",
+        "kind": "chart",
+        "frame": {
+          "x": 1490,
+          "y": 776,
+          "w": 372,
+          "h": 216,
+          "rotate": 0
+        },
+        "spec": {
+          "type": "bar",
+          "data": {
+            "kind": "category",
+            "categories": [
+              "华东",
+              "华南",
+              "华北",
+              "西南",
+              "华中",
+              "东北"
+            ],
+            "series": [
+              {
+                "name": "准时率",
+                "values": [
+                  98,
+                  96,
+                  95,
+                  94,
+                  92,
+                  89
+                ]
+              }
+            ]
+          },
+          "option": {
+            "backgroundColor": "transparent",
+            "animation": false,
+            "color": [
+              "#37d8c7"
+            ],
+            "tooltip": {
+              "trigger": "axis"
+            },
+            "legend": {
+              "show": false
+            },
+            "grid": {
+              "left": 48,
+              "right": 24,
+              "top": 6,
+              "bottom": 8
+            },
+            "xAxis": {
+              "type": "value",
+              "data": [],
+              "min": 0,
+              "max": 100,
+              "axisLabel": {
+                "color": "#7798a8",
+                "fontSize": 8,
+                "formatter": "{value}%"
+              },
+              "splitNumber": 4,
+              "splitLine": {
+                "lineStyle": {
+                  "color": "#173442",
+                  "type": "dashed"
+                }
+              },
+              "axisLine": {
+                "show": false
+              }
+            },
+            "yAxis": {
+              "type": "category",
+              "data": [
+                "华东",
+                "华南",
+                "华北",
+                "西南",
+                "华中",
+                "东北"
+              ],
+              "inverse": true,
+              "axisLabel": {
+                "color": "#9ab9c5",
+                "fontSize": 10
+              },
+              "axisLine": {
+                "show": false
+              },
+              "axisTick": {
+                "show": false
+              }
+            },
+            "series": [
+              {
+                "barWidth": 11,
+                "showBackground": true,
+                "backgroundStyle": {
+                  "color": "#143242",
+                  "borderRadius": 5
+                },
+                "itemStyle": {
+                  "borderRadius": [
+                    0,
+                    6,
+                    6,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "blueprint": {
+      "nodes": [],
+      "edges": [],
+      "variables": []
+    },
+    "themeId": "monitor-dark",
+    "updatedAt": 1793338350000,
+    "category": "运营监控",
+    "tags": [
+      "物流",
+      "运营态势",
+      "示例数据",
+      "深色科技"
+    ]
+  }
+}

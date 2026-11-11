@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { ChartItem } from "@/core/model/types";
 import { chartRegistry } from "@/core/chart/registry";
 import type { FieldConfig } from "@/core/chart/registry";
@@ -8,6 +8,19 @@ const props = defineProps<{ item: ChartItem }>();
 const emit = defineEmits<{ (e: "changePath", path: string, value: unknown): void }>();
 
 const descriptor = computed(() => chartRegistry[props.item.spec.type]);
+const query = ref("");
+const filteredGroups = computed(() => {
+  const needle = query.value.trim().toLocaleLowerCase();
+  return descriptor.value.configGroups
+    .map((group) => {
+      const matchesGroup = !!needle && group.title.toLocaleLowerCase().includes(needle);
+      const fields = !needle || matchesGroup
+        ? group.fields
+        : group.fields.filter((field) => `${field.label} ${field.path}`.toLocaleLowerCase().includes(needle));
+      return { ...group, fields };
+    })
+    .filter((group) => group.fields.length > 0);
+});
 
 function getPath(path: string): unknown {
   let node: unknown = props.item.spec.option;
@@ -44,7 +57,17 @@ function onInput(field: FieldConfig, ev: Event): void {
 
 <template>
   <div class="chart-config">
-    <div v-for="group in descriptor.configGroups" :key="group.title" class="chart-config__group">
+    <div class="chart-config__search">
+      <input
+        v-model="query"
+        class="cf-control cf-control--compact"
+        type="search"
+        aria-label="搜索图表配置项"
+        placeholder="搜索配置项名称或字段…"
+      />
+      <button v-if="query" type="button" aria-label="清除配置项搜索" @click="query = ''">清除</button>
+    </div>
+    <div v-for="group in filteredGroups" :key="group.title" class="chart-config__group">
       <div class="chart-config__group-title">{{ group.title }}</div>
       <label v-for="field in group.fields" :key="field.path" class="chart-config__row">
         <span>{{ field.label }}</span>
@@ -71,10 +94,35 @@ function onInput(field: FieldConfig, ev: Event): void {
         />
       </label>
     </div>
+    <div v-if="filteredGroups.length === 0" class="chart-config__empty">没有匹配的配置项</div>
   </div>
 </template>
 
 <style scoped>
+.chart-config__search {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.chart-config__search input {
+  flex: 1;
+  min-width: 0;
+}
+.chart-config__search button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--cf-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.chart-config__empty {
+  padding: 16px 8px;
+  color: var(--cf-text-2);
+  text-align: center;
+  font-size: 12px;
+}
 .chart-config__group {
   margin-bottom: 14px;
 }

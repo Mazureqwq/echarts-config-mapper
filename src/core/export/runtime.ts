@@ -1,9 +1,9 @@
 /**
  * 产物运行时代码（纯 JavaScript，以字符串形式内联进产物）。
  *
- * 刻意做得很薄：option 在导出时已经算好，运行时只负责
+ * 刻意做得很薄：option 在导出时已经算好，运行时主要负责
  * 「读 payload → 建舞台 → setOption → 适配窗口 → 轮播」。
- * 因此这里没有任何业务逻辑复制，编辑器的 optionBuilder / pipeline 不会被悄悄分叉。
+ * 唯一的数据转换例外是受限的、字段映射驱动的离线地图绑定，以支持包内数据与蓝图筛选刷新。
  * 约束：不得使用 eval / new Function / innerHTML（CSP 与安全清单要求）。
  */
 export const RUNTIME_CODE = String.raw`
@@ -125,12 +125,43 @@ export const RUNTIME_CODE = String.raw`
     var el = doc.createElement("div");
     el.className = "cf-item cf-text";
     place(el, item);
-    el.style.fontSize = (item.fontSize || 16) + "px";
-    el.style.color = item.color || "#ffffff";
-    el.style.textAlign = item.align || "left";
-    el.style.fontWeight = item.weight === "bold" ? "700" : "400";
-    if (item.lineHeight) el.style.lineHeight = String(item.lineHeight);
-    el.textContent = item.text == null ? "" : String(item.text);
+    var fontFamilies = ["system-ui", "Arial", "Microsoft YaHei", "SimHei", "SimSun", "serif", "monospace"];
+    var family = fontFamilies.indexOf(item.fontFamily) >= 0 ? item.fontFamily : "system-ui";
+    var weights = ["normal", "bold", "100", "200", "300", "400", "500", "600", "700", "800", "900"];
+    var weight = weights.indexOf(String(item.weight)) >= 0 ? String(item.weight) : "normal";
+    el.style.boxSizing = "border-box"; el.style.display = "flex"; el.style.flexDirection = "column";
+    el.style.justifyContent = item.verticalAlign === "middle" ? "center" : item.verticalAlign === "bottom" ? "flex-end" : "flex-start";
+    el.style.overflow = "hidden"; el.style.padding = boundedWidgetNumber(item.padding, 0, 0, 128) + "px";
+    el.style.backgroundColor = safeWidgetColor(item.backgroundColor, "transparent");
+    var borderWidth = boundedWidgetNumber(item.borderWidth, 0, 0, 16);
+    if (borderWidth > 0) el.style.border = borderWidth + "px solid " + safeWidgetColor(item.borderColor, "#344054");
+    if (boundedWidgetNumber(item.radius, 0, 0, 128) > 0) el.style.borderRadius = boundedWidgetNumber(item.radius, 0, 0, 128) + "px";
+    var content = doc.createElement("span");
+    content.style.display = item.overflow === "ellipsis" ? "-webkit-box" : "block";
+    content.style.overflow = "hidden"; content.style.width = "100%";
+    if (item.overflow === "ellipsis") {
+      content.style.webkitBoxOrient = "vertical";
+      content.style.webkitLineClamp = String(Math.round(boundedWidgetNumber(item.lineClamp, 2, 1, 30)));
+      content.style.textOverflow = "ellipsis";
+    }
+    content.style.fontFamily = family;
+    content.style.fontSize = boundedWidgetNumber(item.fontSize, 16, 1, 1000) + "px";
+    content.style.fontStyle = ["normal", "italic", "oblique"].indexOf(item.fontStyle) >= 0 ? item.fontStyle : "normal";
+    content.style.color = safeWidgetColor(item.color, "#ffffff");
+    content.style.textAlign = ["left", "center", "right"].indexOf(item.align) >= 0 ? item.align : "left";
+    content.style.fontWeight = weight;
+    content.style.lineHeight = String(boundedWidgetNumber(item.lineHeight, 1.4, 0.5, 4));
+    content.style.letterSpacing = boundedWidgetNumber(item.letterSpacing, 0, -16, 64) + "px";
+    content.style.whiteSpace = "pre-wrap"; content.style.wordBreak = "break-word";
+    if (item.shadow && typeof item.shadow === "object") {
+      var shadowColor = safeWidgetColor(item.shadow.color, "#00cfff");
+      var shadowX = boundedWidgetNumber(item.shadow.offsetX, 0, -64, 64);
+      var shadowY = boundedWidgetNumber(item.shadow.offsetY, 0, -64, 64);
+      var shadowBlur = boundedWidgetNumber(item.shadow.blur, 0, 0, 64);
+      content.style.textShadow = shadowX + "px " + shadowY + "px " + shadowBlur + "px " + shadowColor;
+    }
+    content.textContent = item.text == null ? "" : String(item.text);
+    el.appendChild(content);
     el.setAttribute("role", "img");
     el.setAttribute("aria-label", item.text ? String(item.text) : "文本");
     stage.appendChild(el);
@@ -216,6 +247,60 @@ export const RUNTIME_CODE = String.raw`
     var value = safeField(fields.value, keys[1] || "value");
     var seriesField = safeField(fields.seriesField, "");
     var seriesTemplate = Array.isArray(option.series) && option.series.length ? option.series[0] : {};
+    if (item.type === "geoScatter" || item.type === "geoHeatmap" || item.type === "geoFlow") {
+      var mapping = fields.geo && typeof fields.geo === "object" ? fields.geo : {};
+      function geoField(name) {
+        var candidate = mapping[name];
+        if (typeof candidate !== "string") return "";
+        candidate = candidate.trim();
+        return candidate && safeKey(candidate) ? candidate : "";
+      }
+      function geoCoordinate(row, longitudeKey, latitudeKey) {
+        if (!longitudeKey || !latitudeKey) return null;
+        var longitude = asNumber(row[longitudeKey]); var latitude = asNumber(row[latitudeKey]);
+        if (longitude === null || latitude === null || longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return null;
+        return [longitude, latitude];
+      }
+      function geoName(row, field) {
+        if (!field) return "";
+        var rawName = row[field];
+        if (typeof rawName !== "string" && typeof rawName !== "number") return "";
+        return String(rawName).trim();
+      }
+      var geoValueField = geoField("value");
+      var geoData = [];
+      if (item.type === "geoFlow") {
+        var originLongitude = geoField("originLongitude"); var originLatitude = geoField("originLatitude");
+        var destinationLongitude = geoField("destinationLongitude"); var destinationLatitude = geoField("destinationLatitude");
+        rows.forEach(function (row) {
+          var from = geoCoordinate(row, originLongitude, originLatitude);
+          var to = geoCoordinate(row, destinationLongitude, destinationLatitude);
+          var numericValue = geoValueField ? asNumber(row[geoValueField]) : null;
+          if (!from || !to || (geoValueField && numericValue === null)) return;
+          var flow = { coords: [from, to] };
+          var flowName = geoName(row, geoField("name"));
+          if (flowName) flow.name = flowName;
+          if (numericValue !== null) flow.value = numericValue;
+          geoData.push(flow);
+        });
+      } else {
+        var longitudeField = geoField("longitude"); var latitudeField = geoField("latitude");
+        rows.forEach(function (row) {
+          var point = geoCoordinate(row, longitudeField, latitudeField);
+          var numericValue = geoValueField ? asNumber(row[geoValueField]) : null;
+          if (!point || (geoValueField && numericValue === null) || (item.type === "geoHeatmap" && numericValue === null)) return;
+          if (item.type === "geoHeatmap") geoData.push([point[0], point[1], numericValue]);
+          else {
+            var scatter = { value: numericValue === null ? point : [point[0], point[1], numericValue] };
+            var pointName = geoName(row, geoField("name"));
+            if (pointName) scatter.name = pointName;
+            geoData.push(scatter);
+          }
+        });
+      }
+      option.series = [Object.assign({}, seriesTemplate, { data: geoData })];
+      return option;
+    }
     if (item.type === "pie" || item.type === "map") {
       var points = rows.map(function (row) { return { name: row[category] == null ? "" : String(row[category]), value: asNumber(row[value]) || 0 }; });
       option.series = [Object.assign({}, seriesTemplate, { data: points })];
@@ -236,7 +321,7 @@ export const RUNTIME_CODE = String.raw`
         radarGroups[group][label] = asNumber(row[value]) || 0;
       });
       var radarMax = rows.reduce(function (max, row) { return Math.max(max, asNumber(row[value]) || 0); }, 0);
-      option.radar = Object.assign({}, option.radar || {}, { indicators: radarCategories.map(function (name) { return { name: name, max: radarMax > 0 ? Math.ceil(radarMax * 1.2) : 100 }; }) });
+      option.radar = Object.assign({}, option.radar || {}, { indicator: radarCategories.map(function (name) { return { name: name, max: radarMax > 0 ? Math.ceil(radarMax * 1.2) : 100 }; }) });
       option.series = [Object.assign({}, seriesTemplate, { type: "radar", data: radarNames.map(function (name) { return { name: name, value: radarCategories.map(function (label) { return radarGroups[name][label] || 0; }) }; }) })];
       return option;
     }
@@ -392,17 +477,182 @@ export const RUNTIME_CODE = String.raw`
     if (variant === "double") appendOutline(inset + 8, 1);
   }
 
+
+  function safeMapScene(item, rootEl, rows, props, screen) {
+    var layerTypes = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"];
+    var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
+    var presentation = props.presentation === "tilted" || props.presentation === "flat" ? props.presentation : fallbackPresentation;
+        var rawView = props.view && typeof props.view === "object" ? props.view : {};
+    var rawCenter = Array.isArray(rawView.center) ? rawView.center : [];
+    var minZoom = boundedWidgetNumber(rawView.minZoom, 1, 0.5, 20);
+    var maxZoom = boundedWidgetNumber(rawView.maxZoom, Math.max(minZoom, 8), minZoom, 20);
+    var zoomFallback = Math.min(maxZoom, Math.max(minZoom, 1.05));
+    var view = {
+      center: [boundedWidgetNumber(rawCenter[0], 104.114129, -180, 180), boundedWidgetNumber(rawCenter[1], 35.550339, -90, 90)],
+      zoom: boundedWidgetNumber(rawView.zoom, zoomFallback, minZoom, maxZoom), minZoom: minZoom, maxZoom: maxZoom,
+      dragEnabled: typeof rawView.dragEnabled === "boolean" ? rawView.dragEnabled : true,
+      zoomEnabled: typeof rawView.zoomEnabled === "boolean" ? rawView.zoomEnabled : true,
+      showLabels: typeof rawView.showLabels === "boolean" ? rawView.showLabels : true,
+      backgroundColor: safeWidgetColor(rawView.backgroundColor, "#081622")
+    };
+    var roam = view.dragEnabled && view.zoomEnabled ? true : view.dragEnabled ? "move" : view.zoomEnabled ? "scale" : false;
+     var geoBase = { map: "china", center: view.center, zoom: view.zoom, roam: roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: { show: view.showLabels, color: "#e7fbff", fontSize: 10 }, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: "#c0f3fb", borderWidth: 1, shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: { label: { color: "#ffffff" }, itemStyle: { areaColor: "rgba(0,254,233,0.6)" } } };
+     // Three purposeful underlays: deep base shadow, mid sidewall, and bright top rim.
+      var extrusionLayers = [{ offset: 3, areaColor: "rgba(5,21,35,0.12)", borderColor: "rgba(58,149,253,0.45)", shadowColor: "rgba(58,149,253,0.85)", shadowOffsetY: 10, shadowBlur: 8 }, { offset: 2, areaColor: "rgba(5,21,35,0.1)", borderColor: "rgba(58,149,253,0.68)", shadowColor: "rgba(65,214,255,0.72)", shadowOffsetY: 6, shadowBlur: 10 }, { offset: 1, areaColor: "#10273a", borderColor: "#b5f3ff", shadowColor: "#8cd3ef", shadowOffsetY: 4, shadowBlur: 10 }];
+     var geoLayers = presentation === "tilted" ? extrusionLayers.map(function (layer) { return Object.assign({}, geoBase, { layoutCenter: ["50%", (49 + layer.offset) + "%"], layoutSize: "150%", label: Object.assign({}, geoBase.label, { show: false }), roam: false, silent: true, emphasis: { disabled: true }, itemStyle: { areaColor: layer.areaColor, borderColor: layer.borderColor, borderWidth: 1, shadowColor: layer.shadowColor, shadowOffsetY: layer.shadowOffsetY, shadowBlur: layer.shadowBlur } }); }).concat([Object.assign({}, geoBase, { layoutCenter: ["50%", "49%"], layoutSize: "150%" })]) : geoBase;
+     var geoIndex = presentation === "tilted" ? 3 : 0;
+    var rawLayers = Array.isArray(props.layers) ? props.layers.slice(0, 50) : [];
+    var layers = [];
+    rawLayers.forEach(function (entry, index) {
+      if (!entry || typeof entry !== "object" || layerTypes.indexOf(entry.type) < 0) return;
+      var defaults = { regionFill: "区域填色", geoScatter: "地理散点", geoHeatmap: "点热力", geoFlow: "OD 飞线" };
+      var style = entry.style && typeof entry.style === "object" ? entry.style : {};
+      layers.push({
+        id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim().slice(0, 80) : "layer-" + (index + 1),
+        type: entry.type,
+        name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim().slice(0, 48) : defaults[entry.type],
+        visible: typeof entry.visible === "boolean" ? entry.visible : true,
+        color: safeWidgetColor(style.color, entry.type === "geoHeatmap" ? "#ff6b6b" : entry.type === "geoScatter" ? "#ffcc66" : "#32d6ff"),
+        opacity: boundedWidgetNumber(style.opacity, 0.85, 0, 1),
+        size: boundedWidgetNumber(style.size, 12, 1, 100),
+        dataBinding: entry.dataBinding && typeof entry.dataBinding === "object" && typeof entry.dataBinding.datasetId === "string" && entry.dataBinding.datasetId.trim() ? entry.dataBinding : null
+      });
+    });
+    rootEl.className += " cf-map-scene cf-map-scene--" + presentation;
+    rootEl.style.overflow = "hidden";
+    rootEl.style.perspective = "none";
+    rootEl.style.backgroundColor = view.backgroundColor;
+    rootEl.setAttribute("role", "img");
+    rootEl.setAttribute("aria-label", presentation === "tilted" ? "2.5D 立体地图（矢量挤出）" : "平面地图（2D）");
+    var plane = doc.createElement("div");
+    plane.style.position = "absolute"; plane.style.inset = "0"; plane.style.overflow = "hidden";
+    plane.style.transform = "none";
+    plane.style.backgroundColor = view.backgroundColor;
+    plane.style.boxShadow = presentation === "tilted" ? "inset 0 0 30px #26c5ff2b, 0 10px 18px #02080e88" : "inset 0 0 34px #1ca7cf24";
+    var canvas = doc.createElement("div");
+    canvas.setAttribute("data-item", item.id || "");
+    canvas.style.position = "absolute"; canvas.style.inset = "0";
+    plane.appendChild(canvas); rootEl.appendChild(plane);
+    var title = doc.createElement("div"); title.className = "cf-map-scene__caption";
+    title.textContent = presentation === "tilted" ? "立体地图 · 2.5D" : "平面地图 · 2D";
+    title.style.position = "absolute"; title.style.zIndex = "2"; title.style.top = "10px"; title.style.left = "10px";
+    title.style.padding = "5px 8px"; title.style.border = "1px solid #54bad744"; title.style.borderRadius = "4px"; title.style.background = "#061622c9"; title.style.color = "#b9e9f5"; title.style.fontSize = "11px";
+    rootEl.appendChild(title);
+    var visibleCount = layers.filter(function (layer) { return layer.visible; }).length;
+    var badge = doc.createElement("div"); badge.textContent = visibleCount + " 个可见图层";
+    badge.style.position = "absolute"; badge.style.zIndex = "2"; badge.style.right = "10px"; badge.style.bottom = "10px";
+    badge.style.padding = "5px 8px"; badge.style.border = "1px solid #54bad744"; badge.style.borderRadius = "4px"; badge.style.background = "#061622c9"; badge.style.color = "#b9e9f5"; badge.style.fontSize = "11px";
+    rootEl.appendChild(badge);
+    var errors = []; var series = []; var visualMaps = [];
+    var containerFields = item.dataBinding && item.dataBinding.fields ? item.dataBinding.fields : {};
+    function field(source, key) { return typeof source[key] === "string" && source[key].trim() && safeKey(source[key].trim()) ? source[key].trim() : ""; }
+    function coordinate(row, lonField, latField) {
+      if (!lonField || !latField) return null;
+      var lon = asNumber(row[lonField]); var lat = asNumber(row[latField]);
+      return lon !== null && lat !== null && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90 ? [lon, lat] : null;
+    }
+    layers.forEach(function (layer) {
+      if (!layer.visible) return;
+      var layerRows = layer.dataBinding ? datasetRows(layer.dataBinding, screen) : rows;
+      var fields = layer.dataBinding ? (layer.dataBinding.fields || {}) : containerFields;
+      var geo = fields.geo && typeof fields.geo === "object" ? fields.geo : {};
+      if (layer.type === "regionFill") {
+        var nameField = field(fields, "category"); var valueField = field(fields, "value");
+        if (!nameField || !valueField) { errors.push(layer.name + "：区域填色需要配置区域名称与数值字段映射"); return; }
+        if (layerRows.length && (!layerRows.some(function (row) { return Object.prototype.hasOwnProperty.call(row, nameField); }) || !layerRows.some(function (row) { return Object.prototype.hasOwnProperty.call(row, valueField); }))) {
+          errors.push(layer.name + "：加工后数据缺少已映射的区域名称或数值列"); return;
+        }
+        var regionData = [];
+        layerRows.forEach(function (row) {
+          var nameValue = row[nameField]; var name = typeof nameValue === "string" || typeof nameValue === "number" ? String(nameValue).trim() : "";
+          var value = asNumber(row[valueField]);
+          if (name && value !== null) regionData.push({ name: name, value: value });
+        });
+        if (layerRows.length && !regionData.length) { errors.push(layer.name + "：没有有效的区域名称/数值行"); return; }
+        if (regionData.length) {
+          var mapSeriesIndex = series.length;
+          var values = regionData.map(function (entry) { return entry.value; });
+          var minimum = values.reduce(function (min, value) { return Math.min(min, value); }, Infinity);
+          var maximum = values.reduce(function (max, value) { return Math.max(max, value); }, -Infinity);
+          series.push({ name: layer.name, type: "map", map: "china", geoIndex: geoIndex, data: regionData, itemStyle: { areaColor: layer.color, opacity: layer.opacity, borderColor: "#5db9d2", borderWidth: 0.65 } });
+          visualMaps.push({ show: false, min: minimum, max: maximum || 1, seriesIndex: mapSeriesIndex, inRange: { color: ["#102b3d", layer.color] } });
+        }
+        return;
+      }
+      var data = [];
+      var mappedGeoColumns = Object.keys(geo).map(function (key) { return field(geo, key); }).filter(function (column) { return !!column; });
+      var absentGeoColumns = mappedGeoColumns.filter(function (column, index) {
+        if (mappedGeoColumns.indexOf(column) !== index) return false;
+        return !layerRows.some(function (row) { return Object.prototype.hasOwnProperty.call(row, column); });
+      });
+      if (layerRows.length && absentGeoColumns.length) {
+        errors.push(layer.name + "：加工后缺少已映射的地理字段列：" + absentGeoColumns.join("、")); return;
+      }
+      if (layer.type === "geoFlow") {
+        var fromLon = field(geo, "originLongitude"); var fromLat = field(geo, "originLatitude");
+        var toLon = field(geo, "destinationLongitude"); var toLat = field(geo, "destinationLatitude");
+        var flowValueField = field(geo, "value"); var flowNameField = field(geo, "name");
+        if (!fromLon || !fromLat || !toLon || !toLat) { errors.push(layer.name + "：缺少必需的起点/终点经纬度映射"); return; }
+        layerRows.forEach(function (row) {
+          var from = coordinate(row, fromLon, fromLat); var to = coordinate(row, toLon, toLat);
+          var value = flowValueField ? asNumber(row[flowValueField]) : null;
+          if (!from || !to || (flowValueField && value === null)) return;
+          var entry = { coords: [from, to] };
+          if (flowNameField && row[flowNameField] != null) entry.name = String(row[flowNameField]).slice(0, 100);
+          if (value !== null) entry.value = value;
+          data.push(entry);
+        });
+        if (layerRows.length && !data.length) { errors.push(layer.name + "：没有可用的地理数据行，请检查经纬度范围与数值字段"); return; }
+        series.push({ name: layer.name, type: "lines", coordinateSystem: "geo", geoIndex: geoIndex, data: data, lineStyle: { color: layer.color, width: Math.max(1, layer.size / 4), opacity: layer.opacity, curveness: 0.2 }, effect: { show: false } });
+        return;
+      }
+      var lonField = field(geo, "longitude"); var latField = field(geo, "latitude"); var valueFieldGeo = field(geo, "value"); var pointNameField = field(geo, "name");
+      if (!lonField || !latField || (layer.type === "geoHeatmap" && !valueFieldGeo)) { errors.push(layer.name + (layer.type === "geoHeatmap" ? "：缺少经度、纬度或热力值映射" : "：缺少经度/纬度映射")); return; }
+      layerRows.forEach(function (row) {
+        var point = coordinate(row, lonField, latField); var value = valueFieldGeo ? asNumber(row[valueFieldGeo]) : null;
+        if (!point || (valueFieldGeo && value === null) || (layer.type === "geoHeatmap" && value === null)) return;
+        if (layer.type === "geoHeatmap") data.push([point[0], point[1], value]);
+        else { var pointData = { value: value === null ? point : [point[0], point[1], value] }; if (pointNameField && row[pointNameField] != null) pointData.name = String(row[pointNameField]).slice(0, 100); data.push(pointData); }
+      });
+      if (layerRows.length && !data.length) { errors.push(layer.name + "：没有可用的地理数据行，请检查经纬度范围与数值字段"); return; }
+      if (layer.type === "geoHeatmap") series.push({ name: layer.name, type: "heatmap", coordinateSystem: "geo", geoIndex: geoIndex, data: data, pointSize: layer.size, blurSize: Math.max(layer.size, 12), itemStyle: { color: layer.color, opacity: layer.opacity } });
+      else series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: geoIndex, symbolSize: layer.size, data: data, itemStyle: { color: layer.color, opacity: layer.opacity } });
+    });
+    var option = { backgroundColor: presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: { trigger: "item" }, geo: geoLayers, series: series };
+    if (visualMaps.length) option.visualMap = visualMaps;
+    if (window.echarts) {
+      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (presentation === "tilted" && typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var currentGeo = chart.getOption().geo; if (!Array.isArray(currentGeo) || currentGeo.length < 2) return; var topIndex = currentGeo.length - 1; var topGeo = currentGeo[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = currentGeo.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); }); charts.push(chart); }
+      catch (e) { errors.push("地图渲染失败"); }
+    } else errors.push("离线图表运行时不可用");
+    if (errors.length) {
+      var status = doc.createElement("div"); status.setAttribute("role", "status"); status.className = "cf-map-scene__status";
+      status.textContent = errors.join("；"); status.style.position = "absolute"; status.style.zIndex = "3"; status.style.left = "50%"; status.style.bottom = "10px"; status.style.maxWidth = "75%"; status.style.transform = "translateX(-50%)";
+      status.style.padding = "5px 8px"; status.style.borderRadius = "4px"; status.style.background = "#07121dd9"; status.style.color = "#ffd17b"; status.style.fontSize = "10px"; status.style.textAlign = "center";
+      rootEl.appendChild(status);
+    } else if (!layers.length) {
+      var empty = doc.createElement("div"); empty.textContent = "本地离线底图 · 可从图层面板添加地图数据层"; empty.style.position = "absolute"; empty.style.left = "50%"; empty.style.bottom = "10px"; empty.style.transform = "translateX(-50%)"; empty.style.color = "#b9e9f5"; empty.style.fontSize = "10px"; rootEl.appendChild(empty);
+    }
+  }
+
   function addComponent(item, screen) {
     var state = stateFor(screen);
     var props = safeMerge(item.props || {}, state.props[item.componentId] || {});
-    var rows = datasetRows(item.dataBinding, screen);
+    var rows = item.dataBinding ? datasetRows(item.dataBinding, screen) : (Array.isArray(item.sampleRows) ? item.sampleRows : []);
     var tokens = themeTokens(screen);
     var rootEl = doc.createElement("div");
     rootEl.className = "cf-item cf-component";
     rootEl.style.color = tokens.text;
     place(rootEl, item);
     rootEl.setAttribute("data-component", item.componentId);
-    if (item.componentId === "chartforge.data-table" && item.componentVersion === 1) {
+    if (!item.dataBinding && Array.isArray(item.sampleRows) && item.sampleRows.length) {
+      var sampleNotice = doc.createElement("p"); sampleNotice.className = "cf-sample-notice";
+      sampleNotice.textContent = "示例数据 · 绑定数据集后自动替换";
+      sampleNotice.style.margin = "0 0 8px"; sampleNotice.style.color = tokens.accent; sampleNotice.style.fontSize = "10px";
+      rootEl.appendChild(sampleNotice);
+    }
+    if ((item.componentId === "chartforge.map-scene-flat" || item.componentId === "chartforge.map-scene-tilted") && item.componentVersion === 1) {
+      safeMapScene(item, rootEl, rows, props, screen);
+    } else if (item.componentId === "chartforge.data-table" && item.componentVersion === 1) {
       rootEl.className += " cf-data-table";
       var columns = Array.isArray(props.columns) ? props.columns.filter(function (column) { return column && typeof column === "object" && safeField(column.field, ""); }) : [];
       if (columns.length) {
