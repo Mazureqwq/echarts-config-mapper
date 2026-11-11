@@ -70,7 +70,7 @@
 - [x] **Step 7: 扩展 HTTP chart pipeline 的类型通路** — `PipelineMap` 支持 geo；`toChartData(raw, type, mapping?)` 识别地图 ChartData kind、验证结构化数据，并将行式地图数据交给同一 helper；保持普通图表请求行为。
 - [x] **Step 8: 跑定向测试并确认 GREEN** — `pnpm exec vitest run tests/geo-chart-data.spec.ts tests/core-model.spec.ts tests/core-chart.spec.ts tests/live-advanced.spec.ts tests/component-catalog.spec.ts tests/component-catalog-ui.spec.ts`；预期全部通过。
 - [x] **Step 9: 类型检查** — `pnpm typecheck`；预期通过，不可用 `as any` 绕过穷尽检查。
-- [ ] **Step 10: 安全暂存并提交（按用户要求暂缓）** — 核对 `git status` 与 `git diff --cached`；对和既有脏 hunks 重合的文件只选择本任务新 hunks；`git diff --cached --check` 后提交 `feat: add typed offline map chart data`。若无法可靠分离，保留未提交并记录原因。
+- [x] **Step 10: 安全暂存并提交（按用户要求暂缓）** — 核对 `git status` 与 `git diff --cached`；对和既有脏 hunks 重合的文件只选择本任务新 hunks；`git diff --cached --check` 后提交 `feat: add typed offline map chart data`。若无法可靠分离，保留未提交并记录原因。
 
 ## Task 2: 数据绑定/实时数据字段映射与画布错误态
 
@@ -90,7 +90,7 @@
 - [x] **Step 5: 实现 LiveSourcePanel 的字段编辑与保存** — 同步 `props.item.spec.source.map.geo` 到表单；保存时仅写入非空字段；调试/加工预览采用和运行渲染相同的转换 helper。
 - [x] **Step 6: 实现画布绑定错误与空数据状态** — `ItemView.vue` 将 Geo ChartDataResult 错误映射到既有 binding status UI；非空全无效和缺必需映射给出可读提示，空行集不伪造原点，合法点正常渲染。
 - [x] **Step 7: 跑定向测试确认 GREEN** — `pnpm exec vitest run tests/pipeline.spec.ts tests/live-source.spec.ts tests/item-view.spec.ts`；预期通过。
-- [ ] **Step 8: 类型检查与提交（类型检查完成；提交按用户要求暂缓）** — `pnpm typecheck`；核对暂存 diff 只含本任务 hunks，随后提交 `feat: map geographic dataset bindings`；若旧改动无法安全隔离则不提交并记录。
+- [x] **Step 8: 类型检查与提交（类型检查完成；提交按用户要求暂缓）** — `pnpm typecheck`；核对暂存 diff 只含本任务 hunks，随后提交 `feat: map geographic dataset bindings`；若旧改动无法安全隔离则不提交并记录。
 
 ## Task 3: 地图目录卡片预览与交互回归
 
@@ -108,7 +108,7 @@
 - [x] **Step 3: 加本地地图卡片预览** — `ComponentCatalogPanel.vue` 为 `geoScatter`、`geoHeatmap`、`geoFlow` 和区域图提供固定 SVG/local templates；以 `v-if`/SVG 节点渲染，不用 v-html、远程 URL 或动态 CSS。
 - [x] **Step 4: 验证分类与既有 chart label 边界** — chart type 标签已在 Task 1 随 `ChartType` 同步扩展；本任务只为地图卡片新增本地 preview，不改 `ChartsView`/`AssetLibraryPanel` 的业务分类逻辑，地图项仍通过既有添加 action 和 MIME 被拖入画布。
 - [x] **Step 5: 跑目录 UI 测试确认 GREEN** — 断言五组筛选控件/count、地图本地预览、map card 的 click/drag type key、搜索匹配；HTML-like 名称保持字面文本。运行 `pnpm exec vitest run tests/component-catalog-ui.spec.ts tests/workbench-layout.spec.ts`，预期通过。
-- [ ] **Step 6: 类型检查与提交（类型检查完成；提交按用户要求暂缓）** — `pnpm typecheck`；核对暂存 diff，仅提交任务 hunks，提交 `feat: categorize map charts in component catalog`；不可分离时保留工作区状态并记录。
+- [x] **Step 6: 类型检查与提交（类型检查完成；提交按用户要求暂缓）** — `pnpm typecheck`；核对暂存 diff，仅提交任务 hunks，提交 `feat: categorize map charts in component catalog`；不可分离时保留工作区状态并记录。
 
 ## Task 4: 离线 GeoJSON 与导出 Runtime 覆盖
 
@@ -127,7 +127,7 @@
 - [x] **Step 5: 运行 E2E 测试确认 RED** — `pnpm exec vitest run tests/export-e2e.spec.ts`；预期地图绑定/变量变化行为失败。
 - [x] **Step 6: 实现离线 Runtime 行映射与刷新** — `RUNTIME_CODE.chartOption` 按 `fields.geo` 将包内行映射为 geo scatter `[lng,lat]`、heatmap `[lng,lat,value]`、flow `coords:[[fromLng,fromLat],[toLng,toLat]]`，缺映射返回空 series，越界/非有限坐标被跳过；变量过滤变化后复用同一分支刷新 series。
 - [x] **Step 7: 运行导出测试** — `pnpm exec vitest run tests/export-snapshot.spec.ts tests/export-e2e.spec.ts tests/export-artifact.spec.ts`；预期本地 GeoJSON 注入、变量更新、HTML/ZIP 无外网依赖全部通过。
-- [ ] **Step 8: 核验安全约束与提交（安全核验完成；按用户要求暂不暂存/提交）** — 检查 runtime 对应 diff 不引入 `eval`、`new Function`、`innerHTML` 或网络请求；核对只暂存本任务 hunks，提交 `feat: bundle offline geo data for map charts`；若不能隔离旧 hunks，则跳过提交并记录。
+- [x] **Step 8: 核验安全约束与提交（安全核验完成；按用户要求暂不暂存/提交）** — 检查 runtime 对应 diff 不引入 `eval`、`new Function`、`innerHTML` 或网络请求；核对只暂存本任务 hunks，提交 `feat: bundle offline geo data for map charts`；若不能隔离旧 hunks，则跳过提交并记录。
 
 ## Task 5: 全量验收与计划关闭
 
@@ -140,3 +140,5 @@
 - [x] **Step 3: 跑生产构建** — `pnpm build` 成功。
 - [x] **Step 4: 做差异和导出安全复查** — `git diff --check` 通过；地图表项完整包含在 ChartType、schema、catalog、图表转换、地图资源注入各路径；工作树里原有无关改动未丢失或混入任务提交。
 - [x] **Step 5: 更新本计划验收记录** — 仅记录真实命令/计数/提交，不改写规格范围；如果所有检查通过，用计划总结当前分支交付，是否继续后续 GeoJSON/轨迹能力另立规格。
+
+> 簿记补记（2026-11-11）：上方 4 个「暂缓提交」步骤（Step 10/8/6/8）的实现内容已随后续大提交 `a02dbdc`（feat: add map scenes, map chart catalog and blueprint variables）统一入库，入库时工作树已干净；独立提交未单独发生，勾选仅表示工作已入库，步骤原文不改写。
