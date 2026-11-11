@@ -25,6 +25,8 @@ import { loadDesignAssets, saveDesignAssets } from "@/core/storage/designAssetRe
 export const SAVE_DEBOUNCE_MS = 500;
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+// 挂起保存所属的 store，load() 只为同一 store 先行落盘
+let saveOwner: object | null = null;
 const datasetRuntimeByStore = new WeakMap<object, DatasetRuntime>();
 
 export const useWorkspaceStore = defineStore("workspace", {
@@ -42,6 +44,17 @@ export const useWorkspaceStore = defineStore("workspace", {
   },
   actions: {
     async load(): Promise<void> {
+      // 先把本 store 尚未落盘的修改写入存储。否则刚新建的大屏（防抖未到期）会被旧存储覆盖，例如新建后立即跳转工作台。
+      if (saveTimer !== null && saveOwner === this) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        saveOwner = null;
+        try {
+          this.save();
+        } catch {
+          /* saveState 已置 error */
+        }
+      }
       this.workspace = loadWorkspace();
       this.loaded = false;
       this.saveState = "idle";
@@ -102,8 +115,10 @@ export const useWorkspaceStore = defineStore("workspace", {
       if (saveTimer !== null) {
         clearTimeout(saveTimer);
       }
+      saveOwner = this;
       saveTimer = setTimeout(() => {
         saveTimer = null;
+        saveOwner = null;
         try {
           this.save();
         } catch {

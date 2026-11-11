@@ -91,6 +91,19 @@ describe("stores/workspaceStore", () => {
     vi.useRealTimers();
   });
 
+  it("load 前会先落盘挂起的修改：防抖未到期时重新 load 不会丢失刚新建的大屏", () => {
+    vi.useFakeTimers();
+    const ws = useWorkspaceStore();
+    ws.load();
+    ws.workspace.screens.push(createScreen("新建大屏"));
+    ws.scheduleSave();
+    // 模拟新建大屏后立即跳转工作台（防抖未到期），工作台挂载时会调用 load()
+    ws.load();
+    expect(ws.workspace.screens.map((s) => s.name)).toEqual(["新建大屏"]);
+    expect(JSON.parse(store._map.get("chartforge.workspace.v1")!).screens).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
   it("createAsset 在图表库中新建图表资产（含类型与默认尺寸）", () => {
     const ws = useWorkspaceStore();
     ws.load();
