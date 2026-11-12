@@ -6,7 +6,7 @@ import CornerFrameWidget from "@/workbench/components/CornerFrameWidget.vue";
 import MapSceneWidget from "@/workbench/components/MapSceneWidget.vue";
 import { createDefaultMapSceneProps } from "./mapScene";
 import { createComponentRegistry } from "./registry";
-import type { ComponentAction, ComponentDefinition, LegacyItemKind } from "./types";
+import type { ComponentAction, ComponentDefinition, ComponentEvent, LegacyItemKind } from "./types";
 
 const DEFAULT_FRAME = { x: 100, y: 100, w: 400, h: 300, rotate: 0 } as const;
 const BASE_ACTIONS: readonly ComponentAction[] = [
@@ -127,6 +127,12 @@ const dataWidgetDefinitions: readonly ComponentDefinition[] = [
   },
 ];
 
+const MAP_SCENE_EVENTS: readonly ComponentEvent[] = [
+  { name: "regionClick", payloadFields: { name: "string", value: "number", valueText: "string", presentation: "string" } },
+  { name: "regionDblclick", payloadFields: { name: "string", value: "number", valueText: "string", presentation: "string" } },
+  { name: "regionUpdrill", payloadFields: { name: "string", presentation: "string" } },
+];
+
 const mapSceneDefinitions: readonly ComponentDefinition[] = [
   {
     id: "chartforge.map-scene-flat", version: 1, name: "2D 平面地图", category: "map",
@@ -139,7 +145,7 @@ const mapSceneDefinitions: readonly ComponentDefinition[] = [
       { key: "view", label: "地图视图", type: "json", defaultValue: createDefaultMapSceneProps("flat").view },
       { key: "layers", label: "地图图层", type: "json", defaultValue: [] },
     ],
-    events: [], actions: BASE_ACTIONS, renderer: { kind: "vue", view: MapSceneWidget }, exportRendererId: "chartforge-map-scene-v1",
+    events: MAP_SCENE_EVENTS, actions: BASE_ACTIONS, renderer: { kind: "vue", view: MapSceneWidget }, exportRendererId: "chartforge-map-scene-v1",
   },
   {
     id: "chartforge.map-scene-tilted", version: 1, name: "2.5D 立体地图", category: "map",
@@ -152,7 +158,7 @@ const mapSceneDefinitions: readonly ComponentDefinition[] = [
       { key: "view", label: "地图视图", type: "json", defaultValue: createDefaultMapSceneProps("tilted").view },
       { key: "layers", label: "地图图层", type: "json", defaultValue: [] },
     ],
-    events: [], actions: BASE_ACTIONS, renderer: { kind: "vue", view: MapSceneWidget }, exportRendererId: "chartforge-map-scene-v1",
+    events: MAP_SCENE_EVENTS, actions: BASE_ACTIONS, renderer: { kind: "vue", view: MapSceneWidget }, exportRendererId: "chartforge-map-scene-v1",
   },
 ];
 

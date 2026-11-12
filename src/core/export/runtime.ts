@@ -739,6 +739,12 @@ export const RUNTIME_CODE = String.raw`
       }
       return changed;
     }
+    function cfEmitRegionEvent(eventName, params) {
+      if (!params) return;
+      if (params.componentType !== "series" || params.seriesType !== "map" || typeof params.name !== "string" || !params.name) return;
+      var value = typeof params.value === "number" ? params.value : null;
+      runBlueprint(item, screen, eventName, { name: params.name, value: value, valueText: cfFormatMapValue(value, props.valueFormat), presentation: presentation });
+    }
     if (props.legend && props.legend.show && legendSource) {
       var legendEl = doc.createElement("div");
       legendElRef = legendEl;
@@ -784,7 +790,7 @@ export const RUNTIME_CODE = String.raw`
       rootEl.appendChild(legendEl);
     }
     if (window.echarts) {
-      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var geoOption = chart.getOption().geo; var geoList = Array.isArray(geoOption) ? geoOption : (geoOption ? [geoOption] : []); var zoomNow = null; if (geoList.length) { var lastGeo = geoList[geoList.length - 1]; if (lastGeo && typeof lastGeo.zoom === "number") zoomNow = lastGeo.zoom; } if (zoomNow !== null) { if (cfApplyZoomVisibility(zoomNow)) { chart.setOption({ series: series }, { notMerge: false, lazyUpdate: true, silent: true }); } if (legendElRef) { legendElRef.style.display = cfLayerVisibleAt(cfLayerById(fillLayerId), zoomNow) ? "" : "none"; } } if (presentation === "tilted" && geoList.length >= 2) { var topIndex = geoList.length - 1; var topGeo = geoList[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = geoList.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); } }); charts.push(chart); }
+      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var geoOption = chart.getOption().geo; var geoList = Array.isArray(geoOption) ? geoOption : (geoOption ? [geoOption] : []); var zoomNow = null; if (geoList.length) { var lastGeo = geoList[geoList.length - 1]; if (lastGeo && typeof lastGeo.zoom === "number") zoomNow = lastGeo.zoom; } if (zoomNow !== null) { if (cfApplyZoomVisibility(zoomNow)) { chart.setOption({ series: series }, { notMerge: false, lazyUpdate: true, silent: true }); } if (legendElRef) { legendElRef.style.display = cfLayerVisibleAt(cfLayerById(fillLayerId), zoomNow) ? "" : "none"; } } if (presentation === "tilted" && geoList.length >= 2) { var topIndex = geoList.length - 1; var topGeo = geoList[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = geoList.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); } if (typeof chart.on === "function") { chart.on("click", function (params) { cfEmitRegionEvent("regionClick", params); }); chart.on("dblclick", function (params) { cfEmitRegionEvent("regionDblclick", params); }); } }); charts.push(chart); }
       catch (e) { errors.push("地图渲染失败"); }
     } else errors.push("离线图表运行时不可用");
     if (errors.length) {

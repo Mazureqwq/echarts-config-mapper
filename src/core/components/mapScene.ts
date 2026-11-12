@@ -1,4 +1,5 @@
 export const MAP_LAYER_TYPES = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"] as const;
+export const MAP_REGION_EVENTS = ["regionClick", "regionDblclick", "regionUpdrill"] as const;
 export type MapLayerType = typeof MAP_LAYER_TYPES[number];
 export type MapPresentation = "flat" | "tilted";
 export const MAP_SCENE_MODEL_VERSION = 2 as const;

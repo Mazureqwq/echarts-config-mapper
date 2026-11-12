@@ -9,7 +9,7 @@ const props = defineProps<{
   theme?: "light" | "dark";
 }>();
 
-const emit = defineEmits<{ (e: "error", message: string): void; (e: "roam", payload: { center: [number, number]; zoom: number }): void }>();
+const emit = defineEmits<{ (e: "error", message: string): void; (e: "roam", payload: { center: [number, number]; zoom: number }): void; (e: "chartEvent", payload: { type: "click" | "dblclick"; name: string | null; value: number | null; componentType: string; seriesType: string }): void }>();
 
 const el = ref<HTMLDivElement | null>(null);
 const chart = shallowRef<EChartsType | null>(null);
@@ -65,6 +65,18 @@ function mountChart(): void {
     if (!geo || !Array.isArray(geo.center) || typeof geo.zoom !== "number") return;
     emit("roam", { center: [...geo.center] as [number, number], zoom: geo.zoom });
   });
+  const forwardChartEvent = (type: "click" | "dblclick") => (raw: unknown) => {
+    const params = (raw ?? {}) as Record<string, unknown>;
+    emit("chartEvent", {
+      type,
+      name: typeof params.name === "string" ? params.name : null,
+      value: typeof params.value === "number" ? params.value : null,
+      componentType: typeof params.componentType === "string" ? params.componentType : "",
+      seriesType: typeof params.seriesType === "string" ? params.seriesType : "",
+    });
+  };
+  chart.value.on("click", forwardChartEvent("click"));
+  chart.value.on("dblclick", forwardChartEvent("dblclick"));
   render();
 }
 

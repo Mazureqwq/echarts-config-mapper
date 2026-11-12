@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowReactive, watch } from "vue";
 import type { ComponentRenderProps } from "@/core/components/types";
-import { buildMapLegend, buildMapSceneOption, filterLayersForZoom, normalizeMapSceneProps, type MapLegendEntry } from "@/core/components/mapScene";
+import { buildMapLegend, buildMapSceneOption, filterLayersForZoom, formatMapValue, normalizeMapSceneProps, type MapLegendEntry } from "@/core/components/mapScene";
 import EChartsView from "@/workbench/EChartsView.vue";
 import { themeMode } from "@/shared/theme";
 import { filterRowsByBinding } from "@/core/components/dataWidgets";
@@ -66,6 +66,16 @@ function onRoam(camera: { center: [number, number]; zoom: number }): void {
 watch(scene, () => {
   visibleSig.value = layerSignature(liveCamera.value?.zoom ?? scene.value.view.zoom);
 }, { immediate: true });
+function onChartEvent(payload: { type: "click" | "dblclick"; name: string | null; value: number | null; componentType: string; seriesType: string }): void {
+  if (payload.componentType !== "series" || payload.seriesType !== "map" || !payload.name) return;
+  const eventName = payload.type === "click" ? "regionClick" : "regionDblclick";
+  props.emitEvent(eventName, {
+    name: payload.name,
+    value: payload.value,
+    valueText: formatMapValue(payload.value, scene.value.valueFormat),
+    presentation: scene.value.presentation,
+  });
+}
 const result = computed(() => {
   const zoom = liveCamera.value?.zoom ?? scene.value.view.zoom;
   const layers = filterLayersForZoom(scene.value.layers, zoom);
@@ -89,7 +99,7 @@ const legendEntries = computed<MapLegendEntry[]>(() =>
 <template>
   <div class="map-scene" :class="`map-scene--${scene.presentation}`" :style="{ backgroundColor: scene.view.backgroundColor }">
     <div class="map-scene__surface" :style="{ backgroundColor: scene.view.backgroundColor }">
-      <EChartsView class="map-scene__chart" :option="result.option" :theme="themeMode" @roam="onRoam" />
+      <EChartsView class="map-scene__chart" :option="result.option" :theme="themeMode" @roam="onRoam" @chart-event="onChartEvent" />
       <div class="map-scene__caption">{{ scene.presentation === 'tilted' ? '立体地图 · 2.5D' : '平面地图 · 2D' }}</div>
       <div class="map-scene__layers">{{ visibleLayers }} 个可见图层</div>
       <div v-if="legendEntries.length" class="map-scene__legend" :class="`map-scene__legend--${scene.legend?.position ?? 'top-right'}`">

@@ -225,6 +225,15 @@ describe("map scene model and catalog", () => {
     expect(filterLayersForZoom(layers, 7).map((l) => l.id)).toEqual(["a"]);
   });
 
+  it("declares region blueprint events on both map scene components", () => {
+    for (const id of ["chartforge.map-scene-flat", "chartforge.map-scene-tilted"]) {
+      const definition = componentRegistry.get(id, 1);
+      expect(definition?.events.map((event) => event.name)).toEqual(["regionClick", "regionDblclick", "regionUpdrill"]);
+      expect(definition?.events[0]?.payloadFields).toMatchObject({ name: "string", value: "number", valueText: "string", presentation: "string" });
+      expect(definition?.events[2]?.payloadFields).toMatchObject({ name: "string", presentation: "string" });
+    }
+  });
+
   it("normalizes the drill toggle with an enabled default", () => {
     expect(normalizeMapSceneProps({ drill: { enabled: false } }).drill).toEqual({ enabled: false });
     expect(normalizeMapSceneProps({ drill: { enabled: "yes" } }).drill).toEqual({ enabled: true });
