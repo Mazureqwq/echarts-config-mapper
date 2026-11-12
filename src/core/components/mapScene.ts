@@ -19,6 +19,8 @@ export interface MapLegendConfig { show: boolean; position: "top-right" | "botto
 export interface MapTooltipStyle { background: string; borderColor: string; color: string; fontSize: number }
 export interface MapEmphasisStyle { areaColor: string; borderColor: string; labelColor: string }
 export interface MapSelectedStyle { areaColor: string; borderColor: string }
+export interface MapLabelStyle { show: boolean; color: string; size: number; stroke?: string; strokeWidth?: number; shadow?: string; shadowBlur?: number }
+export interface MapBorderStyle { color: string; width: number; type: "solid" | "dashed" }
 export interface MapFillColors { min: string; mid: string; max: string; empty: string }
 export interface MapLayerBorder { color: string; width: number; type: "solid" | "dashed" }
 export interface MapPointLabel { show: boolean; color: string; size: number; stroke?: string }
@@ -60,6 +62,8 @@ export interface MapSceneProps extends Record<string, unknown> {
   tooltipStyle?: MapTooltipStyle;
   emphasis?: MapEmphasisStyle;
   selected?: MapSelectedStyle;
+  label?: MapLabelStyle;
+  border?: MapBorderStyle;
   appliedSkin?: string;
 }
 
@@ -82,6 +86,8 @@ export const MAP_FILL_DEFAULT_MIN = "#102b3d";
 export const MAP_FILL_DEFAULT_MID = "#1c5f8f";
 export const MAP_FILL_DEFAULT_EMPTY = "#0d1a26";
 export const MAP_LAYER_BORDER_DEFAULT: MapLayerBorder = { color: "#ffffff", width: 1, type: "solid" };
+export const MAP_LABEL_DEFAULT: MapLabelStyle = { show: true, color: "#e7fbff", size: 10 };
+export const MAP_BORDER_DEFAULT: MapBorderStyle = { color: "#c0f3fb", width: 1, type: "solid" };
 
 function normalizeHex(value: unknown, fallback: string): string {
   return typeof value === "string" && HEX_COLOR.test(value) ? value : fallback;
@@ -159,6 +165,25 @@ function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProp
     out.selected = {
       areaColor: normalizeHex(input.selected.areaColor, MAP_SELECTED_DEFAULT.areaColor),
       borderColor: normalizeHex(input.selected.borderColor, MAP_SELECTED_DEFAULT.borderColor),
+    };
+  }
+  if (isRecord(input.label)) {
+    const label: MapLabelStyle = {
+      show: typeof input.label.show === "boolean" ? input.label.show : true,
+      color: normalizeHex(input.label.color, MAP_LABEL_DEFAULT.color),
+      size: clamp(input.label.size, 8, 40, MAP_LABEL_DEFAULT.size),
+    };
+    if (typeof input.label.stroke === "string" && HEX_COLOR.test(input.label.stroke)) label.stroke = input.label.stroke;
+    if (typeof input.label.strokeWidth === "number") label.strokeWidth = clamp(input.label.strokeWidth, 0, 6, 1);
+    if (typeof input.label.shadow === "string" && HEX_COLOR.test(input.label.shadow)) label.shadow = input.label.shadow;
+    if (typeof input.label.shadowBlur === "number") label.shadowBlur = clamp(input.label.shadowBlur, 0, 24, 0);
+    out.label = label;
+  }
+  if (isRecord(input.border)) {
+    out.border = {
+      color: normalizeHex(input.border.color, MAP_BORDER_DEFAULT.color),
+      width: clamp(input.border.width, 0, 8, MAP_BORDER_DEFAULT.width),
+      type: input.border.type === "dashed" ? "dashed" : "solid",
     };
   }
   if (typeof input.appliedSkin === "string" && input.appliedSkin.trim()) out.appliedSkin = input.appliedSkin.trim().slice(0, 48);
@@ -430,20 +455,45 @@ export function buildMapSceneOption(
   }
   const view = scene.view;
   const roam = view.dragEnabled && view.zoomEnabled ? true : view.dragEnabled ? "move" : view.zoomEnabled ? "scale" : false;
-  const geoBase = { map: "china", center: view.center, zoom: view.zoom, roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: { show: view.showLabels, color: "#e7fbff", fontSize: 10 }, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: "#c0f3fb", borderWidth: 1, shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: { label: { color: "#ffffff" }, itemStyle: { areaColor: "rgba(0,254,233,0.6)" } } };
+  const labelGroup = scene.label ?? MAP_LABEL_DEFAULT;
+  const labelCfg: Record<string, unknown> = {
+    show: view.showLabels && labelGroup.show,
+    color: labelGroup.color,
+    fontSize: labelGroup.size,
+  };
+  if (labelGroup.stroke) {
+    labelCfg.stroke = labelGroup.stroke;
+    labelCfg.strokeWidth = labelGroup.strokeWidth ?? 1;
+  }
+  if (labelGroup.shadow) {
+    labelCfg.textShadowColor = labelGroup.shadow;
+    labelCfg.textShadowBlur = labelGroup.shadowBlur ?? 0;
+  }
+  const borderGroup = scene.border ?? MAP_BORDER_DEFAULT;
+  const emphasisCfg = scene.emphasis
+    ? { label: { color: scene.emphasis.labelColor }, itemStyle: { areaColor: scene.emphasis.areaColor, borderColor: scene.emphasis.borderColor } }
+    : { label: { color: "#ffffff" }, itemStyle: { areaColor: "rgba(0,254,233,0.6)" } };
+  const tooltipCfg = scene.tooltipStyle
+    ? { trigger: "item", backgroundColor: scene.tooltipStyle.background, borderColor: scene.tooltipStyle.borderColor, textStyle: { color: scene.tooltipStyle.color, fontSize: scene.tooltipStyle.fontSize } }
+    : { trigger: "item" };
+  const geoBase = { map: "china", center: view.center, zoom: view.zoom, roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: labelCfg, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: borderGroup.color, borderWidth: borderGroup.width, borderType: borderGroup.type, shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: emphasisCfg };
   // Three purposeful underlays: deep base shadow, mid sidewall, and bright top rim.
   const extrusionLayers = [{ offset: 3, areaColor: "rgba(5,21,35,0.12)", borderColor: "rgba(58,149,253,0.45)", shadowColor: "rgba(58,149,253,0.85)", shadowOffsetY: 10, shadowBlur: 8 }, { offset: 2, areaColor: "rgba(5,21,35,0.1)", borderColor: "rgba(58,149,253,0.68)", shadowColor: "rgba(65,214,255,0.72)", shadowOffsetY: 6, shadowBlur: 10 }, { offset: 1, areaColor: "#10273a", borderColor: "#b5f3ff", shadowColor: "#8cd3ef", shadowOffsetY: 4, shadowBlur: 10 }];
   const geo = scene.presentation === "tilted"
     ? [...extrusionLayers.map((layer) => ({ ...geoBase, layoutCenter: ["50%", `${49 + layer.offset}%`], layoutSize: "150%", label: { ...geoBase.label, show: false }, roam: false, silent: true, emphasis: { disabled: true }, itemStyle: { areaColor: layer.areaColor, borderColor: layer.borderColor, borderWidth: 1, shadowColor: layer.shadowColor, shadowOffsetY: layer.shadowOffsetY, shadowBlur: layer.shadowBlur } })), { ...geoBase, layoutCenter: ["50%", "49%"], layoutSize: "150%" }]
     : geoBase;
+  const topGeo = (Array.isArray(geo) ? geo[geo.length - 1] : geo) as Record<string, unknown>;
   if (emptyColor) {
-    const topGeo = (Array.isArray(geo) ? geo[geo.length - 1] : geo) as Record<string, unknown>;
     const emptyFill = emptyColor;
     topGeo.regions = CHINA_REGION_NAMES.map((name) => ({ name, itemStyle: { areaColor: emptyFill } }));
   }
+  if (scene.selected) {
+    topGeo.selectedMode = "single";
+    topGeo.select = { itemStyle: { areaColor: scene.selected.areaColor, borderColor: scene.selected.borderColor } };
+  }
   return {
     option: {
-      backgroundColor: scene.presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: { trigger: "item" },
+      backgroundColor: scene.presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: tooltipCfg,
       ...(visualMaps.length ? { visualMap: visualMaps } : {}),
       geo,
       series,

@@ -527,7 +527,18 @@ export const RUNTIME_CODE = String.raw`
       backgroundColor: safeWidgetColor(rawView.backgroundColor, "#081622")
     };
     var roam = view.dragEnabled && view.zoomEnabled ? true : view.dragEnabled ? "move" : view.zoomEnabled ? "scale" : false;
-     var geoBase = { map: "china", center: view.center, zoom: view.zoom, roam: roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: { show: view.showLabels, color: "#e7fbff", fontSize: 10 }, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: "#c0f3fb", borderWidth: 1, shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: { label: { color: "#ffffff" }, itemStyle: { areaColor: "rgba(0,254,233,0.6)" } } };
+     var labelGroup = props.label && typeof props.label === "object" ? props.label : { show: true, color: "#e7fbff", size: 10 };
+     var labelCfg = { show: view.showLabels && labelGroup.show !== false, color: safeWidgetColor(labelGroup.color, "#e7fbff"), fontSize: boundedWidgetNumber(labelGroup.size, 10, 8, 40) };
+     if (typeof labelGroup.stroke === "string" && /^#[0-9a-fA-F]{6}$/.test(labelGroup.stroke)) { labelCfg.stroke = labelGroup.stroke; labelCfg.strokeWidth = boundedWidgetNumber(labelGroup.strokeWidth, 1, 0, 6); }
+     if (typeof labelGroup.shadow === "string" && /^#[0-9a-fA-F]{6}$/.test(labelGroup.shadow)) { labelCfg.textShadowColor = labelGroup.shadow; labelCfg.textShadowBlur = boundedWidgetNumber(labelGroup.shadowBlur, 0, 0, 24); }
+     var borderGroup = props.border && typeof props.border === "object" ? props.border : { color: "#c0f3fb", width: 1, type: "solid" };
+     var emphasisCfg = props.emphasis && typeof props.emphasis === "object"
+       ? { label: { color: safeWidgetColor(props.emphasis.labelColor, "#ffffff") }, itemStyle: { areaColor: safeWidgetColor(props.emphasis.areaColor, "#3a95fd"), borderColor: safeWidgetColor(props.emphasis.borderColor, "#ffffff") } }
+       : { label: { color: "#ffffff" }, itemStyle: { areaColor: "rgba(0,254,233,0.6)" } };
+     var tooltipCfg = props.tooltipStyle && typeof props.tooltipStyle === "object"
+       ? { trigger: "item", backgroundColor: safeWidgetColor(props.tooltipStyle.background, "#07121d"), borderColor: safeWidgetColor(props.tooltipStyle.borderColor, "#1f2a3a"), textStyle: { color: safeWidgetColor(props.tooltipStyle.color, "#e7fbff"), fontSize: boundedWidgetNumber(props.tooltipStyle.fontSize, 12, 8, 32) } }
+       : { trigger: "item" };
+     var geoBase = { map: "china", center: view.center, zoom: view.zoom, roam: roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: labelCfg, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: safeWidgetColor(borderGroup.color, "#c0f3fb"), borderWidth: boundedWidgetNumber(borderGroup.width, 1, 0, 8), borderType: borderGroup.type === "dashed" ? "dashed" : "solid", shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: emphasisCfg };
      // Three purposeful underlays: deep base shadow, mid sidewall, and bright top rim.
       var extrusionLayers = [{ offset: 3, areaColor: "rgba(5,21,35,0.12)", borderColor: "rgba(58,149,253,0.45)", shadowColor: "rgba(58,149,253,0.85)", shadowOffsetY: 10, shadowBlur: 8 }, { offset: 2, areaColor: "rgba(5,21,35,0.1)", borderColor: "rgba(58,149,253,0.68)", shadowColor: "rgba(65,214,255,0.72)", shadowOffsetY: 6, shadowBlur: 10 }, { offset: 1, areaColor: "#10273a", borderColor: "#b5f3ff", shadowColor: "#8cd3ef", shadowOffsetY: 4, shadowBlur: 10 }];
      var geoLayers = presentation === "tilted" ? extrusionLayers.map(function (layer) { return Object.assign({}, geoBase, { layoutCenter: ["50%", (49 + layer.offset) + "%"], layoutSize: "150%", label: Object.assign({}, geoBase.label, { show: false }), roam: false, silent: true, emphasis: { disabled: true }, itemStyle: { areaColor: layer.areaColor, borderColor: layer.borderColor, borderWidth: 1, shadowColor: layer.shadowColor, shadowOffsetY: layer.shadowOffsetY, shadowBlur: layer.shadowBlur } }); }).concat([Object.assign({}, geoBase, { layoutCenter: ["50%", "49%"], layoutSize: "150%" })]) : geoBase;
@@ -668,11 +679,15 @@ export const RUNTIME_CODE = String.raw`
       if (layer.type === "geoHeatmap") series.push({ name: layer.name, type: "heatmap", coordinateSystem: "geo", geoIndex: geoIndex, data: data, pointSize: layer.size, blurSize: Math.max(layer.size, 12), itemStyle: { color: layer.color, opacity: layer.opacity } });
       else series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: geoIndex, symbolSize: layer.size, data: data, itemStyle: { color: layer.color, opacity: layer.opacity } });
     });
+    var regionGeo = Array.isArray(geoLayers) ? geoLayers[geoLayers.length - 1] : geoLayers;
     if (emptyColor) {
-      var regionGeo = Array.isArray(geoLayers) ? geoLayers[geoLayers.length - 1] : geoLayers;
       regionGeo.regions = CF_CHINA_REGIONS.map(function (regionName) { return { name: regionName, itemStyle: { areaColor: emptyColor } }; });
     }
-    var option = { backgroundColor: presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: { trigger: "item" }, geo: geoLayers, series: series };
+    if (props.selected && typeof props.selected === "object") {
+      regionGeo.selectedMode = "single";
+      regionGeo.select = { itemStyle: { areaColor: safeWidgetColor(props.selected.areaColor, "#58d6ff"), borderColor: safeWidgetColor(props.selected.borderColor, "#ffffff") } };
+    }
+    var option = { backgroundColor: presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: tooltipCfg, geo: geoLayers, series: series };
     if (visualMaps.length) option.visualMap = visualMaps;
     if (props.legend && props.legend.show && legendSource) {
       var legendEl = doc.createElement("div");
