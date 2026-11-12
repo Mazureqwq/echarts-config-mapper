@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { componentRegistry } from "../src/core/components/builtins";
 import { getComponentCatalog } from "../src/core/components/catalog";
-import { buildMapSceneOption, normalizeMapSceneProps } from "../src/core/components/mapScene";
+import { buildMapSceneOption, formatMapValue, normalizeMapSceneProps } from "../src/core/components/mapScene";
 import { normalizeWorkspace } from "../src/core/model/schema";
 
 describe("map scene model and catalog", () => {
@@ -14,7 +14,7 @@ describe("map scene model and catalog", () => {
     expect(mapEntries.every((entry) => entry.source === "component")).toBe(true);
     expect(getComponentCatalog().some((entry) => entry.source === "chart" && entry.chartType === "map")).toBe(false);
     expect(getComponentCatalog().some((entry) => entry.source === "chart" && entry.chartType === "geoFlow")).toBe(false);
-    expect(componentRegistry.get("chartforge.map-scene-flat", 1)?.defaults).toMatchObject({ modelVersion: 1, presentation: "flat", pitch: 0, view: expect.any(Object), layers: [] });
+    expect(componentRegistry.get("chartforge.map-scene-flat", 1)?.defaults).toMatchObject({ modelVersion: 2, presentation: "flat", pitch: 0, view: expect.any(Object), layers: [] });
     expect(componentRegistry.get("chartforge.map-scene-tilted", 1)?.defaults).toMatchObject({ presentation: "tilted" });
   });
 
@@ -28,7 +28,7 @@ describe("map scene model and catalog", () => {
       ],
     }, "tilted");
     expect(normalized).toEqual({
-      modelVersion: 1, presentation: "tilted", pitch: 60,
+      modelVersion: 2, presentation: "tilted", pitch: 60,
       view: { center: [104.114129, 35.550339], zoom: 1.05, minZoom: 1, maxZoom: 8, dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622" },
       layers: [
         { id: "fill-1", type: "regionFill", name: "销量", visible: false, style: { color: "#12abEF", opacity: 1, size: 1 } },
@@ -135,7 +135,7 @@ describe("map scene model and catalog", () => {
   });
 
   it("normalizes a bounded offline map view and maps it to the shared ECharts geo camera", () => {
-    expect(normalizeMapSceneProps(null).modelVersion).toBe(1);
+    expect(normalizeMapSceneProps(null).modelVersion).toBe(2);
     expect(normalizeMapSceneProps(null).view).toEqual({
       center: [104.114129, 35.550339], zoom: 1.05, minZoom: 1, maxZoom: 8,
       dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622",
@@ -169,12 +169,49 @@ describe("map scene model and catalog", () => {
 
   it("uses safe deterministic defaults for malformed input", () => {
     expect(normalizeMapSceneProps(null, "flat")).toEqual({
-      modelVersion: 1, presentation: "flat", pitch: 0,
+      modelVersion: 2, presentation: "flat", pitch: 0,
       view: { center: [104.114129, 35.550339], zoom: 1.05, minZoom: 1, maxZoom: 8, dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622" },
       layers: [],
     });
     expect(normalizeMapSceneProps({ presentation: "tilted", pitch: -4, layers: Array(52).fill({ type: "geoScatter" }) }))
       .toMatchObject({ presentation: "tilted", pitch: 0, layers: expect.any(Array) });
     expect(normalizeMapSceneProps({ layers: Array(52).fill({ type: "geoScatter" }) }).layers).toHaveLength(50);
+  });
+
+  it("bumps to model version 2 and keeps v1 props key-identical", () => {
+    const v1 = { presentation: "flat" as const, layers: [{ id: "a", type: "regionFill" as const, name: "n", visible: true, style: { color: "#336699", opacity: 0.7, size: 12 } }] };
+    const out = normalizeMapSceneProps(v1);
+    expect(out.modelVersion).toBe(2);
+    expect(Object.keys(out).sort()).toEqual(["layers", "modelVersion", "pitch", "presentation", "view"]);
+    expect(out.layers[0]).toEqual({ id: "a", type: "regionFill", name: "n", visible: true, style: { color: "#336699", opacity: 0.7, size: 12 } });
+    expect("valueFormat" in out).toBe(false);
+  });
+
+  it("normalizes provided v2 groups with clamps", () => {
+    const out = normalizeMapSceneProps({
+      valueFormat: { decimals: 99, suffix: "次" },
+      legend: { show: 1, position: "middle", mode: "pie" },
+      tooltipStyle: { background: "#001122", color: "red" },
+      emphasis: { areaColor: "#12abEF" },
+      selected: { areaColor: "oops" },
+      appliedSkin: "  jade  ",
+      layers: [{ id: "a", type: "regionFill", name: "n", visible: true, style: { colorMode: "segments", segments: 99, colors: { min: "#000000", max: "url(x)", empty: "#111111" }, border: { color: "#fff", width: 99, type: "dotted" } }, minZoom: -3, maxZoom: 99 }],
+    });
+    expect(out.valueFormat).toEqual({ decimals: 4, suffix: "次" });
+    expect(out.legend).toEqual({ show: false, position: "top-right", mode: "continuous" });
+    expect(out.tooltipStyle).toEqual({ background: "#001122", borderColor: "#1f2a3a", color: "#e7fbff", fontSize: 12 });
+    expect(out.emphasis).toEqual({ areaColor: "#12abEF", borderColor: "#ffffff", labelColor: "#ffffff" });
+    expect(out.selected).toEqual({ areaColor: "#58d6ff", borderColor: "#ffffff" });
+    expect(out.appliedSkin).toBe("jade");
+    const layer = out.layers[0]!;
+    expect(layer.style).toMatchObject({ colorMode: "segments", segments: 10, colors: { min: "#000000", max: "#32d6ff", empty: "#111111" }, border: { color: "#ffffff", width: 8, type: "solid" } });
+    expect([layer.minZoom, layer.maxZoom]).toEqual([0.5, 20]);
+  });
+
+  it("formatMapValue clamps decimals and appends suffix", () => {
+    expect(formatMapValue(null)).toBe("—");
+    expect(formatMapValue(12.3456)).toBe("12");
+    expect(formatMapValue(12.3456, { decimals: 2, suffix: " 万吨" })).toBe("12.35 万吨");
+    expect(formatMapValue(-0.04, { decimals: 1 })).toBe("-0.0");
   });
 });

@@ -1,7 +1,7 @@
 export const MAP_LAYER_TYPES = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"] as const;
 export type MapLayerType = typeof MAP_LAYER_TYPES[number];
 export type MapPresentation = "flat" | "tilted";
-export const MAP_SCENE_MODEL_VERSION = 1 as const;
+export const MAP_SCENE_MODEL_VERSION = 2 as const;
 
 export interface MapSceneView {
   center: [number, number];
@@ -14,14 +14,38 @@ export interface MapSceneView {
   backgroundColor: string;
 }
 
+export interface MapValueFormat { decimals?: number; suffix?: string }
+export interface MapLegendConfig { show: boolean; position: "top-right" | "bottom-right" | "bottom-left"; mode: "continuous" | "segments" }
+export interface MapTooltipStyle { background: string; borderColor: string; color: string; fontSize: number }
+export interface MapEmphasisStyle { areaColor: string; borderColor: string; labelColor: string }
+export interface MapSelectedStyle { areaColor: string; borderColor: string }
+export interface MapFillColors { min: string; mid: string; max: string; empty: string }
+export interface MapLayerBorder { color: string; width: number; type: "solid" | "dashed" }
+export interface MapPointLabel { show: boolean; color: string; size: number; stroke?: string }
+
+export interface MapLayerStyle {
+  color: string;
+  opacity: number;
+  size: number;
+  colorMode?: "gradient" | "segments";
+  colors?: MapFillColors;
+  segments?: number;
+  border?: MapLayerBorder;
+  label?: MapPointLabel;
+  animated?: boolean;
+}
+
 export interface MapSceneLayer {
   id: string;
   type: MapLayerType;
   name: string;
   visible: boolean;
-  style: { color: string; opacity: number; size: number };
+  style: MapLayerStyle;
   /** Omitted bindings inherit the map container's binding. */
   dataBinding?: DatasetBinding;
+  /** Inclusive ECharts geo zoom window when provided. */
+  minZoom?: number;
+  maxZoom?: number;
 }
 
 export interface MapSceneProps extends Record<string, unknown> {
@@ -30,6 +54,13 @@ export interface MapSceneProps extends Record<string, unknown> {
   pitch: number;
   view: MapSceneView;
   layers: MapSceneLayer[];
+  /** v2 optional groups: omitted entirely unless provided (v1 shape preserved). */
+  valueFormat?: MapValueFormat;
+  legend?: MapLegendConfig;
+  tooltipStyle?: MapTooltipStyle;
+  emphasis?: MapEmphasisStyle;
+  selected?: MapSelectedStyle;
+  appliedSkin?: string;
 }
 
 const LAYER_DEFAULTS: Record<MapLayerType, { name: string; color: string }> = {
@@ -42,6 +73,105 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const clamp = (value: unknown, min: number, max: number, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+
+export const MAP_LEGEND_DEFAULT: MapLegendConfig = { show: false, position: "top-right", mode: "continuous" };
+export const MAP_TOOLTIP_DEFAULT: MapTooltipStyle = { background: "#07121d", borderColor: "#1f2a3a", color: "#e7fbff", fontSize: 12 };
+export const MAP_EMPHASIS_DEFAULT: MapEmphasisStyle = { areaColor: "#3a95fd", borderColor: "#ffffff", labelColor: "#ffffff" };
+export const MAP_SELECTED_DEFAULT: MapSelectedStyle = { areaColor: "#58d6ff", borderColor: "#ffffff" };
+export const MAP_FILL_DEFAULT_MIN = "#102b3d";
+export const MAP_FILL_DEFAULT_MID = "#1c5f8f";
+export const MAP_FILL_DEFAULT_EMPTY = "#0d1a26";
+export const MAP_LAYER_BORDER_DEFAULT: MapLayerBorder = { color: "#ffffff", width: 1, type: "solid" };
+
+function normalizeHex(value: unknown, fallback: string): string {
+  return typeof value === "string" && HEX_COLOR.test(value) ? value : fallback;
+}
+
+function normalizeLayerStyle(raw: Record<string, unknown>, defaultColor: string): MapLayerStyle {
+  const color = normalizeHex(raw.color, defaultColor);
+  const base: MapLayerStyle = {
+    color,
+    opacity: clamp(raw.opacity, 0, 1, 0.85),
+    size: clamp(raw.size, 1, 100, 12),
+  };
+  const colorMode = raw.colorMode === "gradient" || raw.colorMode === "segments" ? raw.colorMode : undefined;
+  if (colorMode !== undefined) base.colorMode = colorMode;
+  if (colorMode !== undefined || isRecord(raw.colors)) {
+    const colors = isRecord(raw.colors) ? raw.colors : {};
+    base.colors = {
+      min: normalizeHex(colors.min, MAP_FILL_DEFAULT_MIN),
+      mid: normalizeHex(colors.mid, MAP_FILL_DEFAULT_MID),
+      max: normalizeHex(colors.max, color),
+      empty: normalizeHex(colors.empty, MAP_FILL_DEFAULT_EMPTY),
+    };
+  }
+  if (typeof raw.segments === "number" && Number.isFinite(raw.segments)) base.segments = clamp(raw.segments, 2, 10, 5);
+  if (isRecord(raw.border)) {
+    base.border = {
+      color: normalizeHex(raw.border.color, MAP_LAYER_BORDER_DEFAULT.color),
+      width: clamp(raw.border.width, 0, 8, MAP_LAYER_BORDER_DEFAULT.width),
+      type: raw.border.type === "dashed" ? "dashed" : "solid",
+    };
+  }
+  if (isRecord(raw.label)) {
+    const label: MapPointLabel = {
+      show: typeof raw.label.show === "boolean" ? raw.label.show : true,
+      color: normalizeHex(raw.label.color, "#e7fbff"),
+      size: clamp(raw.label.size, 1, 40, 12),
+    };
+    if (typeof raw.label.stroke === "string" && HEX_COLOR.test(raw.label.stroke)) label.stroke = raw.label.stroke;
+    base.label = label;
+  }
+  if (typeof raw.animated === "boolean") base.animated = raw.animated;
+  return base;
+}
+
+function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProps> {
+  const out: Partial<MapSceneProps> = {};
+  if (isRecord(input.valueFormat)) {
+    const fmt: MapValueFormat = { decimals: clamp(input.valueFormat.decimals, 0, 4, 0) };
+    if (typeof input.valueFormat.suffix === "string") fmt.suffix = input.valueFormat.suffix.slice(0, 12);
+    out.valueFormat = fmt;
+  }
+  if (isRecord(input.legend)) {
+    out.legend = {
+      show: typeof input.legend.show === "boolean" ? input.legend.show : false,
+      position: input.legend.position === "bottom-right" || input.legend.position === "bottom-left" ? input.legend.position : "top-right",
+      mode: input.legend.mode === "segments" ? "segments" : "continuous",
+    };
+  }
+  if (isRecord(input.tooltipStyle)) {
+    out.tooltipStyle = {
+      background: normalizeHex(input.tooltipStyle.background, MAP_TOOLTIP_DEFAULT.background),
+      borderColor: normalizeHex(input.tooltipStyle.borderColor, MAP_TOOLTIP_DEFAULT.borderColor),
+      color: normalizeHex(input.tooltipStyle.color, MAP_TOOLTIP_DEFAULT.color),
+      fontSize: clamp(input.tooltipStyle.fontSize, 8, 32, MAP_TOOLTIP_DEFAULT.fontSize),
+    };
+  }
+  if (isRecord(input.emphasis)) {
+    out.emphasis = {
+      areaColor: normalizeHex(input.emphasis.areaColor, MAP_EMPHASIS_DEFAULT.areaColor),
+      borderColor: normalizeHex(input.emphasis.borderColor, MAP_EMPHASIS_DEFAULT.borderColor),
+      labelColor: normalizeHex(input.emphasis.labelColor, MAP_EMPHASIS_DEFAULT.labelColor),
+    };
+  }
+  if (isRecord(input.selected)) {
+    out.selected = {
+      areaColor: normalizeHex(input.selected.areaColor, MAP_SELECTED_DEFAULT.areaColor),
+      borderColor: normalizeHex(input.selected.borderColor, MAP_SELECTED_DEFAULT.borderColor),
+    };
+  }
+  if (typeof input.appliedSkin === "string" && input.appliedSkin.trim()) out.appliedSkin = input.appliedSkin.trim().slice(0, 48);
+  return out;
+}
+
+/** Format a map value for legend/tooltip/valueText display. */
+export function formatMapValue(value: number | null, fmt?: MapValueFormat): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  const decimals = clamp(fmt?.decimals, 0, 4, 0);
+  const text = value.toFixed(decimals);
+  return typeof fmt?.suffix === "string" && fmt.suffix ? `${text}${fmt.suffix}` : text;
+}
 
 const GEO_FIELD_KEYS = ["longitude", "latitude", "name", "value", "originLongitude", "originLatitude", "destinationLongitude", "destinationLatitude"] as const;
 
@@ -116,13 +246,18 @@ export function normalizeMapSceneProps(raw: unknown, fallbackPresentation: MapPr
       type,
       name: name || layerDefaults.name,
       visible: typeof entry.visible === "boolean" ? entry.visible : true,
-      style: {
-        color: typeof style.color === "string" && HEX_COLOR.test(style.color) ? style.color : layerDefaults.color,
-        opacity: clamp(style.opacity, 0, 1, 0.85),
-        size: clamp(style.size, 1, 100, 12),
-      },
+      style: normalizeLayerStyle(style, layerDefaults.color),
       ...(dataBinding ? { dataBinding } : {}),
+      ...(typeof entry.minZoom === "number" && Number.isFinite(entry.minZoom) ? { minZoom: clamp(entry.minZoom, 0.5, 20, 1) } : {}),
+      ...(typeof entry.maxZoom === "number" && Number.isFinite(entry.maxZoom) ? { maxZoom: clamp(entry.maxZoom, 0.5, 20, 20) } : {}),
     });
+  });
+  layers.forEach((layer) => {
+    if (layer.minZoom !== undefined && layer.maxZoom !== undefined && layer.minZoom > layer.maxZoom) {
+      const swap = layer.minZoom;
+      layer.minZoom = layer.maxZoom;
+      layer.maxZoom = swap;
+    }
   });
   return {
     modelVersion: MAP_SCENE_MODEL_VERSION,
@@ -130,6 +265,7 @@ export function normalizeMapSceneProps(raw: unknown, fallbackPresentation: MapPr
     pitch: presentation === "flat" ? 0 : clamp(input.pitch, 0, 60, 28),
     view: normalizeMapSceneView(input.view),
     layers,
+    ...normalizeV2Groups(input),
   };
 }
 
