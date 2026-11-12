@@ -87,4 +87,19 @@ describe("map color ramp and legend", () => {
     expect(geo.select).toBeUndefined();
     expect(result.option.tooltip).toEqual({ trigger: "item" });
   });
+
+  it("applies per-layer border point labels and flyline animation", () => {
+    const result = buildMapSceneOption({ layers: [
+      { id: "r", type: "regionFill", name: "热度", visible: true, style: { color: "#336699", opacity: 1, size: 12, border: { color: "#aabbcc", width: 2, type: "dashed" } } },
+      { id: "s", type: "geoScatter", name: "网点", visible: true, style: { color: "#ffcc66", opacity: 1, size: 12, label: { show: true, color: "#ffffff", size: 12, stroke: "#000000" } } },
+      { id: "f", type: "geoFlow", name: "航线", visible: true, style: { color: "#32d6ff", opacity: 1, size: 8, animated: true } },
+      { id: "f2", type: "geoFlow", name: "静线", visible: true, style: { color: "#32d6ff", opacity: 1, size: 8 } },
+    ] }, [{ province: "广东省", score: 9, lng: 113.26, lat: 23.13, fromLng: 113.26, fromLat: 23.13, toLng: 114.17, toLat: 22.31 }],
+    { category: "province", value: "score", geo: { longitude: "lng", latitude: "lat", originLongitude: "fromLng", originLatitude: "fromLat", destinationLongitude: "toLng", destinationLatitude: "toLat" } });
+    const series = result.option.series as any[];
+    expect(series[0].itemStyle).toMatchObject({ borderColor: "#aabbcc", borderWidth: 2, borderType: "dashed" });
+    expect(series[1].label).toMatchObject({ show: true, color: "#ffffff", fontSize: 12, stroke: "#000000" });
+    expect(series[2].effect).toMatchObject({ show: true, trailLength: 0.4 });
+    expect(series[3].effect).toMatchObject({ show: false });
+  });
 });

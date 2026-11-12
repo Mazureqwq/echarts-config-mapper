@@ -424,9 +424,10 @@ export function buildMapSceneOption(
         const values = converted.data.map((row) => row.value);
         const minimum = values.reduce((min, value) => Math.min(min, value), Number.POSITIVE_INFINITY);
         const maximum = values.reduce((max, value) => Math.max(max, value), Number.NEGATIVE_INFINITY);
+        const regionBorder = layer.style.border ?? { color: "#5db9d2", width: 0.65, type: "solid" };
         series.push({
           name: layer.name, type: "map", map: "china", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data,
-          itemStyle: { areaColor: layer.style.color, opacity: layer.style.opacity, borderColor: "#5db9d2", borderWidth: 0.65 },
+          itemStyle: { areaColor: layer.style.color, opacity: layer.style.opacity, borderColor: regionBorder.color, borderWidth: regionBorder.width, borderType: regionBorder.type },
           emphasis: { itemStyle: { areaColor: layer.style.color, opacity: 1 } },
         });
         const seriesIndex = series.length - 1;
@@ -446,11 +447,14 @@ export function buildMapSceneOption(
     const converted = buildGeoChartDataFromRows(layerRows, layerFields?.geo, chartType);
     if (!converted.ok) { errors.push(layerError(layer, converted.message)); continue; }
     if (layer.type === "geoScatter" && converted.data.kind === "geoScatter") {
-      series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, symbolSize: layer.style.size, data: converted.data.rows.map((point) => ({ name: point.name, value: point.value === undefined ? [point.longitude, point.latitude] : [point.longitude, point.latitude, point.value] })), itemStyle: { color: layer.style.color, opacity: layer.style.opacity } });
+      const pointLabel = layer.style.label
+        ? { show: layer.style.label.show, color: layer.style.label.color, fontSize: layer.style.label.size, ...(layer.style.label.stroke ? { stroke: layer.style.label.stroke, strokeWidth: 1 } : {}) }
+        : undefined;
+      series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, symbolSize: layer.style.size, data: converted.data.rows.map((point) => ({ name: point.name, value: point.value === undefined ? [point.longitude, point.latitude] : [point.longitude, point.latitude, point.value] })), itemStyle: { color: layer.style.color, opacity: layer.style.opacity }, ...(pointLabel ? { label: pointLabel } : {}) });
     } else if (layer.type === "geoHeatmap" && converted.data.kind === "geoHeatmap") {
       series.push({ name: layer.name, type: "heatmap", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data.rows.map((point) => [point.longitude, point.latitude, point.value]), pointSize: layer.style.size, blurSize: Math.max(layer.style.size, 12), itemStyle: { color: layer.style.color, opacity: layer.style.opacity } });
     } else if (layer.type === "geoFlow" && converted.data.kind === "geoFlow") {
-      series.push({ name: layer.name, type: "lines", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data.rows.map((line) => ({ name: line.name, coords: [line.from, line.to], ...(line.value !== undefined ? { value: line.value } : {}) })), lineStyle: { color: layer.style.color, width: Math.max(1, layer.style.size / 4), opacity: layer.style.opacity, curveness: 0.2 }, effect: { show: false } });
+      series.push({ name: layer.name, type: "lines", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data.rows.map((line) => ({ name: line.name, coords: [line.from, line.to], ...(line.value !== undefined ? { value: line.value } : {}) })), lineStyle: { color: layer.style.color, width: Math.max(1, layer.style.size / 4), opacity: layer.style.opacity, curveness: 0.2 }, effect: layer.style.animated ? { show: true, trailLength: 0.4, symbol: "arrow", symbolSize: 4 } : { show: false } });
     }
   }
   const view = scene.view;

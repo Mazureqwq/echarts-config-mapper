@@ -558,6 +558,18 @@ export const RUNTIME_CODE = String.raw`
         color: layerColor,
         opacity: boundedWidgetNumber(style.opacity, 0.85, 0, 1),
         size: boundedWidgetNumber(style.size, 12, 1, 100),
+        border: style.border && typeof style.border === "object" ? {
+          color: safeWidgetColor(style.border.color, "#5db9d2"),
+          width: boundedWidgetNumber(style.border.width, 0.65, 0, 8),
+          type: style.border.type === "dashed" ? "dashed" : "solid"
+        } : null,
+        label: style.label && typeof style.label === "object" ? {
+          show: typeof style.label.show === "boolean" ? style.label.show : true,
+          color: safeWidgetColor(style.label.color, "#e7fbff"),
+          size: boundedWidgetNumber(style.label.size, 12, 1, 40),
+          stroke: typeof style.label.stroke === "string" && /^#[0-9a-fA-F]{6}$/.test(style.label.stroke) ? style.label.stroke : ""
+        } : null,
+        animated: style.animated === true,
         colorMode: style.colorMode === "gradient" || style.colorMode === "segments" ? style.colorMode : "",
         colors: style.colors && typeof style.colors === "object" ? {
           min: safeWidgetColor(style.colors.min, "#102b3d"),
@@ -626,7 +638,8 @@ export const RUNTIME_CODE = String.raw`
           var values = regionData.map(function (entry) { return entry.value; });
           var minimum = values.reduce(function (min, value) { return Math.min(min, value); }, Infinity);
           var maximum = values.reduce(function (max, value) { return Math.max(max, value); }, -Infinity);
-          series.push({ name: layer.name, type: "map", map: "china", geoIndex: geoIndex, data: regionData, itemStyle: { areaColor: layer.color, opacity: layer.opacity, borderColor: "#5db9d2", borderWidth: 0.65 } });
+          var regionBorder = layer.border || { color: "#5db9d2", width: 0.65, type: "solid" };
+          series.push({ name: layer.name, type: "map", map: "china", geoIndex: geoIndex, data: regionData, itemStyle: { areaColor: layer.color, opacity: layer.opacity, borderColor: regionBorder.color, borderWidth: regionBorder.width, borderType: regionBorder.type } });
           var rampColors = layer.colors || { min: "#102b3d", mid: "#1c5f8f", max: layer.color, empty: "#0d1a26" };
           if (layer.colorMode === "segments") {
             visualMaps.push({ show: false, type: "piecewise", min: minimum, max: maximum || 1, seriesIndex: mapSeriesIndex, pieces: cfSegmentPieces(rampColors, minimum, maximum || 1, layer.segments || 5) });
@@ -664,7 +677,7 @@ export const RUNTIME_CODE = String.raw`
           data.push(entry);
         });
         if (layerRows.length && !data.length) { errors.push(layer.name + "：没有可用的地理数据行，请检查经纬度范围与数值字段"); return; }
-        series.push({ name: layer.name, type: "lines", coordinateSystem: "geo", geoIndex: geoIndex, data: data, lineStyle: { color: layer.color, width: Math.max(1, layer.size / 4), opacity: layer.opacity, curveness: 0.2 }, effect: { show: false } });
+        series.push({ name: layer.name, type: "lines", coordinateSystem: "geo", geoIndex: geoIndex, data: data, lineStyle: { color: layer.color, width: Math.max(1, layer.size / 4), opacity: layer.opacity, curveness: 0.2 }, effect: layer.animated ? { show: true, trailLength: 0.4, symbol: "arrow", symbolSize: 4 } : { show: false } });
         return;
       }
       var lonField = field(geo, "longitude"); var latField = field(geo, "latitude"); var valueFieldGeo = field(geo, "value"); var pointNameField = field(geo, "name");
@@ -677,7 +690,14 @@ export const RUNTIME_CODE = String.raw`
       });
       if (layerRows.length && !data.length) { errors.push(layer.name + "：没有可用的地理数据行，请检查经纬度范围与数值字段"); return; }
       if (layer.type === "geoHeatmap") series.push({ name: layer.name, type: "heatmap", coordinateSystem: "geo", geoIndex: geoIndex, data: data, pointSize: layer.size, blurSize: Math.max(layer.size, 12), itemStyle: { color: layer.color, opacity: layer.opacity } });
-      else series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: geoIndex, symbolSize: layer.size, data: data, itemStyle: { color: layer.color, opacity: layer.opacity } });
+      else {
+        var scatterSeries = { name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: geoIndex, symbolSize: layer.size, data: data, itemStyle: { color: layer.color, opacity: layer.opacity } };
+        if (layer.label) {
+          scatterSeries.label = { show: layer.label.show, color: layer.label.color, fontSize: layer.label.size };
+          if (layer.label.stroke) { scatterSeries.label.stroke = layer.label.stroke; scatterSeries.label.strokeWidth = 1; }
+        }
+        series.push(scatterSeries);
+      }
     });
     var regionGeo = Array.isArray(geoLayers) ? geoLayers[geoLayers.length - 1] : geoLayers;
     if (emptyColor) {
