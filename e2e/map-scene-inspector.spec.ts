@@ -72,6 +72,47 @@ test("检查器三页签、皮肤、图层模板、缩放级别与交互页", as
     return scene?.props?.legend?.show ?? null;
   }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toBe(true);
 
+  // 外观与图例控件：图例开关/位置、边线线型、值格式化
+  const appearance = inspector.locator(".map-scene-inspector__section").filter({ hasText: "外观与图例" });
+  await expect(appearance.getByLabel("显示图例")).toBeVisible();
+  await appearance.getByLabel("图例位置").selectOption("bottom-left");
+  await appearance.getByLabel("边线线型").selectOption("dashed");
+  await appearance.getByLabel("数值小数位").fill("2");
+  await appearance.getByLabel("数值小数位").press("Tab");
+  await appearance.getByLabel("数值单位").fill(" 个");
+  await appearance.getByLabel("数值单位").press("Tab");
+  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
+    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
+    const props = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId)?.props ?? {};
+    return {
+      position: props.legend?.position ?? null,
+      borderType: props.border?.type ?? null,
+      decimals: props.valueFormat?.decimals ?? null,
+      suffix: props.valueFormat?.suffix ?? null,
+    };
+  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toEqual({ position: "bottom-left", borderType: "dashed", decimals: 2, suffix: " 个" });
+
+  // 图层色带控件：区域填色 1 切分段 + 分段数 + 低值色
+  const heatLayer = inspector.locator(".map-scene-inspector__layer").nth(2);
+  await heatLayer.getByLabel("区域填色 1色带模式").selectOption("segments");
+  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
+    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
+    const layer = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId)?.props?.layers?.find((l: any) => l.name === "区域填色 1");
+    return layer?.style?.colorMode ?? null;
+  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toBe("segments");
+  await heatLayer.getByLabel("区域填色 1分段数").fill("4");
+  await heatLayer.getByLabel("区域填色 1分段数").press("Tab");
+  await heatLayer.getByLabel("区域填色 1色带低值色").evaluate((el) => {
+    const input = el as HTMLInputElement;
+    input.value = "#0a0a14";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
+    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
+    const layer = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId)?.props?.layers?.find((l: any) => l.name === "区域填色 1");
+    return { segments: layer?.style?.segments ?? null, min: layer?.style?.colors?.min ?? null };
+  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toEqual({ segments: 4, min: "#0a0a14" });
+
   // 数据页：共享数据绑定字段
   await inspector.getByRole("tab", { name: "数据", exact: true }).click();
   await expect(inspector.getByLabel("工作区数据集")).toBeVisible();

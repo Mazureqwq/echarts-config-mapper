@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { ComponentItem } from "@/core/model/types";
-import { createMapSceneLayer, MAP_LAYER_TYPES, normalizeMapSceneProps, type MapSceneLayer as MapLayer, type MapSceneView, type MapLayerType } from "@/core/components/mapScene";
+import {
+  createMapSceneLayer,
+  MAP_BORDER_DEFAULT,
+  MAP_EMPHASIS_DEFAULT,
+  MAP_LABEL_DEFAULT,
+  MAP_LAYER_TYPES,
+  MAP_SELECTED_DEFAULT,
+  MAP_TOOLTIP_DEFAULT,
+  normalizeMapSceneProps,
+  type MapSceneLayer as MapLayer,
+  type MapSceneView,
+  type MapLayerType,
+} from "@/core/components/mapScene";
 import { applyMapSkin, MAP_SKINS } from "@/core/components/mapSkins";
 import { useUiStore } from "@/stores/uiStore";
 import DatasetBindingEditor from "./DatasetBindingEditor.vue";
@@ -96,6 +108,13 @@ function updateLayerZoom(layer: MapLayer, key: "minZoom" | "maxZoom", event: Eve
 function openBlueprint(): void {
   ui.setBlueprintOpen(true);
 }
+function updateGroup(
+  key: "legend" | "label" | "border" | "emphasis" | "selected" | "tooltipStyle" | "valueFormat",
+  patch: Record<string, unknown>,
+): void {
+  const current = (scene.value[key] ?? {}) as Record<string, unknown>;
+  updateProps({ [key]: { ...current, ...patch } });
+}
 function removeLayer(id: string): void { updateProps({ layers: scene.value.layers.filter((layer) => layer.id !== id) }); }
 function moveLayer(index: number, delta: number): void {
   const target = index + delta;
@@ -153,6 +172,53 @@ function moveLayer(index: number, delta: number): void {
     </section>
 
     <section class="map-scene-inspector__section">
+      <h3>外观与图例</h3>
+      <label class="map-scene-inspector__check">
+        <input type="checkbox" :checked="scene.legend?.show ?? false" @change="updateGroup('legend', { show: ($event.target as HTMLInputElement).checked })" />显示图例
+      </label>
+      <div class="map-scene-inspector__view-grid">
+        <label>图例位置
+          <select class="cf-control cf-control--compact" :value="scene.legend?.position ?? 'top-right'" @change="updateGroup('legend', { position: ($event.target as HTMLSelectElement).value })">
+            <option value="top-right">右上</option><option value="bottom-right">右下</option><option value="bottom-left">左下</option>
+          </select>
+        </label>
+        <label>图例模式
+          <select class="cf-control cf-control--compact" :value="scene.legend?.mode ?? 'continuous'" @change="updateGroup('legend', { mode: ($event.target as HTMLSelectElement).value })">
+            <option value="continuous">连续</option><option value="segments">分段</option>
+          </select>
+        </label>
+        <label>标注颜色<input type="color" :value="scene.label?.color ?? MAP_LABEL_DEFAULT.color" @input="updateGroup('label', { color: ($event.target as HTMLInputElement).value })" /></label>
+        <label>标注字号<input class="cf-control cf-control--compact" type="number" min="8" max="40" :value="scene.label?.size ?? MAP_LABEL_DEFAULT.size" @change="updateGroup('label', { size: Number(($event.target as HTMLInputElement).value) })" /></label>
+        <label>边线颜色<input type="color" :value="scene.border?.color ?? MAP_BORDER_DEFAULT.color" @input="updateGroup('border', { color: ($event.target as HTMLInputElement).value })" /></label>
+        <label>边线粗细<input class="cf-control cf-control--compact" type="number" min="0" max="8" step="0.5" :value="scene.border?.width ?? MAP_BORDER_DEFAULT.width" @change="updateGroup('border', { width: Number(($event.target as HTMLInputElement).value) })" /></label>
+        <label>边线线型
+          <select class="cf-control cf-control--compact" :value="scene.border?.type ?? MAP_BORDER_DEFAULT.type" @change="updateGroup('border', { type: ($event.target as HTMLSelectElement).value })">
+            <option value="solid">实线</option><option value="dashed">虚线</option>
+          </select>
+        </label>
+        <label>悬停填充<input type="color" :value="scene.emphasis?.areaColor ?? MAP_EMPHASIS_DEFAULT.areaColor" @input="updateGroup('emphasis', { areaColor: ($event.target as HTMLInputElement).value })" /></label>
+        <label>点击态填充<input type="color" :value="scene.selected?.areaColor ?? MAP_SELECTED_DEFAULT.areaColor" @input="updateGroup('selected', { areaColor: ($event.target as HTMLInputElement).value })" /></label>
+        <label>Tooltip 底色<input type="color" :value="scene.tooltipStyle?.background ?? MAP_TOOLTIP_DEFAULT.background" @input="updateGroup('tooltipStyle', { background: ($event.target as HTMLInputElement).value })" /></label>
+        <label>Tooltip 文字<input type="color" :value="scene.tooltipStyle?.color ?? MAP_TOOLTIP_DEFAULT.color" @input="updateGroup('tooltipStyle', { color: ($event.target as HTMLInputElement).value })" /></label>
+        <label>数值小数位<input class="cf-control cf-control--compact" type="number" min="0" max="4" :value="scene.valueFormat?.decimals ?? 0" @change="updateGroup('valueFormat', { decimals: Number(($event.target as HTMLInputElement).value) })" /></label>
+        <label>数值单位<input class="cf-control cf-control--compact" type="text" maxlength="12" :value="scene.valueFormat?.suffix ?? ''" @change="updateGroup('valueFormat', { suffix: ($event.target as HTMLInputElement).value })" /></label>
+      </div>
+      <details class="map-scene-inspector__binding">
+        <summary>高级：标注描边/阴影、点击态与 Tooltip 边框</summary>
+        <div class="map-scene-inspector__view-grid">
+          <label>描边色<input type="color" :value="scene.label?.stroke ?? '#013a4a'" @input="updateGroup('label', { stroke: ($event.target as HTMLInputElement).value })" /></label>
+          <label>描边宽<input class="cf-control cf-control--compact" type="number" min="0" max="6" :value="scene.label?.strokeWidth ?? 1" @change="updateGroup('label', { strokeWidth: Number(($event.target as HTMLInputElement).value) })" /></label>
+          <label>阴影色<input type="color" :value="scene.label?.shadow ?? '#00ffff'" @input="updateGroup('label', { shadow: ($event.target as HTMLInputElement).value })" /></label>
+          <label>阴影模糊<input class="cf-control cf-control--compact" type="number" min="0" max="24" :value="scene.label?.shadowBlur ?? 0" @change="updateGroup('label', { shadowBlur: Number(($event.target as HTMLInputElement).value) })" /></label>
+          <label>悬停边线<input type="color" :value="scene.emphasis?.borderColor ?? '#ffffff'" @input="updateGroup('emphasis', { borderColor: ($event.target as HTMLInputElement).value })" /></label>
+          <label>悬停文字<input type="color" :value="scene.emphasis?.labelColor ?? '#ffffff'" @input="updateGroup('emphasis', { labelColor: ($event.target as HTMLInputElement).value })" /></label>
+          <label>点击态边线<input type="color" :value="scene.selected?.borderColor ?? '#ffffff'" @input="updateGroup('selected', { borderColor: ($event.target as HTMLInputElement).value })" /></label>
+          <label>Tooltip 边框<input type="color" :value="scene.tooltipStyle?.borderColor ?? '#1f2a3a'" @input="updateGroup('tooltipStyle', { borderColor: ($event.target as HTMLInputElement).value })" /></label>
+        </div>
+      </details>
+    </section>
+
+    <section class="map-scene-inspector__section">
       <div class="map-scene-inspector__heading"><h3>地图图层（{{ scene.layers.length }}）</h3><span>上层绘制在后</span></div>
       <div class="map-scene-inspector__add">
         <select v-model="newType" class="cf-control cf-control--compact" aria-label="新增地图图层类型">
@@ -183,6 +249,20 @@ function moveLayer(index: number, delta: number): void {
           <label>尺寸 <input class="cf-control cf-control--compact" type="number" min="1" max="100" :value="layer.style.size" :aria-label="`${layer.name}尺寸`" @change="updateLayer(layer.id, { style: { size: Number(($event.target as HTMLInputElement).value) } })" /></label>
           <label>最小缩放 <input class="cf-control cf-control--compact" type="number" min="0.5" max="20" step="0.1" :value="layer.minZoom ?? ''" :aria-label="`${layer.name}最小缩放`" placeholder="不限" @change="updateLayerZoom(layer, 'minZoom', $event)" /></label>
           <label>最大缩放 <input class="cf-control cf-control--compact" type="number" min="0.5" max="20" step="0.1" :value="layer.maxZoom ?? ''" :aria-label="`${layer.name}最大缩放`" placeholder="不限" @change="updateLayerZoom(layer, 'maxZoom', $event)" /></label>
+        </div>
+        <div v-if="layer.type === 'regionFill'" class="map-scene-inspector__view-grid">
+          <label>色带模式
+            <select class="cf-control cf-control--compact" :value="layer.style.colorMode ?? 'gradient'" :aria-label="`${layer.name}色带模式`" @change="updateLayer(layer.id, { style: { colorMode: ($event.target as HTMLSelectElement).value as 'gradient' | 'segments' } })">
+              <option value="gradient">渐变</option><option value="segments">分段</option>
+            </select>
+          </label>
+          <label v-if="(layer.style.colorMode ?? 'gradient') === 'segments'">分段数
+            <input class="cf-control cf-control--compact" type="number" min="2" max="10" :value="layer.style.segments ?? 5" :aria-label="`${layer.name}分段数`" @change="updateLayer(layer.id, { style: { segments: Number(($event.target as HTMLInputElement).value) } })" />
+          </label>
+          <label>色带-低<input type="color" :value="layer.style.colors?.min ?? '#102b3d'" :aria-label="`${layer.name}色带低值色`" @input="updateLayer(layer.id, { style: { colors: { ...(layer.style.colors ?? { min: '#102b3d', mid: '#1c5f8f', max: layer.style.color, empty: '#0d1a26' }), min: ($event.target as HTMLInputElement).value } } })" /></label>
+          <label>色带-中<input type="color" :value="layer.style.colors?.mid ?? '#1c5f8f'" :aria-label="`${layer.name}色带中值色`" @input="updateLayer(layer.id, { style: { colors: { ...(layer.style.colors ?? { min: '#102b3d', mid: '#1c5f8f', max: layer.style.color, empty: '#0d1a26' }), mid: ($event.target as HTMLInputElement).value } } })" /></label>
+          <label>色带-高<input type="color" :value="layer.style.colors?.max ?? layer.style.color" :aria-label="`${layer.name}色带高值色`" @input="updateLayer(layer.id, { style: { colors: { ...(layer.style.colors ?? { min: '#102b3d', mid: '#1c5f8f', max: layer.style.color, empty: '#0d1a26' }), max: ($event.target as HTMLInputElement).value } } })" /></label>
+          <label>空值色<input type="color" :value="layer.style.colors?.empty ?? '#0d1a26'" :aria-label="`${layer.name}空值色`" @input="updateLayer(layer.id, { style: { colors: { ...(layer.style.colors ?? { min: '#102b3d', mid: '#1c5f8f', max: layer.style.color, empty: '#0d1a26' }), empty: ($event.target as HTMLInputElement).value } } })" /></label>
         </div>
         <details class="map-scene-inspector__binding">
           <summary>数据绑定 · {{ layer.dataBinding ? '独立' : '继承容器' }}</summary>
