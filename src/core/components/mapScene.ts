@@ -21,6 +21,7 @@ export interface MapEmphasisStyle { areaColor: string; borderColor: string; labe
 export interface MapSelectedStyle { areaColor: string; borderColor: string }
 export interface MapLabelStyle { show: boolean; color: string; size: number; stroke?: string; strokeWidth?: number; shadow?: string; shadowBlur?: number }
 export interface MapBorderStyle { color: string; width: number; type: "solid" | "dashed" }
+export interface MapUnderlayLayer { areaColor: string; borderColor: string; shadowColor: string }
 export interface MapFillColors { min: string; mid: string; max: string; empty: string }
 export interface MapLayerBorder { color: string; width: number; type: "solid" | "dashed" }
 export interface MapPointLabel { show: boolean; color: string; size: number; stroke?: string }
@@ -64,6 +65,7 @@ export interface MapSceneProps extends Record<string, unknown> {
   selected?: MapSelectedStyle;
   label?: MapLabelStyle;
   border?: MapBorderStyle;
+  underlay?: MapUnderlayLayer[];
   appliedSkin?: string;
 }
 
@@ -185,6 +187,14 @@ function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProp
       width: clamp(input.border.width, 0, 8, MAP_BORDER_DEFAULT.width),
       type: input.border.type === "dashed" ? "dashed" : "solid",
     };
+  }
+  if (Array.isArray(input.underlay)) {
+    const entries = input.underlay.slice(0, 3).filter(isRecord).map((entry) => ({
+      areaColor: normalizeHex(entry.areaColor, "#10273a"),
+      borderColor: normalizeHex(entry.borderColor, "#b5f3ff"),
+      shadowColor: normalizeHex(entry.shadowColor, "#8cd3ef"),
+    }));
+    if (entries.length) out.underlay = entries;
   }
   if (typeof input.appliedSkin === "string" && input.appliedSkin.trim()) out.appliedSkin = input.appliedSkin.trim().slice(0, 48);
   return out;
@@ -482,7 +492,13 @@ export function buildMapSceneOption(
     : { trigger: "item" };
   const geoBase = { map: "china", center: view.center, zoom: view.zoom, roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: labelCfg, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: borderGroup.color, borderWidth: borderGroup.width, borderType: borderGroup.type, shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: emphasisCfg };
   // Three purposeful underlays: deep base shadow, mid sidewall, and bright top rim.
-  const extrusionLayers = [{ offset: 3, areaColor: "rgba(5,21,35,0.12)", borderColor: "rgba(58,149,253,0.45)", shadowColor: "rgba(58,149,253,0.85)", shadowOffsetY: 10, shadowBlur: 8 }, { offset: 2, areaColor: "rgba(5,21,35,0.1)", borderColor: "rgba(58,149,253,0.68)", shadowColor: "rgba(65,214,255,0.72)", shadowOffsetY: 6, shadowBlur: 10 }, { offset: 1, areaColor: "#10273a", borderColor: "#b5f3ff", shadowColor: "#8cd3ef", shadowOffsetY: 4, shadowBlur: 10 }];
+  const DEFAULT_EXTRUSION = [{ offset: 3, areaColor: "rgba(5,21,35,0.12)", borderColor: "rgba(58,149,253,0.45)", shadowColor: "rgba(58,149,253,0.85)", shadowOffsetY: 10, shadowBlur: 8 }, { offset: 2, areaColor: "rgba(5,21,35,0.1)", borderColor: "rgba(58,149,253,0.68)", shadowColor: "rgba(65,214,255,0.72)", shadowOffsetY: 6, shadowBlur: 10 }, { offset: 1, areaColor: "#10273a", borderColor: "#b5f3ff", shadowColor: "#8cd3ef", shadowOffsetY: 4, shadowBlur: 10 }];
+  const extrusionLayers = scene.underlay
+    ? DEFAULT_EXTRUSION.map((base, index) => {
+        const palette = scene.underlay?.[index];
+        return palette ? { ...base, areaColor: palette.areaColor, borderColor: palette.borderColor, shadowColor: palette.shadowColor } : base;
+      })
+    : DEFAULT_EXTRUSION;
   const geo = scene.presentation === "tilted"
     ? [...extrusionLayers.map((layer) => ({ ...geoBase, layoutCenter: ["50%", `${49 + layer.offset}%`], layoutSize: "150%", label: { ...geoBase.label, show: false }, roam: false, silent: true, emphasis: { disabled: true }, itemStyle: { areaColor: layer.areaColor, borderColor: layer.borderColor, borderWidth: 1, shadowColor: layer.shadowColor, shadowOffsetY: layer.shadowOffsetY, shadowBlur: layer.shadowBlur } })), { ...geoBase, layoutCenter: ["50%", "49%"], layoutSize: "150%" }]
     : geoBase;
