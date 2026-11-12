@@ -211,7 +211,16 @@ export const RUNTIME_CODE = String.raw`
     for (var i = 0; i < arguments.length; i++) {
       var source = arguments[i];
       if (!source || typeof source !== "object") continue;
-      Object.keys(source).forEach(function (key) { if (safeKey(key)) out[key] = source[key]; });
+      Object.keys(source).forEach(function (key) {
+        if (!safeKey(key)) return;
+        var incoming = source[key];
+        var current = out[key];
+        if (incoming && typeof incoming === "object" && !Array.isArray(incoming) && current && typeof current === "object" && !Array.isArray(current)) {
+          out[key] = safeMerge(current, incoming);
+        } else {
+          out[key] = incoming;
+        }
+      });
     }
     return out;
   }

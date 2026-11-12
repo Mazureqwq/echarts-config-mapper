@@ -169,6 +169,11 @@ function selectActionComponent(value: string): void {
   const [id, version] = value.split("@");
   Object.assign(node, { componentId: id, componentVersion: Number(version) });
 }
+function applyMapPreset(node: { kind: "componentAction"; props: Record<string, unknown> }, preset: "locate" | "reset" | "zoom"): void {
+  if (preset === "locate") node.props = { view: { center: [113.2644, 23.1291], zoom: 4.5 } };
+  else if (preset === "reset") node.props = { view: { center: [104.114129, 35.550339], zoom: 1.05 } };
+  else node.props = { view: { zoom: 4 } };
+}
 function save(): void {
   if (editError.value || !validation.value.ok) return;
   emit("save", clone(draft.value), { ...renamedVariables.value });
@@ -240,6 +245,15 @@ function save(): void {
               <label>组件类型<select :value="`${selectedNode.componentId}@${selectedNode.componentVersion}`" @change="selectActionComponent(($event.target as HTMLSelectElement).value)"><option v-for="component in allComponents" :key="`${component.id}@${component.version}`" :value="`${component.id}@${component.version}`">{{ component.name }} · {{ component.id }}</option></select></label>
               <label v-if="selectedNode.action === 'setVisibility'" class="blueprint-editor__check">显示组件<input type="checkbox" :checked="selectedNode.visible" @change="setField(selectedNode, 'visible', ($event.target as HTMLInputElement).checked)" /></label>
               <label v-else>组件属性补丁 JSON<textarea :value="jsonText(selectedNode.props)" @change="setJson(selectedNode, 'props', $event)" /></label>
+              <div
+                v-if="selectedNode.action === 'setProps' && selectedNode.componentId.startsWith('chartforge.map-scene')"
+                class="blueprint-editor__map-presets"
+              >
+                <span>地图预设：</span>
+                <button type="button" class="cf-button cf-button--small" @click="applyMapPreset(selectedNode, 'locate')">定位到区域</button>
+                <button type="button" class="cf-button cf-button--small" @click="applyMapPreset(selectedNode, 'reset')">复位视角</button>
+                <button type="button" class="cf-button cf-button--small" @click="applyMapPreset(selectedNode, 'zoom')">缩放层级</button>
+              </div>
             </template>
             <label v-else-if="selectedNode.kind === 'navigateScreen'">屏幕 ID<input :value="selectedNode.screenId" @input="setText(selectedNode, 'screenId', $event)" /></label>
             <div v-for="key in valueRefKeys(selectedNode)" :key="key" class="blueprint-editor__ref">

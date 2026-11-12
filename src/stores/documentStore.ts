@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { markRaw } from "vue";
 import { History, HISTORY_LIMIT } from "@/core/history/history";
 import { DEFAULT_FRAME, createComponentItem, createItem, createScreen, normalizeComponentProps } from "@/core/model/schema";
+import { deepMergeProps } from "@/core/components/props";
 import { componentRegistry } from "@/core/components/builtins";
 import { deepMerge } from "@/core/chart/optionBuilder";
 import { chartRegistry } from "@/core/chart/registry";
@@ -429,7 +430,7 @@ export const useDocumentStore = defineStore("document", {
         if (entry.kind !== "component") continue;
         const definition = componentRegistry.get(entry.componentId, entry.componentVersion);
         if (!definition) continue;
-        entry.props = normalizeComponentProps(definition, { ...entry.props, ...props });
+        entry.props = normalizeComponentProps(definition, deepMergeProps(entry.props, props));
       }
       this.commit();
     },
