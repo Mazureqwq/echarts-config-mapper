@@ -173,6 +173,82 @@ export function formatMapValue(value: number | null, fmt?: MapValueFormat): stri
   return typeof fmt?.suffix === "string" && fmt.suffix ? `${text}${fmt.suffix}` : text;
 }
 
+export const CHINA_REGION_NAMES = [
+  "新疆维吾尔自治区", "西藏自治区", "内蒙古自治区", "青海省", "四川省", "黑龙江省", "甘肃省", "云南省",
+  "广西壮族自治区", "湖南省", "陕西省", "广东省", "吉林省", "河北省", "湖北省", "贵州省", "山东省",
+  "江西省", "河南省", "辽宁省", "山西省", "安徽省", "福建省", "浙江省", "江苏省", "重庆市",
+  "宁夏回族自治区", "海南省", "台湾省", "北京市", "天津市", "上海市", "香港特别行政区", "澳门特别行政区",
+] as const;
+
+function mixHex(a: string, b: string, t: number): string {
+  const parse = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const pa = parse(a);
+  const pb = parse(b);
+  const mixed = pa.map((v, i) => Math.round(v + (pb[i] - v) * Math.min(1, Math.max(0, t))));
+  return "#" + mixed.map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+
+/** Three-stop ramp: min@0, mid@0.5, max@1. */
+function rampColor(colors: MapFillColors, t: number): string {
+  const clamped = Math.min(1, Math.max(0, t));
+  return clamped <= 0.5 ? mixHex(colors.min, colors.mid, clamped * 2) : mixHex(colors.mid, colors.max, (clamped - 0.5) * 2);
+}
+
+/** Endpoint-inclusive piecewise segments: first piece carries min color, last carries max color. */
+export function buildSegmentPieces(colors: MapFillColors, min: number, max: number, count: number): Array<Record<string, unknown>> {
+  const n = Math.min(10, Math.max(2, Math.round(count)));
+  const span = max - min;
+  const pieces: Array<Record<string, unknown>> = [];
+  for (let k = 0; k < n; k++) {
+    const color = k === 0 ? colors.min : k === n - 1 ? colors.max : rampColor(colors, k / (n - 1));
+    const lo = min + (span * k) / n;
+    const hi = min + (span * (k + 1)) / n;
+    if (k === 0) pieces.push({ lte: hi, color });
+    else if (k === n - 1) pieces.push({ gt: lo, color });
+    else pieces.push({ gt: lo, lte: hi, color });
+  }
+  return pieces;
+}
+
+export type MapLegendEntry = { label: string; color: string } | { from: string; to: string; stops: string[] };
+
+/** Legend entries derived from the first visible regionFill layer (empty when legend hidden or no data). */
+export function buildMapLegend(
+  props: unknown,
+  rows: readonly Record<string, unknown>[],
+  fields?: DatasetBinding["fields"],
+  rowsByLayerId: Readonly<Record<string, readonly MapRow[]>> = {},
+): MapLegendEntry[] {
+  const scene = normalizeMapSceneProps(props);
+  if (!scene.legend?.show) return [];
+  const layer = scene.layers.find((entry) => entry.visible && entry.type === "regionFill");
+  if (!layer) return [];
+  const layerRows = layer.dataBinding ? (rowsByLayerId[layer.id] ?? []) : rows;
+  const layerFields = layer.dataBinding ? layer.dataBinding.fields : fields;
+  const converted = regionRows(layerRows, layerFields);
+  if (converted.error || !converted.data.length) return [];
+  const values = converted.data.map((row) => row.value);
+  const minimum = values.reduce((min, value) => Math.min(min, value), Number.POSITIVE_INFINITY);
+  const maximum = values.reduce((max, value) => Math.max(max, value), Number.NEGATIVE_INFINITY);
+  const fmt = scene.valueFormat;
+  const colors = layer.style.colors ?? { min: MAP_FILL_DEFAULT_MIN, mid: MAP_FILL_DEFAULT_MID, max: layer.style.color, empty: MAP_FILL_DEFAULT_EMPTY };
+  if (scene.legend.mode === "segments" || layer.style.colorMode === "segments") {
+    const n = layer.style.segments ?? 5;
+    const span = maximum - minimum;
+    const entries: MapLegendEntry[] = [];
+    for (let k = 0; k < n; k++) {
+      const lo = minimum + (span * k) / n;
+      const hi = minimum + (span * (k + 1)) / n;
+      entries.push({
+        label: `${formatMapValue(lo, fmt)} ~ ${formatMapValue(hi, fmt)}`,
+        color: k === 0 ? colors.min : k === n - 1 ? colors.max : rampColor(colors, k / (n - 1)),
+      });
+    }
+    return entries;
+  }
+  return [{ from: formatMapValue(minimum, fmt), to: formatMapValue(maximum, fmt), stops: [colors.min, colors.mid, colors.max] }];
+}
+
 const GEO_FIELD_KEYS = ["longitude", "latitude", "name", "value", "originLongitude", "originLatitude", "destinationLongitude", "destinationLatitude"] as const;
 
 function normalizeLayerBinding(raw: unknown): DatasetBinding | undefined {
@@ -311,6 +387,7 @@ export function buildMapSceneOption(
   const errors: string[] = [];
   const series: Array<Record<string, unknown>> = [];
   const visualMaps: Array<Record<string, unknown>> = [];
+  let emptyColor: string | null = null;
   for (const layer of scene.layers) {
     if (!layer.visible) continue;
     const layerRows = layer.dataBinding ? (rowsByLayerId[layer.id] ?? []) : rows;
@@ -327,7 +404,16 @@ export function buildMapSceneOption(
           itemStyle: { areaColor: layer.style.color, opacity: layer.style.opacity, borderColor: "#5db9d2", borderWidth: 0.65 },
           emphasis: { itemStyle: { areaColor: layer.style.color, opacity: 1 } },
         });
-        visualMaps.push({ show: false, min: minimum, max: maximum || 1, seriesIndex: series.length - 1, inRange: { color: ["#102b3d", layer.style.color] } });
+        const seriesIndex = series.length - 1;
+        const rampColors = layer.style.colors ?? { min: MAP_FILL_DEFAULT_MIN, mid: MAP_FILL_DEFAULT_MID, max: layer.style.color, empty: MAP_FILL_DEFAULT_EMPTY };
+        if (layer.style.colorMode === "segments") {
+          visualMaps.push({ show: false, type: "piecewise", min: minimum, max: maximum || 1, seriesIndex, pieces: buildSegmentPieces(rampColors, minimum, maximum || 1, layer.style.segments ?? 5) });
+        } else if (layer.style.colorMode === "gradient") {
+          visualMaps.push({ show: false, type: "continuous", min: minimum, max: maximum || 1, seriesIndex, inRange: { colorStops: [{ offset: 0, color: rampColors.min }, { offset: 0.5, color: rampColors.mid }, { offset: 1, color: rampColors.max }] } });
+        } else {
+          visualMaps.push({ show: false, min: minimum, max: maximum || 1, seriesIndex, inRange: { color: ["#102b3d", layer.style.color] } });
+        }
+        if (layer.style.colors?.empty && !emptyColor) emptyColor = layer.style.colors.empty;
       }
       continue;
     }
@@ -350,6 +436,11 @@ export function buildMapSceneOption(
   const geo = scene.presentation === "tilted"
     ? [...extrusionLayers.map((layer) => ({ ...geoBase, layoutCenter: ["50%", `${49 + layer.offset}%`], layoutSize: "150%", label: { ...geoBase.label, show: false }, roam: false, silent: true, emphasis: { disabled: true }, itemStyle: { areaColor: layer.areaColor, borderColor: layer.borderColor, borderWidth: 1, shadowColor: layer.shadowColor, shadowOffsetY: layer.shadowOffsetY, shadowBlur: layer.shadowBlur } })), { ...geoBase, layoutCenter: ["50%", "49%"], layoutSize: "150%" }]
     : geoBase;
+  if (emptyColor) {
+    const topGeo = (Array.isArray(geo) ? geo[geo.length - 1] : geo) as Record<string, unknown>;
+    const emptyFill = emptyColor;
+    topGeo.regions = CHINA_REGION_NAMES.map((name) => ({ name, itemStyle: { areaColor: emptyFill } }));
+  }
   return {
     option: {
       backgroundColor: scene.presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: { trigger: "item" },

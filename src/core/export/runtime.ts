@@ -478,6 +478,37 @@ export const RUNTIME_CODE = String.raw`
   }
 
 
+  function cfMixHex(a, b, t) {
+    function parse(hex) { return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]; }
+    var pa = parse(a); var pb = parse(b);
+    var tt = Math.min(1, Math.max(0, t));
+    var out = "#";
+    for (var i = 0; i < 3; i++) { var v = Math.round(pa[i] + (pb[i] - pa[i]) * tt); out += (v < 16 ? "0" : "") + v.toString(16); }
+    return out;
+  }
+  function cfRampColor(colors, t) {
+    var c = Math.min(1, Math.max(0, t));
+    return c <= 0.5 ? cfMixHex(colors.min, colors.mid, c * 2) : cfMixHex(colors.mid, colors.max, (c - 0.5) * 2);
+  }
+  function cfSegmentPieces(colors, min, max, count) {
+    var n = Math.min(10, Math.max(2, Math.round(count)));
+    var span = max - min; var pieces = [];
+    for (var k = 0; k < n; k++) {
+      var color = k === 0 ? colors.min : k === n - 1 ? colors.max : cfRampColor(colors, k / (n - 1));
+      var lo = min + span * k / n; var hi = min + span * (k + 1) / n;
+      if (k === 0) pieces.push({ lte: hi, color: color });
+      else if (k === n - 1) pieces.push({ gt: lo, color: color });
+      else pieces.push({ gt: lo, lte: hi, color: color });
+    }
+    return pieces;
+  }
+  function cfFormatMapValue(value, fmt) {
+    if (value === null || value === undefined || !isFinite(value)) return "\u2014";
+    var decimals = fmt && typeof fmt.decimals === "number" ? Math.min(4, Math.max(0, Math.round(fmt.decimals))) : 0;
+    var text = value.toFixed(decimals);
+    return fmt && typeof fmt.suffix === "string" && fmt.suffix ? text + fmt.suffix : text;
+  }
+  var CF_CHINA_REGIONS = ["新疆维吾尔自治区", "西藏自治区", "内蒙古自治区", "青海省", "四川省", "黑龙江省", "甘肃省", "云南省", "广西壮族自治区", "湖南省", "陕西省", "广东省", "吉林省", "河北省", "湖北省", "贵州省", "山东省", "江西省", "河南省", "辽宁省", "山西省", "安徽省", "福建省", "浙江省", "江苏省", "重庆市", "宁夏回族自治区", "海南省", "台湾省", "北京市", "天津市", "上海市", "香港特别行政区", "澳门特别行政区"];
   function safeMapScene(item, rootEl, rows, props, screen) {
     var layerTypes = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"];
     var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
@@ -507,14 +538,23 @@ export const RUNTIME_CODE = String.raw`
       if (!entry || typeof entry !== "object" || layerTypes.indexOf(entry.type) < 0) return;
       var defaults = { regionFill: "区域填色", geoScatter: "地理散点", geoHeatmap: "点热力", geoFlow: "OD 飞线" };
       var style = entry.style && typeof entry.style === "object" ? entry.style : {};
+      var layerColor = safeWidgetColor(style.color, entry.type === "geoHeatmap" ? "#ff6b6b" : entry.type === "geoScatter" ? "#ffcc66" : "#32d6ff");
       layers.push({
         id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim().slice(0, 80) : "layer-" + (index + 1),
         type: entry.type,
         name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim().slice(0, 48) : defaults[entry.type],
         visible: typeof entry.visible === "boolean" ? entry.visible : true,
-        color: safeWidgetColor(style.color, entry.type === "geoHeatmap" ? "#ff6b6b" : entry.type === "geoScatter" ? "#ffcc66" : "#32d6ff"),
+        color: layerColor,
         opacity: boundedWidgetNumber(style.opacity, 0.85, 0, 1),
         size: boundedWidgetNumber(style.size, 12, 1, 100),
+        colorMode: style.colorMode === "gradient" || style.colorMode === "segments" ? style.colorMode : "",
+        colors: style.colors && typeof style.colors === "object" ? {
+          min: safeWidgetColor(style.colors.min, "#102b3d"),
+          mid: safeWidgetColor(style.colors.mid, "#1c5f8f"),
+          max: safeWidgetColor(style.colors.max, layerColor),
+          empty: safeWidgetColor(style.colors.empty, "#0d1a26")
+        } : null,
+        segments: typeof style.segments === "number" && isFinite(style.segments) ? Math.min(10, Math.max(2, Math.round(style.segments))) : 5,
         dataBinding: entry.dataBinding && typeof entry.dataBinding === "object" && typeof entry.dataBinding.datasetId === "string" && entry.dataBinding.datasetId.trim() ? entry.dataBinding : null
       });
     });
@@ -544,6 +584,7 @@ export const RUNTIME_CODE = String.raw`
     badge.style.padding = "5px 8px"; badge.style.border = "1px solid #54bad744"; badge.style.borderRadius = "4px"; badge.style.background = "#061622c9"; badge.style.color = "#b9e9f5"; badge.style.fontSize = "11px";
     rootEl.appendChild(badge);
     var errors = []; var series = []; var visualMaps = [];
+    var emptyColor = ""; var legendSource = null;
     var containerFields = item.dataBinding && item.dataBinding.fields ? item.dataBinding.fields : {};
     function field(source, key) { return typeof source[key] === "string" && source[key].trim() && safeKey(source[key].trim()) ? source[key].trim() : ""; }
     function coordinate(row, lonField, latField) {
@@ -575,7 +616,16 @@ export const RUNTIME_CODE = String.raw`
           var minimum = values.reduce(function (min, value) { return Math.min(min, value); }, Infinity);
           var maximum = values.reduce(function (max, value) { return Math.max(max, value); }, -Infinity);
           series.push({ name: layer.name, type: "map", map: "china", geoIndex: geoIndex, data: regionData, itemStyle: { areaColor: layer.color, opacity: layer.opacity, borderColor: "#5db9d2", borderWidth: 0.65 } });
-          visualMaps.push({ show: false, min: minimum, max: maximum || 1, seriesIndex: mapSeriesIndex, inRange: { color: ["#102b3d", layer.color] } });
+          var rampColors = layer.colors || { min: "#102b3d", mid: "#1c5f8f", max: layer.color, empty: "#0d1a26" };
+          if (layer.colorMode === "segments") {
+            visualMaps.push({ show: false, type: "piecewise", min: minimum, max: maximum || 1, seriesIndex: mapSeriesIndex, pieces: cfSegmentPieces(rampColors, minimum, maximum || 1, layer.segments || 5) });
+          } else if (layer.colorMode === "gradient") {
+            visualMaps.push({ show: false, type: "continuous", min: minimum, max: maximum || 1, seriesIndex: mapSeriesIndex, inRange: { colorStops: [{ offset: 0, color: rampColors.min }, { offset: 0.5, color: rampColors.mid }, { offset: 1, color: rampColors.max }] } });
+          } else {
+            visualMaps.push({ show: false, min: minimum, max: maximum || 1, seriesIndex: mapSeriesIndex, inRange: { color: ["#102b3d", layer.color] } });
+          }
+          if (layer.colors && layer.colors.empty && !emptyColor) emptyColor = layer.colors.empty;
+          if (!legendSource) legendSource = { min: minimum, max: maximum, colors: rampColors, mode: layer.colorMode, segments: layer.segments };
         }
         return;
       }
@@ -618,8 +668,55 @@ export const RUNTIME_CODE = String.raw`
       if (layer.type === "geoHeatmap") series.push({ name: layer.name, type: "heatmap", coordinateSystem: "geo", geoIndex: geoIndex, data: data, pointSize: layer.size, blurSize: Math.max(layer.size, 12), itemStyle: { color: layer.color, opacity: layer.opacity } });
       else series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: geoIndex, symbolSize: layer.size, data: data, itemStyle: { color: layer.color, opacity: layer.opacity } });
     });
+    if (emptyColor) {
+      var regionGeo = Array.isArray(geoLayers) ? geoLayers[geoLayers.length - 1] : geoLayers;
+      regionGeo.regions = CF_CHINA_REGIONS.map(function (regionName) { return { name: regionName, itemStyle: { areaColor: emptyColor } }; });
+    }
     var option = { backgroundColor: presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: { trigger: "item" }, geo: geoLayers, series: series };
     if (visualMaps.length) option.visualMap = visualMaps;
+    if (props.legend && props.legend.show && legendSource) {
+      var legendEl = doc.createElement("div");
+      legendEl.className = "cf-map-legend";
+      var legendPos = props.legend.position === "bottom-right" || props.legend.position === "bottom-left" ? props.legend.position : "top-right";
+      legendEl.style.position = "absolute"; legendEl.style.zIndex = "3";
+      legendEl.style.display = "flex"; legendEl.style.flexDirection = "column"; legendEl.style.gap = "3px";
+      legendEl.style.padding = "5px 8px"; legendEl.style.border = "1px solid #54bad744"; legendEl.style.borderRadius = "4px";
+      legendEl.style.background = "#061622c9"; legendEl.style.fontSize = "10px"; legendEl.style.pointerEvents = "none";
+      if (legendPos === "top-right") { legendEl.style.top = "10px"; legendEl.style.right = "10px"; }
+      else if (legendPos === "bottom-right") { legendEl.style.right = "10px"; legendEl.style.bottom = "34px"; }
+      else { legendEl.style.left = "10px"; legendEl.style.bottom = "10px"; }
+      if (!(props.legend.mode === "segments" || legendSource.mode === "segments")) {
+        var legendRow = doc.createElement("span");
+        legendRow.style.display = "flex"; legendRow.style.alignItems = "center"; legendRow.style.gap = "6px"; legendRow.style.color = "#b9e9f5";
+        var legendBar = doc.createElement("i");
+        legendBar.style.display = "inline-block"; legendBar.style.width = "96px"; legendBar.style.height = "8px"; legendBar.style.borderRadius = "3px";
+        legendBar.style.border = "1px solid #54bad744";
+        legendBar.style.background = "linear-gradient(90deg, " + legendSource.colors.min + ", " + legendSource.colors.mid + ", " + legendSource.colors.max + ")";
+        legendRow.appendChild(legendBar);
+        var legendRange = doc.createElement("span");
+        legendRange.textContent = cfFormatMapValue(legendSource.min, props.valueFormat) + " \u2013 " + cfFormatMapValue(legendSource.max, props.valueFormat);
+        legendRow.appendChild(legendRange);
+        legendEl.appendChild(legendRow);
+      } else {
+        var segCount = legendSource.segments || 5;
+        var segSpan = legendSource.max - legendSource.min;
+        for (var seg = 0; seg < segCount; seg++) {
+          var segRow = doc.createElement("span");
+          segRow.style.display = "flex"; segRow.style.alignItems = "center"; segRow.style.gap = "5px"; segRow.style.color = "#b9e9f5";
+          var segSwatch = doc.createElement("i");
+          segSwatch.style.width = "9px"; segSwatch.style.height = "9px"; segSwatch.style.borderRadius = "2px";
+          segSwatch.style.background = seg === 0 ? legendSource.colors.min : seg === segCount - 1 ? legendSource.colors.max : cfRampColor(legendSource.colors, seg / (segCount - 1));
+          segRow.appendChild(segSwatch);
+          var segLabel = doc.createElement("span");
+          var segLo = legendSource.min + segSpan * seg / segCount;
+          var segHi = legendSource.min + segSpan * (seg + 1) / segCount;
+          segLabel.textContent = cfFormatMapValue(segLo, props.valueFormat) + " ~ " + cfFormatMapValue(segHi, props.valueFormat);
+          segRow.appendChild(segLabel);
+          legendEl.appendChild(segRow);
+        }
+      }
+      rootEl.appendChild(legendEl);
+    }
     if (window.echarts) {
       try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (presentation === "tilted" && typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var currentGeo = chart.getOption().geo; if (!Array.isArray(currentGeo) || currentGeo.length < 2) return; var topIndex = currentGeo.length - 1; var topGeo = currentGeo[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = currentGeo.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); }); charts.push(chart); }
       catch (e) { errors.push("地图渲染失败"); }

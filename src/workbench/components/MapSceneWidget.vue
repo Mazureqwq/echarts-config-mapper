@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, shallowReactive, watch } from "vue";
 import type { ComponentRenderProps } from "@/core/components/types";
-import { buildMapSceneOption, normalizeMapSceneProps } from "@/core/components/mapScene";
+import { buildMapLegend, buildMapSceneOption, normalizeMapSceneProps, type MapLegendEntry } from "@/core/components/mapScene";
 import EChartsView from "@/workbench/EChartsView.vue";
 import { themeMode } from "@/shared/theme";
 import { filterRowsByBinding } from "@/core/components/dataWidgets";
@@ -62,6 +62,9 @@ const result = computed(() => {
   return { ...built, errors: [...built.errors, ...bindingErrors] };
 });
 const visibleLayers = computed(() => scene.value.layers.filter((layer) => layer.visible).length);
+const legendEntries = computed<MapLegendEntry[]>(() =>
+  buildMapLegend(props.item.props, props.rows, props.item.dataBinding?.fields),
+);
 </script>
 
 <template>
@@ -70,6 +73,17 @@ const visibleLayers = computed(() => scene.value.layers.filter((layer) => layer.
       <EChartsView class="map-scene__chart" :option="result.option" :theme="themeMode" />
       <div class="map-scene__caption">{{ scene.presentation === 'tilted' ? '立体地图 · 2.5D' : '平面地图 · 2D' }}</div>
       <div class="map-scene__layers">{{ visibleLayers }} 个可见图层</div>
+      <div v-if="legendEntries.length" class="map-scene__legend" :class="`map-scene__legend--${scene.legend?.position ?? 'top-right'}`">
+        <template v-for="(entry, index) in legendEntries" :key="index">
+          <span v-if="'stops' in entry" class="map-scene__legend-range">
+            <i class="map-scene__legend-bar" :style="{ background: `linear-gradient(90deg, ${entry.stops.join(', ')})` }" />
+            {{ entry.from }} – {{ entry.to }}
+          </span>
+          <span v-else class="map-scene__legend-item">
+            <i class="map-scene__legend-swatch" :style="{ background: entry.color }" />{{ entry.label }}
+          </span>
+        </template>
+      </div>
       <div v-if="result.errors.length" class="map-scene__status" role="status">{{ result.errors.join('；') }}</div>
       <div v-else-if="!scene.layers.length" class="map-scene__status" role="status">本地离线底图 · 可从图层面板添加区域填色、散点、热力或飞线</div>
     </div>
@@ -85,5 +99,13 @@ const visibleLayers = computed(() => scene.value.layers.filter((layer) => layer.
 .map-scene__caption, .map-scene__layers { position: absolute; z-index: 2; padding: 5px 8px; border: 1px solid #54bad744; border-radius: 4px; background: #061622c9; font-size: 11px; pointer-events: none; }
 .map-scene__caption { top: 10px; left: 10px; }
 .map-scene__layers { right: 10px; bottom: 10px; }
+.map-scene__legend { position: absolute; z-index: 2; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; border: 1px solid #54bad744; border-radius: 4px; background: #061622c9; font-size: 10px; pointer-events: none; }
+.map-scene__legend--top-right { top: 10px; right: 10px; }
+.map-scene__legend--bottom-right { right: 10px; bottom: 34px; }
+.map-scene__legend--bottom-left { left: 10px; bottom: 10px; }
+.map-scene__legend-range { display: flex; align-items: center; gap: 6px; color: #b9e9f5; }
+.map-scene__legend-bar { display: inline-block; width: 96px; height: 8px; border-radius: 3px; border: 1px solid #54bad744; }
+.map-scene__legend-item { display: flex; align-items: center; gap: 5px; color: #b9e9f5; }
+.map-scene__legend-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .map-scene__status { position: absolute; z-index: 2; left: 50%; bottom: 10px; max-width: 75%; transform: translateX(-50%); padding: 5px 8px; border-radius: 4px; background: #07121dd9; color: #ffd17b; font-size: 10px; text-align: center; pointer-events: none; }
 </style>
