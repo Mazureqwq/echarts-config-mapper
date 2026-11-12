@@ -138,3 +138,11 @@ style: { …, label?: { show: boolean; color: string; size: number; stroke?: str
 ## 11. 执行方式（计划批准后生效）
 
 - `superpowers:writing-plans` 产出分任务计划 → 人工批准 → `superpowers:executing-plans` **会话内连续执行**（无子代理、不建 worktree、每任务 RED→GREEN+质量门+提交，收尾整分支评审+台账清理）。
+
+## 验收记录（实施完成）
+
+1. **质量门**：`pnpm typecheck` 0；`pnpm vitest run tests` **487/487**；`pnpm build` 0；`pnpm test:e2e` **11/11**（editor / inspector / interaction×3 / style-parity×3 / tilted-drill / visual×2）；`git diff --check` 0。
+2. **视觉**：`e2e/map-scene-visual.spec.ts` 产出截图 01–09（结构与拖拽对齐 / 广东 / 西藏 / 窄容器 / 分段色带+分段图例 / 皮肤翡翠青绿与晨曦浅色 / 下钻面包屑），已同步本地逐张目检通过。
+3. **v1 兼容**：旧形状 props 加载后遗留双色 visualMap、无空值色 regions、无图例、归一化键集不变（e2e 断言）。
+4. **安全**：`src/core/export` 无 eval/new Function/innerHTML/外链（仅许可文本与本地 serve 提示）；无新增依赖；src/e2e 无 console.log/debugger/TODO 残留。
+5. **整分支评审（会话内，无子代理）**：**Critical 0 / Important 0 / Minor 1**（离线真实渲染级的区域点击事件 e2e 延后——已以 RUNTIME_CODE 接线契约断言补强）；评审中发现并修复 tilted 下钻探针与散点层碰撞的测试问题，新增 `map-scene-tilted-drill.spec.ts` 钉住 2.5D 旗舰路径（含 Esc 后四层对齐断言）。

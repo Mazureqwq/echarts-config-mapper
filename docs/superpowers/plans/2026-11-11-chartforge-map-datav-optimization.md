@@ -528,22 +528,22 @@ git commit -m "feat: blueprint map action presets with deep prop merge"
 
 **Interfaces:** 无新代码接口；消费前序全部能力。
 
-- [ ] **Step 1: 扩展视觉 spec**
+- [x] **Step 1: 扩展视觉 spec**
 
 新增截图与断言：分段色带（`visualMap.type==="piecewise"`）、图例可见（`.map-scene__legend` 文本）、皮肤应用后 `colors` 变化（应用「翡翠青绿」截图）、下钻后视角+面包屑、悬停态（`emphasis` 字段断言即可，hover 截图可选）、v1 种子（仅旧字段）加载后与现状等价（结构断言：4 叠片/geoIndex 3/无新键）。
 
 Run: `pnpm test:e2e e2e/map-scene-visual.spec.ts` → PASS；目检新截图（同步本地工作区供人工确认）。
 
-- [ ] **Step 2: 全量质量门**
+- [x] **Step 2: 全量质量门**
 
 Run: `pnpm typecheck && pnpm vitest run tests && pnpm build && pnpm test:e2e`
 Expected: 全部 exit 0（e2e 全量含 style-parity/inspector/interaction/visual/editor）
 
-- [ ] **Step 3: 安全与仓库卫生**
+- [x] **Step 3: 安全与仓库卫生**
 
 Run: `git diff --check`；对 `src/core/export` grep `eval\(|new Function|innerHTML|https?://`（仅许可文本）；`git status --porcelain` 仅预期文件。
 
-- [ ] **Step 4: 验收清单与文档提交**
+- [x] **Step 4: 验收清单与文档提交**
 
 Spec §9 四条逐项记录到 spec 文末「验收记录」；计划文件补执行记录。
 
@@ -552,4 +552,4 @@ git add e2e/map-scene-visual.spec.ts docs/superpowers/specs/2026-11-11-chartforg
 git commit -m "test: map datav optimization visual acceptance and spec checklist"
 ```
 
-- [ ] **Step 5: 整分支评审（会话内，无子代理）** — 全量 diff 通读 + 计划/spec 逐条核对 → Critical/Important 当轮修复，Minor 记 `Final: minor (deferred)`；随后 executing-plans 收尾（台账清理 → finalize_changes → 验收报告 → finishing-a-development-branch 菜单）。
+- [x] **Step 5: 整分支评审（会话内，无子代理）** — 全量 diff 通读 + 计划/spec 逐条核对 → Critical/Important 当轮修复，Minor 记 `Final: minor (deferred)`；随后 executing-plans 收尾（台账清理 → finalize_changes → 验收报告 → finishing-a-development-branch 菜单）。

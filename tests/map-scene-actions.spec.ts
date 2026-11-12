@@ -42,4 +42,12 @@ describe("blueprint setProps deep merge", () => {
     expect(RUNTIME_CODE).toContain("out[key] = safeMerge(current, incoming);");
     expect(RUNTIME_CODE).toContain('node.action === "setProps"');
   });
+
+  it("offline runtime wires region events and drill into the blueprint runner", () => {
+    expect(RUNTIME_CODE).toContain('chart.on("click", function (params) { cfEmitRegionEvent("regionClick", params); });');
+    expect(RUNTIME_CODE).toContain('chart.on("dblclick", function (params) { cfEmitRegionEvent("regionDblclick", params); cfStartDrill(params.name); });');
+    expect(RUNTIME_CODE).toContain('runBlueprint(item, screen, "regionUpdrill"');
+    expect(RUNTIME_CODE).toContain('function cfStartDrill(regionName)');
+    expect(RUNTIME_CODE).toContain('doc.addEventListener("keydown", cfEscHandler, true);');
+  });
 });

@@ -92,6 +92,55 @@ const initialWorkspace = {
       ],
       updatedAt: Date.now(),
     },
+    {
+      id: "map-visual-segments-screen",
+      name: "分段色带截图",
+      canvas: { width: 1280, height: 720, background: { kind: "color", color: "#050b12" } },
+      items: [{
+        id: "map-visual-segments-scene",
+        name: "分段地图",
+        kind: "component",
+        componentId: "chartforge.map-scene-flat",
+        componentVersion: 1,
+        frame: { x: 60, y: 50, w: 900, h: 560, rotate: 0 },
+        dataBinding: { datasetId: REGION_DATASET_ID, fields: { category: "province", value: "score" } },
+        props: {
+          presentation: "flat",
+          pitch: 0,
+          legend: { show: true, position: "top-right", mode: "segments" },
+          view: { center: [104.114129, 35.550339], zoom: 1.05, minZoom: 1, maxZoom: 8, dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622" },
+          layers: [{
+            id: "seg",
+            type: "regionFill",
+            name: "分段热度",
+            visible: true,
+            style: { color: "#32d6ff", opacity: 0.85, size: 12, colorMode: "segments", segments: 5, colors: { min: "#0b1f33", mid: "#1c7fa8", max: "#66ffff" } },
+          }],
+        },
+      }],
+      updatedAt: Date.now(),
+    },
+    {
+      id: "map-visual-v1-screen",
+      name: "v1 兼容回归",
+      canvas: { width: 1280, height: 720, background: { kind: "color", color: "#050b12" } },
+      items: [{
+        id: "map-visual-v1-scene",
+        name: "旧版地图",
+        kind: "component",
+        componentId: "chartforge.map-scene-flat",
+        componentVersion: 1,
+        frame: { x: 60, y: 50, w: 900, h: 560, rotate: 0 },
+        dataBinding: { datasetId: REGION_DATASET_ID, fields: { category: "province", value: "score" } },
+        props: {
+          presentation: "flat",
+          pitch: 0,
+          view: { center: [104.114129, 35.550339], zoom: 1.05, minZoom: 1, maxZoom: 8, dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622" },
+          layers: [{ id: "old", type: "regionFill", name: "旧区域", visible: true, style: { color: "#336699", opacity: 0.8, size: 12 } }],
+        },
+      }],
+      updatedAt: Date.now(),
+    },
   ],
   datasets: [
     { id: REGION_DATASET_ID, name: "省级热度集", source: { kind: "static", data: regionRows }, pipeline: { filter: [] } },
@@ -261,4 +310,90 @@ test("2.5D 地图场景结构、相机同步与视觉抽查截图", async ({ pag
   await page.waitForTimeout(500);
   await page.screenshot({ path: "test-results/visual/05-narrow.jpg", type: "jpeg", quality: 62 });
   await page.setViewportSize({ width: 1440, height: 900 });
+});
+
+test("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼容回归", async ({ page, context }) => {
+  await context.addInitScript(({ storageKey, workspace }) => {
+    if (localStorage.getItem(storageKey) === null) {
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
+
+  // --- 分段色带 + 分段图例 ---
+  await page.goto("/?nav=segments#/workbench/map-visual-segments-screen");
+  await expect(page.locator(".workbench")).toBeVisible();
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await page.waitForTimeout(700);
+  const ramp = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
+    const vm = Array.isArray(option?.visualMap) ? option.visualMap[0] : option?.visualMap;
+    return { type: vm?.type ?? null, pieces: Array.isArray(vm?.pieces) ? vm.pieces.length : 0 };
+  });
+  expect(ramp).toEqual({ type: "piecewise", pieces: 5 });
+  await expect(page.locator(".map-scene__legend-item")).toHaveCount(5);
+  await page.screenshot({ path: "test-results/visual/06-segments-legend.jpg", type: "jpeg", quality: 62 });
+
+  // --- 下钻视角 + 面包屑截图（flat 分段屏，geoIndex0 路径已在交互 e2e 验证）---
+  const flatPixel = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const chart = vueInstance?.exposed?.getChart?.();
+    return chart?.convertToPixel?.({ geoIndex: 0 }, [120.1551, 30.2741]) ?? null;
+  });
+  expect(flatPixel).not.toBeNull();
+  const flatBox = await page.locator(".map-scene__chart canvas").boundingBox();
+  expect(flatBox).not.toBeNull();
+  await page.mouse.dblclick(flatBox!.x + (flatPixel as number[])[0], flatBox!.y + (flatPixel as number[])[1]);
+  await expect(page.locator(".map-scene__breadcrumb")).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: "test-results/visual/09-drill.jpg", type: "jpeg", quality: 62 });
+
+  // --- 皮肤一键切换（翡翠青绿 → 晨曦浅色）---
+  await page.goto(`/?nav=skin#/workbench/${SCREEN_ID}`);
+  await expect(page.locator(".workbench")).toBeVisible();
+  await page.locator(`[data-item-id="${ITEM_ID}"]`).click();
+  const inspector = page.locator(".map-scene-inspector");
+  await expect(inspector.locator(".map-scene-inspector__skin")).toHaveCount(5);
+  await inspector.locator('[title="翡翠青绿"]').click();
+  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
+    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
+    const scene = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId);
+    return scene?.props?.view?.backgroundColor ?? null;
+  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toBe("#06170f");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "test-results/visual/07-skin-jade.jpg", type: "jpeg", quality: 62 });
+  await inspector.locator('[title="晨曦浅色"]').click();
+  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
+    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
+    const scene = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId);
+    return scene?.props?.view?.backgroundColor ?? null;
+  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toBe("#f4f7fb");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "test-results/visual/08-skin-dawn.jpg", type: "jpeg", quality: 62 });
+
+
+  // --- v1 旧形状 props 回归：遗留双色 visualMap、无 regions、无图例、无 v2 键 ---
+  await page.goto("/?nav=v1#/workbench/map-visual-v1-screen");
+  await expect(page.locator(".workbench")).toBeVisible();
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await page.waitForTimeout(700);
+  const legacy = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
+    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
+    const vm = Array.isArray(option?.visualMap) ? option.visualMap[0] : option?.visualMap;
+    return {
+      vmType: vm?.type ?? null,
+      inRangeColor: vm?.inRange?.color ?? null,
+      hasEmptyColor: Array.isArray(geo?.regions) ? geo.regions.some((entry: any) => entry?.itemStyle?.areaColor === "#0d1a26") : false,
+      legendCount: document.querySelectorAll(".map-scene__legend").length,
+    };
+  });
+  expect(legacy.vmType).toBeNull();
+  expect(legacy.inRangeColor).toEqual(["#102b3d", "#336699"]);
+  expect(legacy.hasEmptyColor).toBe(false);
+  expect(legacy.legendCount).toBe(0);
+  const persisted = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
+  const v1Props = persisted?.screens?.find((s: any) => s.id === "map-visual-v1-screen")?.items?.[0]?.props ?? {};
+  expect(Object.keys(v1Props).sort()).toEqual(["layers", "modelVersion", "pitch", "presentation", "view"]);
 });
