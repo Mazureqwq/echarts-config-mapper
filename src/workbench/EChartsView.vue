@@ -116,6 +116,16 @@ onBeforeUnmount(() => {
 
 defineExpose({
   getChart: () => chart.value,
+  setCamera: (center: [number, number], zoom: number) => {
+    const instance = chart.value;
+    if (!instance) return;
+    const option = instance.getOption() as { geo?: Array<Record<string, unknown>> | Record<string, unknown> };
+    const geos = option.geo;
+    const list = Array.isArray(geos) ? geos : geos ? [geos] : [];
+    if (!list.length) return;
+    instance.setOption({ geo: list.map((geo) => ({ ...geo, center: [...center], zoom })) }, { notMerge: false, lazyUpdate: true, silent: true });
+    emit("roam", { center: [...center], zoom });
+  },
 });
 </script>
 

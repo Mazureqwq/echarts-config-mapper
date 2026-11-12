@@ -618,6 +618,7 @@ export const RUNTIME_CODE = String.raw`
     rootEl.appendChild(badge);
     var errors = []; var series = []; var visualMaps = [];
     var emptyColor = ""; var legendSource = null; var legendElRef = null;
+    var drillStack = []; var drillElRef = null; var cfCameraState = null;
     var containerFields = item.dataBinding && item.dataBinding.fields ? item.dataBinding.fields : {};
     function field(source, key) { return typeof source[key] === "string" && source[key].trim() && safeKey(source[key].trim()) ? source[key].trim() : ""; }
     function coordinate(row, lonField, latField) {
@@ -745,6 +746,106 @@ export const RUNTIME_CODE = String.raw`
       var value = typeof params.value === "number" ? params.value : null;
       runBlueprint(item, screen, eventName, { name: params.name, value: value, valueText: cfFormatMapValue(value, props.valueFormat), presentation: presentation });
     }
+    function cfRaf(cb) { return typeof requestAnimationFrame === "function" ? requestAnimationFrame(cb) : setTimeout(cb, 16); }
+    function cfRegionCenter(geoJson, name) {
+      if (!geoJson || !geoJson.features) return null;
+      var feature = null;
+      for (var i = 0; i < geoJson.features.length; i++) {
+        var candidate = geoJson.features[i];
+        if (candidate && candidate.properties && candidate.properties.name === name) { feature = candidate; break; }
+      }
+      if (!feature || !feature.geometry) return null;
+      var points = [];
+      function walkCoord(value) {
+        if (!Array.isArray(value)) return;
+        if (typeof value[0] === "number" && typeof value[1] === "number") { points.push([value[0], value[1]]); return; }
+        for (var w = 0; w < value.length; w++) walkCoord(value[w]);
+      }
+      var geometry = feature.geometry;
+      if (geometry.type === "GeometryCollection" && geometry.geometries) {
+        for (var g = 0; g < geometry.geometries.length; g++) walkCoord(geometry.geometries[g].coordinates);
+      } else walkCoord(geometry.coordinates);
+      if (!points.length) return null;
+      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (var q = 0; q < points.length; q++) {
+        minX = Math.min(minX, points[q][0]); maxX = Math.max(maxX, points[q][0]);
+        minY = Math.min(minY, points[q][1]); maxY = Math.max(maxY, points[q][1]);
+      }
+      return [(minX + maxX) / 2, (minY + maxY) / 2];
+    }
+    function cfCurrentCamera() {
+      if (!cfCameraState) return { center: view.center.slice(), zoom: view.zoom };
+      return { center: cfCameraState.center.slice(), zoom: cfCameraState.zoom };
+    }
+    function cfSetCamera(center, zoom) {
+      var geoOption = chart.getOption().geo;
+      var geoList = Array.isArray(geoOption) ? geoOption : (geoOption ? [geoOption] : []);
+      if (!geoList.length) return;
+      var nextGeo = geoList.map(function (geoLayer) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom }); });
+      chart.setOption({ geo: nextGeo }, { notMerge: false, lazyUpdate: true, silent: true });
+      cfCameraState = { center: center.slice(), zoom: zoom };
+      if (cfApplyZoomVisibility(zoom)) chart.setOption({ series: series }, { notMerge: false, lazyUpdate: true, silent: true });
+      if (legendElRef) legendElRef.style.display = cfLayerVisibleAt(cfLayerById(fillLayerId), zoom) ? "" : "none";
+    }
+    function cfTweenTo(to) {
+      var from = cfCurrentCamera();
+      var start = Date.now();
+      function step() {
+        var t = Math.min(1, (Date.now() - start) / 350);
+        var center = [from.center[0] + (to.center[0] - from.center[0]) * t, from.center[1] + (to.center[1] - from.center[1]) * t];
+        var zoom = from.zoom + (to.zoom - from.zoom) * t;
+        cfSetCamera(center, zoom);
+        if (t < 1) cfRaf(step);
+      }
+      cfRaf(step);
+    }
+    function cfCrumbButton(label, index) {
+      var button = doc.createElement("button");
+      button.type = "button";
+      button.className = "cf-map-crumb";
+      button.textContent = label;
+      button.addEventListener("click", function () { cfDrillToLevel(index); });
+      return button;
+    }
+    function cfUpdateBreadcrumb() {
+      if (!drillElRef) return;
+      while (drillElRef.firstChild) drillElRef.removeChild(drillElRef.firstChild);
+      if (!drillStack.length) { drillElRef.style.display = "none"; return; }
+      drillElRef.style.display = "flex";
+      drillElRef.appendChild(cfCrumbButton("\u5168\u56fd", -1));
+      for (var i = 0; i < drillStack.length; i++) {
+        var sep = doc.createElement("span");
+        sep.className = "cf-map-crumb-sep";
+        sep.textContent = " \u203a ";
+        drillElRef.appendChild(sep);
+        drillElRef.appendChild(cfCrumbButton(drillStack[i].regionName, i));
+      }
+    }
+    function cfDrillToLevel(index) {
+      var target = index >= 0 ? (drillStack[index] || null) : null;
+      drillStack = target ? drillStack.slice(0, index + 1) : [];
+      var to = target ? { center: target.center.slice(), zoom: target.zoom } : { center: view.center.slice(), zoom: view.zoom };
+      cfTweenTo(to);
+      runBlueprint(item, screen, "regionUpdrill", { name: target ? target.regionName : "\u5168\u56fd", presentation: presentation });
+      cfUpdateBreadcrumb();
+    }
+    function cfStartDrill(regionName) {
+      if (props.drill && props.drill.enabled === false) return;
+      var mapApi = window.echarts && typeof window.echarts.getMap === "function" ? window.echarts.getMap("china") : null;
+      var center = mapApi ? cfRegionCenter(mapApi.geoJson, regionName) : null;
+      if (!center) return;
+      var from = cfCurrentCamera();
+      var targetZoom = Math.min(view.maxZoom, Math.max(4.5, from.zoom));
+      drillStack = drillStack.concat([{ center: center, zoom: targetZoom, regionName: regionName }]);
+      cfTweenTo({ center: center.slice(), zoom: targetZoom });
+      cfUpdateBreadcrumb();
+    }
+    function cfEscHandler(ev) {
+      if (!ev || ev.key !== "Escape" || !drillStack.length) return;
+      ev.stopImmediatePropagation();
+      if (ev.preventDefault) ev.preventDefault();
+      cfDrillToLevel(drillStack.length - 2);
+    }
     if (props.legend && props.legend.show && legendSource) {
       var legendEl = doc.createElement("div");
       legendElRef = legendEl;
@@ -789,8 +890,17 @@ export const RUNTIME_CODE = String.raw`
       }
       rootEl.appendChild(legendEl);
     }
+    drillElRef = doc.createElement("div");
+    drillElRef.className = "cf-map-breadcrumb";
+    drillElRef.style.position = "absolute"; drillElRef.style.zIndex = "3";
+    drillElRef.style.top = "10px"; drillElRef.style.left = "50%"; drillElRef.style.transform = "translateX(-50%)";
+    drillElRef.style.display = "none"; drillElRef.style.alignItems = "center"; drillElRef.style.gap = "4px";
+    drillElRef.style.padding = "4px 8px"; drillElRef.style.border = "1px solid #54bad744"; drillElRef.style.borderRadius = "4px";
+    drillElRef.style.background = "#061622c9"; drillElRef.style.fontSize = "11px";
+    rootEl.appendChild(drillElRef);
+    doc.addEventListener("keydown", cfEscHandler, true);
     if (window.echarts) {
-      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var geoOption = chart.getOption().geo; var geoList = Array.isArray(geoOption) ? geoOption : (geoOption ? [geoOption] : []); var zoomNow = null; if (geoList.length) { var lastGeo = geoList[geoList.length - 1]; if (lastGeo && typeof lastGeo.zoom === "number") zoomNow = lastGeo.zoom; } if (zoomNow !== null) { if (cfApplyZoomVisibility(zoomNow)) { chart.setOption({ series: series }, { notMerge: false, lazyUpdate: true, silent: true }); } if (legendElRef) { legendElRef.style.display = cfLayerVisibleAt(cfLayerById(fillLayerId), zoomNow) ? "" : "none"; } } if (presentation === "tilted" && geoList.length >= 2) { var topIndex = geoList.length - 1; var topGeo = geoList[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = geoList.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); } if (typeof chart.on === "function") { chart.on("click", function (params) { cfEmitRegionEvent("regionClick", params); }); chart.on("dblclick", function (params) { cfEmitRegionEvent("regionDblclick", params); }); } }); charts.push(chart); }
+      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var geoOption = chart.getOption().geo; var geoList = Array.isArray(geoOption) ? geoOption : (geoOption ? [geoOption] : []); var zoomNow = null; if (geoList.length) { var lastGeo = geoList[geoList.length - 1]; if (lastGeo && typeof lastGeo.zoom === "number") zoomNow = lastGeo.zoom; } if (zoomNow !== null) { cfCameraState = { center: (lastGeo.center && lastGeo.center.slice) ? lastGeo.center.slice() : view.center.slice(), zoom: zoomNow }; if (cfApplyZoomVisibility(zoomNow)) { chart.setOption({ series: series }, { notMerge: false, lazyUpdate: true, silent: true }); } if (legendElRef) { legendElRef.style.display = cfLayerVisibleAt(cfLayerById(fillLayerId), zoomNow) ? "" : "none"; } } if (presentation === "tilted" && geoList.length >= 2) { var topIndex = geoList.length - 1; var topGeo = geoList[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = geoList.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); } if (typeof chart.on === "function") { chart.on("click", function (params) { cfEmitRegionEvent("regionClick", params); }); chart.on("dblclick", function (params) { cfEmitRegionEvent("regionDblclick", params); cfStartDrill(params.name); }); } }); charts.push(chart); }
       catch (e) { errors.push("地图渲染失败"); }
     } else errors.push("离线图表运行时不可用");
     if (errors.length) {

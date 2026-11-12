@@ -248,6 +248,46 @@ export function buildSegmentPieces(colors: MapFillColors, min: number, max: numb
   return pieces;
 }
 
+export interface DrillView { center: [number, number]; zoom: number }
+
+/** Bounding-box center of a named feature in a GeoJSON FeatureCollection (null when absent/empty). */
+export function computeRegionCenter(geoJson: unknown, name: string): [number, number] | null {
+  const collection = geoJson as { features?: Array<{ properties?: { name?: string }; geometry?: unknown }> } | undefined;
+  const feature = collection?.features?.find((entry) => entry.properties?.name === name);
+  if (!feature?.geometry) return null;
+  const points: number[][] = [];
+  const walk = (value: unknown): void => {
+    if (!Array.isArray(value)) return;
+    if (typeof value[0] === "number" && typeof value[1] === "number") {
+      points.push([value[0], value[1]]);
+      return;
+    }
+    value.forEach(walk);
+  };
+  const geometry = feature.geometry as { type?: string; coordinates?: unknown; geometries?: Array<{ coordinates?: unknown }> };
+  if (geometry.type === "GeometryCollection") {
+    (geometry.geometries ?? []).forEach((entry) => walk(entry.coordinates));
+  } else {
+    walk(geometry.coordinates);
+  }
+  if (!points.length) return null;
+  const xs = points.map((point) => point[0]);
+  const ys = points.map((point) => point[1]);
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+}
+
+/** Linear camera interpolation for the drill tween; t is clamped to [0, 1]. */
+export function interpolateDrillView(from: DrillView, to: DrillView, t: number): DrillView {
+  const k = Math.min(1, Math.max(0, t));
+  return {
+    center: [
+      from.center[0] + (to.center[0] - from.center[0]) * k,
+      from.center[1] + (to.center[1] - from.center[1]) * k,
+    ],
+    zoom: from.zoom + (to.zoom - from.zoom) * k,
+  };
+}
+
 /** Drop layers outside the inclusive zoom window (missing bounds always stay visible). */
 export function filterLayersForZoom(layers: readonly MapSceneLayer[], zoom: number): MapSceneLayer[] {
   return layers.filter((layer) => {
