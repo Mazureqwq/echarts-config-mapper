@@ -15,6 +15,7 @@ import { runBlueprint } from "@/core/blueprint/runner";
 import type { BlueprintContext, BlueprintGraph, BlueprintVariable } from "@/core/blueprint/types";
 import type { ComponentItem } from "@/core/model/types";
 import BlueprintEditor from "@/workbench/BlueprintEditor.vue";
+import { useUiStore } from "@/stores/uiStore";
 
 const props = defineProps<{ id: string }>();
 const ws = useWorkspaceStore();
@@ -22,7 +23,7 @@ const doc = useDocumentStore();
 const stageWrap = ref<HTMLDivElement | null>(null);
 const leftCollapsed = ref(false);
 const rightCollapsed = ref(false);
-const blueprintOpen = ref(false);
+const ui = useUiStore();
 const blueprintMessage = ref("");
 const runtimeVariablesByScreen = reactive<Record<string, Record<string, unknown>>>({});
 const runtimeVariableDefaultsByScreen: Record<string, Record<string, string>> = {};
@@ -134,7 +135,7 @@ function saveBlueprint(graph: BlueprintGraph, renamedVariables: Record<string, s
   if (!screenId) return;
   preserveRuntimeVariableRenames(screenId, renamedVariables);
   doc.updateScreenBlueprint(screenId, graph, renamedVariables);
-  blueprintOpen.value = false;
+  ui.setBlueprintOpen(false);
   blueprintMessage.value = "蓝图已保存";
 }
 
@@ -249,7 +250,7 @@ onBeforeUnmount(() => {
   <div class="workbench">
     <TopBar :screen-id="doc.currentScreenId ?? id" @saved="refreshThumbnail" />
     <div class="workbench__blueprint-bar">
-      <button class="cf-button cf-button--plain cf-button--small" type="button" @click="blueprintOpen = true">蓝图交互</button>
+      <button class="cf-button cf-button--plain cf-button--small" type="button" @click="ui.setBlueprintOpen(true)">蓝图交互</button>
       <span v-if="blueprintMessage" role="status">{{ blueprintMessage }}</span>
     </div>
     <div class="workbench__main">
@@ -290,12 +291,12 @@ onBeforeUnmount(() => {
       </aside>
     </div>
     <BlueprintEditor
-      v-if="blueprintOpen && doc.currentScreen"
+      v-if="ui.blueprintOpen && doc.currentScreen"
       :model-value="currentBlueprint"
       :datasets="ws.workspace.datasets"
       :bound-variable-names="boundVariableNames"
       @save="saveBlueprint"
-      @close="blueprintOpen = false"
+      @close="ui.setBlueprintOpen(false)"
     />
     <ShortcutsHelp />
   </div>

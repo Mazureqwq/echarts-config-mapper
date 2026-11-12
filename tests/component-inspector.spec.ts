@@ -55,9 +55,9 @@ describe("ComponentInspector theme-inheriting colors", () => {
     const html = await renderToString(app);
     expect(html).toContain("地图图层（2）");
     expect(html).toContain("显示运输流向");
-    expect(html).toContain("共享数据绑定");
-    expect(html).toContain("区域名称字段");
-    expect(html).toContain("起点经度");
+    // 容器级「共享数据绑定」随三页签移入数据页；该覆盖由 e2e/map-scene-editor.spec.ts（数据页签）承担。
+    expect(html).toContain("地图皮肤");
+    expect(html).toContain("区域热力+图例");
     expect(html).toContain("数据绑定 · 独立");
     expect(html).toContain("数据绑定 · 继承容器");
     expect(html).toContain("清除图层绑定并继承容器");

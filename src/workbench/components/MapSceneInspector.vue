@@ -3,12 +3,15 @@ import { computed, ref } from "vue";
 import type { ComponentItem } from "@/core/model/types";
 import { createMapSceneLayer, MAP_LAYER_TYPES, normalizeMapSceneProps, type MapSceneLayer as MapLayer, type MapSceneView, type MapLayerType } from "@/core/components/mapScene";
 import { applyMapSkin, MAP_SKINS } from "@/core/components/mapSkins";
+import { useUiStore } from "@/stores/uiStore";
 import DatasetBindingEditor from "./DatasetBindingEditor.vue";
 
 const props = defineProps<{ item: ComponentItem }>();
 const emit = defineEmits<{ (event: "update:props", value: Record<string, unknown>): void; (event: "update:data-binding", value: ComponentItem["dataBinding"]): void }>();
 const scene = computed(() => normalizeMapSceneProps(props.item.props, props.item.componentId.endsWith("tilted") ? "tilted" : "flat"));
+const ui = useUiStore();
 const newType = ref<MapLayerType>("regionFill");
+const tab = ref<"style" | "data" | "interaction">("style");
 const LAYER_LABELS: Record<MapLayerType, string> = { regionFill: "区域填色", geoScatter: "地理散点", geoHeatmap: "点热力", geoFlow: "OD 飞线" };
 
 function updateProps(patch: Record<string, unknown>): void { emit("update:props", { ...props.item.props, ...patch }); }
@@ -41,18 +44,57 @@ function updateLayer(id: string, patch: Omit<Partial<MapLayer>, "style"> & { sty
 function updateLayerBinding(id: string, binding: ComponentItem["dataBinding"]): void {
   updateLayer(id, { dataBinding: binding });
 }
-function addLayer(): void {
-  if (scene.value.layers.length >= 50) return;
+function uniqueLayerName(type: MapLayerType): string {
   const existingNames = new Set(scene.value.layers.map((layer) => layer.name));
-  let suffix = scene.value.layers.filter((layer) => layer.type === newType.value).length + 1;
-  let name = `${LAYER_LABELS[newType.value]} ${suffix}`;
+  let suffix = scene.value.layers.filter((layer) => layer.type === type).length + 1;
+  let name = `${LAYER_LABELS[type]} ${suffix}`;
   while (existingNames.has(name)) {
     suffix += 1;
-    name = `${LAYER_LABELS[newType.value]} ${suffix}`;
+    name = `${LAYER_LABELS[type]} ${suffix}`;
   }
+  return name;
+}
+function addLayer(): void {
+  if (scene.value.layers.length >= 50) return;
   const layer = createMapSceneLayer(newType.value);
-  layer.name = name;
+  layer.name = uniqueLayerName(newType.value);
   updateProps({ layers: [...scene.value.layers, layer] });
+}
+function addTemplate(kind: "heat" | "scatter-flow"): void {
+  if (kind === "heat") {
+    if (scene.value.layers.length >= 50) return;
+    const layer = createMapSceneLayer("regionFill");
+    layer.name = uniqueLayerName("regionFill");
+    updateProps({
+      layers: [...scene.value.layers, layer],
+      legend: { ...(scene.value.legend ?? { show: false, position: "top-right", mode: "continuous" }), show: true, mode: "continuous" },
+    });
+  } else {
+    if (scene.value.layers.length >= 48) return;
+    const flow = createMapSceneLayer("geoFlow");
+    flow.name = uniqueLayerName("geoFlow");
+    const scatter = createMapSceneLayer("geoScatter");
+    scatter.name = uniqueLayerName("geoScatter");
+    updateProps({ layers: [...scene.value.layers, flow, scatter] });
+  }
+}
+function updateLayerZoom(layer: MapLayer, key: "minZoom" | "maxZoom", event: Event): void {
+  const raw = (event.target as HTMLInputElement).value;
+  const layers = scene.value.layers.map((entry) => {
+    if (entry.id !== layer.id) return entry;
+    if (raw === "") {
+      const copy = { ...entry } as Record<string, unknown>;
+      delete copy[key];
+      return copy as unknown as MapLayer;
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return entry;
+    return { ...entry, [key]: value };
+  });
+  updateProps({ layers });
+}
+function openBlueprint(): void {
+  ui.setBlueprintOpen(true);
 }
 function removeLayer(id: string): void { updateProps({ layers: scene.value.layers.filter((layer) => layer.id !== id) }); }
 function moveLayer(index: number, delta: number): void {
@@ -66,6 +108,12 @@ function moveLayer(index: number, delta: number): void {
 
 <template>
   <div class="map-scene-inspector">
+    <div class="map-scene-inspector__tabs" role="tablist">
+      <button type="button" role="tab" class="map-scene-inspector__tab" :class="{ 'map-scene-inspector__tab--active': tab === 'style' }" :aria-selected="tab === 'style'" @click="tab = 'style'">样式</button>
+      <button type="button" role="tab" class="map-scene-inspector__tab" :class="{ 'map-scene-inspector__tab--active': tab === 'data' }" :aria-selected="tab === 'data'" @click="tab = 'data'">数据</button>
+      <button type="button" role="tab" class="map-scene-inspector__tab" :class="{ 'map-scene-inspector__tab--active': tab === 'interaction' }" :aria-selected="tab === 'interaction'" @click="tab = 'interaction'">交互</button>
+    </div>
+    <template v-if="tab === 'style'">
     <section class="map-scene-inspector__section">
       <h3>地图容器</h3>
       <div class="map-scene-inspector__skins" role="group" aria-label="地图皮肤">
@@ -112,6 +160,10 @@ function moveLayer(index: number, delta: number): void {
         </select>
         <button type="button" class="cf-btn cf-btn--small" :disabled="scene.layers.length >= 50" @click="addLayer">添加图层</button>
       </div>
+      <div class="map-scene-inspector__templates">
+        <button type="button" class="cf-btn cf-btn--small" :disabled="scene.layers.length >= 50" @click="addTemplate('heat')">区域热力+图例</button>
+        <button type="button" class="cf-btn cf-btn--small" :disabled="scene.layers.length >= 48" @click="addTemplate('scatter-flow')">散点+飞线</button>
+      </div>
       <p v-if="!scene.layers.length" class="map-scene-inspector__empty">还没有图层。先添加区域填色、地理散点、点热力或 OD 飞线。</p>
       <article v-for="(layer, index) in scene.layers" :key="layer.id" class="map-scene-inspector__layer">
         <div class="map-scene-inspector__layer-head">
@@ -129,6 +181,8 @@ function moveLayer(index: number, delta: number): void {
           <label>颜色 <input type="color" :value="layer.style.color" :aria-label="`${layer.name}颜色`" @input="updateLayer(layer.id, { style: { color: ($event.target as HTMLInputElement).value } })" /></label>
           <label>透明度 <input class="cf-control cf-control--compact" type="number" min="0" max="1" step="0.05" :value="layer.style.opacity" :aria-label="`${layer.name}透明度`" @change="updateLayer(layer.id, { style: { opacity: Number(($event.target as HTMLInputElement).value) } })" /></label>
           <label>尺寸 <input class="cf-control cf-control--compact" type="number" min="1" max="100" :value="layer.style.size" :aria-label="`${layer.name}尺寸`" @change="updateLayer(layer.id, { style: { size: Number(($event.target as HTMLInputElement).value) } })" /></label>
+          <label>最小缩放 <input class="cf-control cf-control--compact" type="number" min="0.5" max="20" step="0.1" :value="layer.minZoom ?? ''" :aria-label="`${layer.name}最小缩放`" placeholder="不限" @change="updateLayerZoom(layer, 'minZoom', $event)" /></label>
+          <label>最大缩放 <input class="cf-control cf-control--compact" type="number" min="0.5" max="20" step="0.1" :value="layer.maxZoom ?? ''" :aria-label="`${layer.name}最大缩放`" placeholder="不限" @change="updateLayerZoom(layer, 'maxZoom', $event)" /></label>
         </div>
         <details class="map-scene-inspector__binding">
           <summary>数据绑定 · {{ layer.dataBinding ? '独立' : '继承容器' }}</summary>
@@ -144,10 +198,21 @@ function moveLayer(index: number, delta: number): void {
       </article>
     </section>
 
+    </template>
+    <template v-else-if="tab === 'data'">
     <section class="map-scene-inspector__section">
       <h3>共享数据绑定</h3>
       <DatasetBindingEditor :model-value="item.dataBinding" :show-fields="true" :map-scene="true" @update:model-value="emit('update:data-binding', $event)" />
     </section>
+    </template>
+    <template v-else>
+      <section class="map-scene-inspector__section">
+        <h3>区域交互</h3>
+        <label class="map-scene-inspector__check"><input type="checkbox" :checked="scene.drill?.enabled ?? true" @change="updateProps({ drill: { enabled: ($event.target as HTMLInputElement).checked } })" />双击区域下钻定位</label>
+        <p class="map-scene-inspector__hint">区域事件：单击 regionClick、双击 regionDblclick、上钻 regionUpdrill（载荷含区域名与数值），可在蓝图中驱动变量与组件联动。</p>
+        <button type="button" class="cf-btn cf-btn--small" @click="openBlueprint">打开蓝图编辑器</button>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -172,6 +237,10 @@ function moveLayer(index: number, delta: number): void {
 .map-scene-inspector__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; }
 .map-scene-inspector__heading span { color: var(--cf-text-2); font-size: 9px; }
 .map-scene-inspector__add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.map-scene-inspector__tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.map-scene-inspector__tab { padding: 5px 0; border: 1px solid var(--cf-border); border-radius: 5px; background: transparent; color: var(--cf-text-2); font-size: 11px; cursor: pointer; }
+.map-scene-inspector__tab--active { border-color: var(--cf-primary); color: var(--cf-primary); background: color-mix(in srgb, var(--cf-primary) 10%, transparent); }
+.map-scene-inspector__templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .map-scene-inspector__layer { display: flex; flex-direction: column; gap: 7px; padding: 7px; border: 1px solid var(--cf-border); border-radius: 5px; background: color-mix(in srgb, var(--cf-panel) 80%, transparent); }
 .map-scene-inspector__layer-head { display: flex; align-items: center; gap: 5px; }
 .map-scene-inspector__type { min-width: 0; flex: 1; overflow: hidden; padding: 4px 7px; border: 1px solid color-mix(in srgb, var(--cf-primary) 28%, var(--cf-border)); border-radius: 5px; background: color-mix(in srgb, var(--cf-primary) 10%, transparent); color: var(--cf-primary); font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }

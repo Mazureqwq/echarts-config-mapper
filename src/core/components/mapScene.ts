@@ -66,6 +66,7 @@ export interface MapSceneProps extends Record<string, unknown> {
   label?: MapLabelStyle;
   border?: MapBorderStyle;
   underlay?: MapUnderlayLayer[];
+  drill?: { enabled: boolean };
   appliedSkin?: string;
 }
 
@@ -196,6 +197,7 @@ function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProp
     }));
     if (entries.length) out.underlay = entries;
   }
+  if (isRecord(input.drill)) out.drill = { enabled: typeof input.drill.enabled === "boolean" ? input.drill.enabled : true };
   if (typeof input.appliedSkin === "string" && input.appliedSkin.trim()) out.appliedSkin = input.appliedSkin.trim().slice(0, 48);
   return out;
 }
@@ -243,6 +245,15 @@ export function buildSegmentPieces(colors: MapFillColors, min: number, max: numb
     else pieces.push({ gt: lo, lte: hi, color });
   }
   return pieces;
+}
+
+/** Drop layers outside the inclusive zoom window (missing bounds always stay visible). */
+export function filterLayersForZoom(layers: readonly MapSceneLayer[], zoom: number): MapSceneLayer[] {
+  return layers.filter((layer) => {
+    if (layer.minZoom !== undefined && zoom < layer.minZoom) return false;
+    if (layer.maxZoom !== undefined && zoom > layer.maxZoom) return false;
+    return true;
+  });
 }
 
 export type MapLegendEntry = { label: string; color: string } | { from: string; to: string; stops: string[] };

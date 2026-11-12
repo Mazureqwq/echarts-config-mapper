@@ -18,6 +18,7 @@ export const useUiStore = defineStore("ui", {
     gridSize: 24 as GridSize,
     helpVisible: false,
     searchVisible: false,
+    blueprintOpen: false,
     editingId: null as string | null,
   }),
   getters: {
@@ -56,6 +57,9 @@ export const useUiStore = defineStore("ui", {
     },
     setSearchVisible(v: boolean) {
       this.searchVisible = v;
+    },
+    setBlueprintOpen(v: boolean) {
+      this.blueprintOpen = v;
     },
     setView(view: AppView) {
       this.view = view;

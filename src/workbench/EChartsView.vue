@@ -9,7 +9,7 @@ const props = defineProps<{
   theme?: "light" | "dark";
 }>();
 
-const emit = defineEmits<{ (e: "error", message: string): void }>();
+const emit = defineEmits<{ (e: "error", message: string): void; (e: "roam", payload: { center: [number, number]; zoom: number }): void }>();
 
 const el = ref<HTMLDivElement | null>(null);
 const chart = shallowRef<EChartsType | null>(null);
@@ -56,6 +56,15 @@ function mountChart(): void {
     return;
   }
   chart.value.on("georoam", syncGeoLayerCamera);
+  chart.value.on("georoam", () => {
+    const instance = chart.value;
+    if (!instance) return;
+    const option = instance.getOption() as { geo?: Array<Record<string, unknown>> | Record<string, unknown> };
+    const geos = option.geo;
+    const geo = Array.isArray(geos) ? geos[geos.length - 1] : geos;
+    if (!geo || !Array.isArray(geo.center) || typeof geo.zoom !== "number") return;
+    emit("roam", { center: [...geo.center] as [number, number], zoom: geo.zoom });
+  });
   render();
 }
 

@@ -116,7 +116,8 @@ test("地图容器绑定继承、图层独立覆盖与变量切换在刷新和�
   await page.locator(`[data-item-id="${ITEM_ID}"]`).click();
   await expect(page.locator(".map-scene-inspector")).toBeVisible();
 
-  // 在地图容器上配置共享数据、地理字段和全局变量过滤。
+  // 在地图容器上配置共享数据、地理字段和全局变量过滤（数据页签）。
+  await page.locator(".map-scene-inspector").getByRole("tab", { name: "数据", exact: true }).click();
   const containerBinding = page.locator(".map-scene-inspector__section").filter({ hasText: "共享数据绑定" });
   await containerBinding.getByLabel("工作区数据集").selectOption(DATASET_ID);
   await containerBinding.getByLabel("区域名称字段").fill("province");
@@ -128,6 +129,7 @@ test("地图容器绑定继承、图层独立覆盖与变量切换在刷新和�
   await containerBinding.getByLabel("匹配字段").fill("province");
   await containerBinding.getByLabel("全局变量").selectOption(VARIABLE_NAME);
 
+  await page.locator(".map-scene-inspector").getByRole("tab", { name: "样式", exact: true }).click();
   const mapSettings = page.locator(".map-scene-inspector__section").filter({ hasText: "地图容器" });
   await mapSettings.getByLabel("地图中心经度").fill("110.5");
   await mapSettings.getByLabel("地图中心经度").press("Tab");

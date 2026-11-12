@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowReactive, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowReactive, watch } from "vue";
 import type { ComponentRenderProps } from "@/core/components/types";
-import { buildMapLegend, buildMapSceneOption, normalizeMapSceneProps, type MapLegendEntry } from "@/core/components/mapScene";
+import { buildMapLegend, buildMapSceneOption, filterLayersForZoom, normalizeMapSceneProps, type MapLegendEntry } from "@/core/components/mapScene";
 import EChartsView from "@/workbench/EChartsView.vue";
 import { themeMode } from "@/shared/theme";
 import { filterRowsByBinding } from "@/core/components/dataWidgets";
@@ -52,8 +52,27 @@ const rowsByLayerId = computed(() => Object.fromEntries(scene.value.layers.flatM
   const snapshot = layerSnapshots[layer.id];
   return [[layer.id, filterRowsByBinding(snapshot?.rows ?? [], layer.dataBinding, props.variables)]];
 })));
+const liveCamera = ref<{ center: [number, number]; zoom: number } | null>(null);
+const visibleSig = ref("");
+function layerSignature(zoom: number): string {
+  return filterLayersForZoom(scene.value.layers, zoom).map((layer) => layer.id).join("|");
+}
+function onRoam(camera: { center: [number, number]; zoom: number }): void {
+  const sig = layerSignature(camera.zoom);
+  if (sig === visibleSig.value) return;
+  visibleSig.value = sig;
+  liveCamera.value = camera;
+}
+watch(scene, () => {
+  visibleSig.value = layerSignature(liveCamera.value?.zoom ?? scene.value.view.zoom);
+}, { immediate: true });
 const result = computed(() => {
-  const built = buildMapSceneOption(props.item.props, props.rows, props.item.dataBinding?.fields, rowsByLayerId.value);
+  const zoom = liveCamera.value?.zoom ?? scene.value.view.zoom;
+  const layers = filterLayersForZoom(scene.value.layers, zoom);
+  const rawProps = props.item.props as Record<string, unknown>;
+  const optionProps: Record<string, unknown> = { ...rawProps, layers };
+  if (liveCamera.value) optionProps.view = { ...scene.value.view, center: liveCamera.value.center, zoom: liveCamera.value.zoom };
+  const built = buildMapSceneOption(optionProps, props.rows, props.item.dataBinding?.fields, rowsByLayerId.value);
   const bindingErrors = scene.value.layers.flatMap((layer) => {
     if (!layer.dataBinding) return [];
     const snapshot = layerSnapshots[layer.id];
@@ -70,7 +89,7 @@ const legendEntries = computed<MapLegendEntry[]>(() =>
 <template>
   <div class="map-scene" :class="`map-scene--${scene.presentation}`" :style="{ backgroundColor: scene.view.backgroundColor }">
     <div class="map-scene__surface" :style="{ backgroundColor: scene.view.backgroundColor }">
-      <EChartsView class="map-scene__chart" :option="result.option" :theme="themeMode" />
+      <EChartsView class="map-scene__chart" :option="result.option" :theme="themeMode" @roam="onRoam" />
       <div class="map-scene__caption">{{ scene.presentation === 'tilted' ? '立体地图 · 2.5D' : '平面地图 · 2D' }}</div>
       <div class="map-scene__layers">{{ visibleLayers }} 个可见图层</div>
       <div v-if="legendEntries.length" class="map-scene__legend" :class="`map-scene__legend--${scene.legend?.position ?? 'top-right'}`">

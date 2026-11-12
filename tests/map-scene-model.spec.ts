@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { componentRegistry } from "../src/core/components/builtins";
 import { getComponentCatalog } from "../src/core/components/catalog";
-import { buildMapSceneOption, formatMapValue, normalizeMapSceneProps } from "../src/core/components/mapScene";
+import { buildMapSceneOption, filterLayersForZoom, formatMapValue, normalizeMapSceneProps } from "../src/core/components/mapScene";
 import { normalizeWorkspace } from "../src/core/model/schema";
 
 describe("map scene model and catalog", () => {
@@ -213,5 +213,21 @@ describe("map scene model and catalog", () => {
     expect(formatMapValue(12.3456)).toBe("12");
     expect(formatMapValue(12.3456, { decimals: 2, suffix: " 万吨" })).toBe("12.35 万吨");
     expect(formatMapValue(-0.04, { decimals: 1 })).toBe("-0.0");
+  });
+
+  it("filters layers by zoom range", () => {
+    const layers = [
+      { id: "a", type: "regionFill" as const, name: "a", visible: true, style: { color: "#336699", opacity: 1, size: 12 } },
+      { id: "b", type: "geoScatter" as const, name: "b", visible: true, style: { color: "#ffcc66", opacity: 1, size: 12 }, minZoom: 3, maxZoom: 6 },
+    ];
+    expect(filterLayersForZoom(layers, 1).map((l) => l.id)).toEqual(["a"]);
+    expect(filterLayersForZoom(layers, 4).map((l) => l.id)).toEqual(["a", "b"]);
+    expect(filterLayersForZoom(layers, 7).map((l) => l.id)).toEqual(["a"]);
+  });
+
+  it("normalizes the drill toggle with an enabled default", () => {
+    expect(normalizeMapSceneProps({ drill: { enabled: false } }).drill).toEqual({ enabled: false });
+    expect(normalizeMapSceneProps({ drill: { enabled: "yes" } }).drill).toEqual({ enabled: true });
+    expect(normalizeMapSceneProps(null).drill).toBeUndefined();
   });
 });

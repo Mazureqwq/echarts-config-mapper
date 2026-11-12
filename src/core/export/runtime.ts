@@ -578,6 +578,8 @@ export const RUNTIME_CODE = String.raw`
           stroke: typeof style.label.stroke === "string" && /^#[0-9a-fA-F]{6}$/.test(style.label.stroke) ? style.label.stroke : ""
         } : null,
         animated: style.animated === true,
+        minZoom: typeof entry.minZoom === "number" && isFinite(entry.minZoom) ? entry.minZoom : null,
+        maxZoom: typeof entry.maxZoom === "number" && isFinite(entry.maxZoom) ? entry.maxZoom : null,
         colorMode: style.colorMode === "gradient" || style.colorMode === "segments" ? style.colorMode : "",
         colors: style.colors && typeof style.colors === "object" ? {
           min: safeWidgetColor(style.colors.min, "#102b3d"),
@@ -615,7 +617,7 @@ export const RUNTIME_CODE = String.raw`
     badge.style.padding = "5px 8px"; badge.style.border = "1px solid #54bad744"; badge.style.borderRadius = "4px"; badge.style.background = "#061622c9"; badge.style.color = "#b9e9f5"; badge.style.fontSize = "11px";
     rootEl.appendChild(badge);
     var errors = []; var series = []; var visualMaps = [];
-    var emptyColor = ""; var legendSource = null;
+    var emptyColor = ""; var legendSource = null; var legendElRef = null;
     var containerFields = item.dataBinding && item.dataBinding.fields ? item.dataBinding.fields : {};
     function field(source, key) { return typeof source[key] === "string" && source[key].trim() && safeKey(source[key].trim()) ? source[key].trim() : ""; }
     function coordinate(row, lonField, latField) {
@@ -717,8 +719,29 @@ export const RUNTIME_CODE = String.raw`
     }
     var option = { backgroundColor: presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: tooltipCfg, geo: geoLayers, series: series };
     if (visualMaps.length) option.visualMap = visualMaps;
+    var renderedLayerIds = layers.filter(function (layer) { return layer.visible; }).map(function (layer) { return layer.id; });
+    var seriesSnapshot = series.map(function (entry) { return entry.data; });
+    var fillLayerId = "";
+    for (var fl = 0; fl < layers.length; fl++) { if (layers[fl].type === "regionFill" && layers[fl].visible) { fillLayerId = layers[fl].id; break; } }
+    function cfLayerById(id) { for (var i = 0; i < layers.length; i++) { if (layers[i].id === id) return layers[i]; } return null; }
+    function cfLayerVisibleAt(layer, zoom) {
+      if (!layer) return true;
+      if (layer.minZoom !== null && layer.minZoom !== undefined && zoom < layer.minZoom) return false;
+      if (layer.maxZoom !== null && layer.maxZoom !== undefined && zoom > layer.maxZoom) return false;
+      return true;
+    }
+    function cfApplyZoomVisibility(zoom) {
+      var changed = false;
+      for (var i = 0; i < series.length; i++) {
+        var visible = cfLayerVisibleAt(cfLayerById(renderedLayerIds[i]), zoom);
+        var next = visible ? seriesSnapshot[i] : [];
+        if (series[i].data !== next) { series[i].data = next; changed = true; }
+      }
+      return changed;
+    }
     if (props.legend && props.legend.show && legendSource) {
       var legendEl = doc.createElement("div");
+      legendElRef = legendEl;
       legendEl.className = "cf-map-legend";
       var legendPos = props.legend.position === "bottom-right" || props.legend.position === "bottom-left" ? props.legend.position : "top-right";
       legendEl.style.position = "absolute"; legendEl.style.zIndex = "3";
@@ -761,7 +784,7 @@ export const RUNTIME_CODE = String.raw`
       rootEl.appendChild(legendEl);
     }
     if (window.echarts) {
-      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (presentation === "tilted" && typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var currentGeo = chart.getOption().geo; if (!Array.isArray(currentGeo) || currentGeo.length < 2) return; var topIndex = currentGeo.length - 1; var topGeo = currentGeo[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = currentGeo.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); }); charts.push(chart); }
+      try { var chart = window.echarts.init(canvas, null, { renderer: "canvas" }); chart.setOption(option, true); if (typeof chart.on === "function" && typeof chart.getOption === "function") chart.on("georoam", function () { var geoOption = chart.getOption().geo; var geoList = Array.isArray(geoOption) ? geoOption : (geoOption ? [geoOption] : []); var zoomNow = null; if (geoList.length) { var lastGeo = geoList[geoList.length - 1]; if (lastGeo && typeof lastGeo.zoom === "number") zoomNow = lastGeo.zoom; } if (zoomNow !== null) { if (cfApplyZoomVisibility(zoomNow)) { chart.setOption({ series: series }, { notMerge: false, lazyUpdate: true, silent: true }); } if (legendElRef) { legendElRef.style.display = cfLayerVisibleAt(cfLayerById(fillLayerId), zoomNow) ? "" : "none"; } } if (presentation === "tilted" && geoList.length >= 2) { var topIndex = geoList.length - 1; var topGeo = geoList[topIndex]; if (!topGeo || !Array.isArray(topGeo.center) || typeof topGeo.zoom !== "number") return; var center = topGeo.center.slice(); var zoom = topGeo.zoom; var syncedGeo = geoList.map(function (geoLayer, index) { return Object.assign({}, geoLayer, { center: center.slice(), zoom: zoom, roam: index === topIndex ? geoLayer.roam : false }); }); chart.setOption({ geo: syncedGeo }, { notMerge: false, lazyUpdate: true, silent: true }); } }); charts.push(chart); }
       catch (e) { errors.push("地图渲染失败"); }
     } else errors.push("离线图表运行时不可用");
     if (errors.length) {
