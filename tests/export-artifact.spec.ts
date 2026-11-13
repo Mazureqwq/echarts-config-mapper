@@ -176,3 +176,32 @@ describe("export/artifact 目录包", () => {
     expect(readme).toContain("CSP");
   });
 });
+
+describe("export/artifact maplibre 注入", () => {
+  it("内联模式把 maplibre 源码注入 index.html", async () => {
+    const out = await buildArtifact({
+      payload: payloadWith("大屏"),
+      echartsCode: ECHARTS_STUB,
+      maplibreCode: "/* maplibre stub */",
+      runtimeCode: RUNTIME_CODE,
+      mode: "inline",
+    });
+    const html = out.files.find((f) => f.path === "index.html")!.content;
+    expect(html).toContain("/* maplibre stub */");
+  });
+
+  it("folder 模式落盘 assets/maplibre-gl.js", async () => {
+    const out = await buildArtifact({
+      payload: payloadWith("大屏"),
+      echartsCode: ECHARTS_STUB,
+      maplibreCode: "/* maplibre stub */",
+      runtimeCode: RUNTIME_CODE,
+      mode: "folder",
+    });
+    const lib = out.files.find((f) => f.path === "assets/maplibre-gl.mjs");
+    expect(lib?.content).toContain("maplibre stub");
+    const html = out.files.find((f) => f.path === "index.html")!.content;
+    expect(html).toContain("assets/maplibre-gl.mjs");
+  });
+});
+

@@ -1,4 +1,5 @@
 import echartsUrl from "echarts/dist/echarts.min.js?url";
+import maplibreUrl from "maplibre-gl/dist/maplibre-gl.mjs?url";
 import chinaGeo from "@/assets/geo/china.json";
 import { RUNTIME_CODE } from "./runtime";
 import type { PackagePayload } from "./model";
@@ -15,6 +16,17 @@ export async function loadEchartsSource(): Promise<string> {
   if (!res.ok) throw new Error(`加载 ECharts 运行时失败（HTTP ${res.status}）`);
   echartsCache = await res.text();
   return echartsCache;
+}
+
+let maplibreCache: string | null = null;
+
+/** 取 MapLibre GL JS UMD 源码（机制同 loadEchartsSource：?url 资源按需 fetch）。 */
+export async function loadMaplibreSource(): Promise<string> {
+  if (maplibreCache) return maplibreCache;
+  const res = await fetch(maplibreUrl);
+  if (!res.ok) throw new Error(`加载 MapLibre 运行时失败（HTTP ${res.status}）`);
+  maplibreCache = await res.text();
+  return maplibreCache;
 }
 
 export function runtimeSource(): string {

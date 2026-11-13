@@ -1,6 +1,6 @@
 import { buildPackagePayload } from "./snapshot";
 import { buildArtifact } from "./artifact";
-import { attachGeo, loadEchartsSource, runtimeSource } from "./assets";
+import { attachGeo, loadEchartsSource, loadMaplibreSource, runtimeSource } from "./assets";
 import { createZip, filesToEntries } from "./zip";
 import type { ArtifactMode, ExportOptions } from "./model";
 import type { Workspace } from "@/core/model/types";
@@ -42,6 +42,7 @@ export async function exportScreenPackage(params: ExportPackageParams): Promise<
   const artifact = await buildArtifact({
     payload,
     echartsCode: await loadEchartsSource(),
+    maplibreCode: await loadMaplibreSource(),
     runtimeCode: runtimeSource(),
     mode: params.mode,
   });

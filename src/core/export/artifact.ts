@@ -17,6 +17,8 @@ export interface ArtifactInput {
   payload: PackagePayload;
   /** echarts UMD 源码（内联或落盘为 assets/echarts.min.js） */
   echartsCode: string;
+  /** maplibre-gl UMD 源码（可选；非空时内联或落盘为 assets/maplibre-gl.js） */
+  maplibreCode?: string;
   /** 产物运行时源码 */
   runtimeCode: string;
   mode: ArtifactMode;
@@ -180,10 +182,13 @@ interface HtmlInput {
   cspScriptSrc: string;
   payloadJson: string;
   echarts: string;
+  maplibre?: string;
   runtime: string;
   /** folder 模式下的资源路径与完整性摘要 */
   echartsSrc?: string;
   echartsIntegrity?: string;
+  maplibreSrc?: string;
+  maplibreIntegrity?: string;
   runtimeSrc?: string;
   runtimeIntegrity?: string;
   manifestJson?: string;
@@ -192,12 +197,18 @@ interface HtmlInput {
 function buildIndexHtml(input: HtmlInput): string {
   const title = escapeHtml(input.payload.title || "大屏");
   const inline = input.mode === "inline";
+  // maplibre v6 仅提供 ESM：内联用 type="module"（顺序：maplibre → runtime 模块；echarts 维持经典脚本先执行）
+  const safeMaplibre = input.maplibre ? input.maplibre.replace(/<\/script/gi, "<\\/script") : "";
   const scriptTags = inline
-    ? `<script>${input.echarts}</script>\n<script>${input.runtime}</script>`
+    ? (input.maplibre
+        ? [`<script type="module">${safeMaplibre}</script>`, `<script>${input.echarts}</script>`, `<script type="module">${input.runtime}</script>`]
+        : [`<script>${input.echarts}</script>`, `<script>${input.runtime}</script>`]
+      ).join("\n")
     : [
+        input.maplibreSrc ? `<script src="${input.maplibreSrc}" type="module" integrity="${input.maplibreIntegrity}" defer></script>` : "",
         `<script src="${input.echartsSrc}" integrity="${input.echartsIntegrity}" defer></script>`,
         `<script src="${input.runtimeSrc}" integrity="${input.runtimeIntegrity}" defer></script>`,
-      ].join("\n");
+      ].filter(Boolean).join("\n");
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -223,6 +234,12 @@ ${scriptTags}
 `;
 }
 
+const MAPLIBRE_NOTICE = `MapLibre GL JS (BSD-3-Clause)
+Copyright (c) MapLibre contributors.
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: (1) Redistributions of source code must retain the above copyright notice; (2) Redistributions in binary form must reproduce the above copyright notice; (3) Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES ARE DISCLAIMED.
+Full license text: https://github.com/maplibre/maplibre-gl-js/blob/main/LICENSE`;
+
 /**
  * 生成产物文件集与 manifest。
  * 纯函数 + 可注入摘要算法 → 全部逻辑都能在单测里跑，不需要真浏览器。
@@ -236,23 +253,27 @@ export async function buildArtifact(input: ArtifactInput): Promise<ArtifactOutpu
   let indexHtml: string;
 
   if (input.mode === "inline") {
-    const [echartsH, runtimeH] = await Promise.all([
+    const [echartsH, runtimeH, maplibreH] = await Promise.all([
       cspHash(input.echartsCode, digest),
       cspHash(input.runtimeCode, digest),
+      input.maplibreCode ? cspHash(input.maplibreCode, digest) : Promise.resolve(null),
     ]);
+    const inlineHashes = [maplibreH, echartsH, runtimeH].filter(Boolean).map((h) => `'${h}'`).join(" ");
     indexHtml = buildIndexHtml({
       payload: input.payload,
       mode: "inline",
-      cspScriptSrc: cspPolicy(`'${echartsH}' '${runtimeH}'`),
+      cspScriptSrc: cspPolicy(inlineHashes),
       payloadJson,
       echarts: input.echartsCode,
+      maplibre: input.maplibreCode,
       runtime: input.runtimeCode,
     });
     files.push({ path: "index.html", content: indexHtml });
   } else {
-    const [echartsInt, runtimeInt] = await Promise.all([
+    const [echartsInt, runtimeInt, maplibreInt] = await Promise.all([
       sriHash(input.echartsCode, digest),
       sriHash(input.runtimeCode, digest),
+      input.maplibreCode ? sriHash(input.maplibreCode, digest) : Promise.resolve(null),
     ]);
     indexHtml = buildIndexHtml({
       payload: input.payload,
@@ -263,15 +284,19 @@ export async function buildArtifact(input: ArtifactInput): Promise<ArtifactOutpu
       runtime: input.runtimeCode,
       echartsSrc: "assets/echarts.min.js",
       echartsIntegrity: echartsInt,
+      maplibreSrc: input.maplibreCode ? "assets/maplibre-gl.mjs" : undefined,
+      maplibreIntegrity: maplibreInt ?? undefined,
       runtimeSrc: "assets/app.js",
       runtimeIntegrity: runtimeInt,
     });
     files.push({ path: "index.html", content: indexHtml });
+    if (input.maplibreCode) files.push({ path: "assets/maplibre-gl.mjs", content: input.maplibreCode });
     files.push({ path: "assets/echarts.min.js", content: input.echartsCode });
     files.push({ path: "assets/app.js", content: input.runtimeCode });
   }
 
   files.push({ path: "NOTICE-ECHARTS.txt", content: ECHARTS_NOTICE });
+  if (input.maplibreCode) files.push({ path: "NOTICE-MAPLIBRE.txt", content: MAPLIBRE_NOTICE });
   files.push({ path: "LICENSE-CHARTFORGE.txt", content: CHARTFORGE_NOTICE });
   files.push({ path: "README.md", content: readmeText(input.payload, input.mode) });
 
