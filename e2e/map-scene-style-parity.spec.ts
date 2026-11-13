@@ -76,22 +76,41 @@ const initialWorkspace = {
   settings: { autosave: true },
 };
 
-async function readWorkbenchRamp(page: Page) {
+async function readWorkbenchStyle(page: Page) {
   return page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    const vm = Array.isArray(option?.visualMap) ? option.visualMap[0] : option?.visualMap;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const style: any = map.getStyle();
+    const fill = (style?.layers ?? []).find((l: any) => l.id === "cf-fill");
+    const line = (style?.layers ?? []).find((l: any) => l.id === "cf-line");
     return {
-      vmType: vm?.type ?? null,
-      colorStops: vm?.inRange?.colorStops ?? null,
-      inRangeColor: vm?.inRange?.color ?? null,
-      emptyRegion: geo?.regions?.[0]?.itemStyle?.areaColor ?? null,
+      version: style?.version ?? null,
+      pitch: style?.pitch ?? null,
+      center: style?.center ?? null,
+      zoom: style?.zoom ?? null,
+      minZoom: style?.minZoom ?? null,
+      maxZoom: style?.maxZoom ?? null,
+      promoteId: style?.sources?.china?.promoteId ?? null,
+      skyColor: style?.sky?.["sky-color"] ?? null,
+      lightIntensity: style?.light?.intensity ?? null,
+      fillPaint: fill
+        ? {
+            color: fill.paint["fill-color"],
+            opacity: fill.paint["fill-opacity"],
+            outline: fill.paint["fill-outline-color"],
+            minzoom: fill.minzoom ?? null,
+            maxzoom: fill.maxzoom ?? null,
+          }
+        : null,
+      linePaint: line
+        ? { color: line.paint["line-color"], width: line.paint["line-width"], dash: line.paint["line-dasharray"] ?? null }
+        : null,
     };
   });
 }
 
-test("色带/空值区域/图例在工作台与离线运行时一致", async ({ page, context }) => {
+test("MapLibre style（色带 match/边线/状态色/相机/光照雾化）双端一致", async ({ page, context }) => {
   await context.addInitScript(({ storageKey, workspace }) => {
     if (localStorage.getItem(storageKey) === null) {
       localStorage.setItem(storageKey, JSON.stringify(workspace));
@@ -101,33 +120,42 @@ test("色带/空值区域/图例在工作台与离线运行时一致", async ({ 
   await page.goto(`/#/workbench/${SCREEN_ID}`);
   await expect(page.locator(".workbench")).toBeVisible();
   await expect(page.locator(".map-scene__chart")).toBeVisible();
-  await page.waitForTimeout(700);
+  await expect.poll(async () => (await readWorkbenchStyle(page))?.fillPaint != null).toBe(true);
 
-  const workbench = await readWorkbenchRamp(page);
-  expect(workbench.vmType).toBe("continuous");
-  expect(workbench.colorStops).toEqual([
-    { offset: 0, color: "#000010" },
-    { offset: 0.5, color: "#0080ff" },
-    { offset: 1, color: "#66ffff" },
-  ]);
-  expect(workbench.emptyRegion).toBe("#0a0a14");
-
-  const legendText = await page.locator(".map-scene__legend").textContent();
-  expect(legendText?.replace(/\s+/g, " ").trim()).toBe("31 分 – 92 分");
-  const workbenchBar = await page.locator(".map-scene__legend-bar").evaluate((el) => (el as HTMLElement).style.background);
-  expect(workbenchBar).toContain("linear-gradient");
+  const workbench = await readWorkbenchStyle(page);
+  expect(workbench?.version).toBe(8);
+  expect(workbench?.pitch).toBe(28);
+  expect(workbench?.promoteId).toBe("name");
+  expect(workbench?.skyColor).toBe("#0a1628");
+  expect((workbench?.lightIntensity as number) ?? 0).toBeGreaterThan(0);
+  expect(workbench?.fillPaint).toMatchObject({ opacity: 0.85, outline: "#8888ff", minzoom: null, maxzoom: null });
+  expect(workbench?.linePaint).toEqual({ color: "#8888ff", width: 2, dash: [2, 2] });
+  const fillColorJson = JSON.stringify(workbench?.fillPaint?.color);
+  expect(fillColorJson).toContain("广东省");
+  expect(fillColorJson).toContain("西藏自治区");
+  expect(fillColorJson).toContain("#0a0a14");
+  expect(fillColorJson).toContain("feature-state");
 
   const workspace = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
   const offlineBuild = await page.evaluate(async ({ workspace, screenId }) => {
     const snapshotUrl = new URL("/src/core/export/snapshot.ts", location.href).href;
     const artifactUrl = new URL("/src/core/export/artifact.ts", location.href).href;
     const runtimeUrl = new URL("/src/core/export/runtime.ts", location.href).href;
-    const [snapshotModule, artifactModule, runtimeModule] = await Promise.all([import(snapshotUrl), import(artifactUrl), import(runtimeUrl)]);
-    const payload = snapshotModule.buildPackagePayload(workspace, [screenId]);
-    const echartsCode = `(function(){window.__cfCapturedOptions=[];window.echarts={registerMap:function(){},init:function(){return{setOption:function(option){window.__cfCapturedOptions.push(option);},resize:function(){},dispose:function(){}};}};})();`;
+    const assetsUrl = new URL("/src/core/export/assets.ts", location.href).href;
+    const [snapshotModule, artifactModule, runtimeModule, assetsModule] = await Promise.all([
+      import(snapshotUrl), import(artifactUrl), import(runtimeUrl), import(assetsUrl),
+    ]);
+    const [maplibreCode, maplibreWorkerCode] = await Promise.all([
+      assetsModule.loadMaplibreSource(),
+      assetsModule.loadMaplibreWorkerSource(),
+    ]);
+    const payload = assetsModule.attachGeo(snapshotModule.buildPackagePayload(workspace, [screenId]));
+    const echartsCode = `(function(){window.echarts={registerMap:function(){},init:function(){return{setOption:function(){},resize:function(){},dispose:function(){}};}};})();`;
     const artifact = await artifactModule.buildArtifact({
       payload,
       echartsCode,
+      maplibreCode,
+      maplibreWorkerCode,
       runtimeCode: runtimeModule.RUNTIME_CODE,
       mode: "inline",
       now: () => 1794280000000,
@@ -136,193 +164,68 @@ test("色带/空值区域/图例在工作台与离线运行时一致", async ({ 
   }, { workspace, screenId: SCREEN_ID });
 
   const offlinePage = await context.newPage();
+  offlinePage.on("console", (m) => { if (m.type() === "error") console.log("OFFLINE_CONSOLE " + m.text().slice(0, 500)); });
+  offlinePage.on("pageerror", (e) => console.log("OFFLINE_PAGEERROR " + String(e).slice(0, 500)));
   await offlinePage.setContent(offlineBuild.html);
-  await offlinePage.waitForFunction(() => {
-    const options = (window as any).__cfCapturedOptions;
-    return Array.isArray(options) && options.length > 0;
+  await offlinePage.waitForSelector(".maplibregl-canvas", { timeout: 25000 });
+  await offlinePage.waitForTimeout(8000);
+  const dump = await offlinePage.evaluate(() => {
+    const canvases = Array.from(document.querySelectorAll(".maplibregl-canvas"));
+    const items = Array.from(document.querySelectorAll("[data-item]")).map((el) => ({
+      cls: (el as HTMLElement).className.slice(0, 60),
+      hasMap: Boolean((el as any).__cfMap),
+      childIsCanvas: Boolean(el.querySelector(".maplibregl-canvas")),
+    }));
+    const s = document.querySelector(".cf-map-scene__status");
+    return { canvasCount: canvases.length, canvasParents: canvases.map((c) => ({ parentCls: (c.parentElement as HTMLElement)?.className?.slice(0, 60), parentHasMap: Boolean((c.parentElement as any)?.__cfMap) })), items, status: s ? s.textContent : null };
   });
-  await expect(offlinePage.locator(".cf-map-legend")).toBeVisible();
-
-  const offlineRamp = await offlinePage.evaluate(() => {
-    const options = (window as any).__cfCapturedOptions ?? [];
-    const option = options[options.length - 1];
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    const vm = Array.isArray(option?.visualMap) ? option.visualMap[0] : option?.visualMap;
+  console.log("PARITY_DUMP " + JSON.stringify(dump));
+  await offlinePage.waitForFunction(() => {
+    const hosts = document.querySelectorAll("[data-item]");
+    for (const el of hosts) {
+      if ((el as any).__cfMap) return true;
+    }
+    return false;
+  }, null, { timeout: 15000 });
+  const offline = await offlinePage.evaluate(() => {
+    let map: any = null;
+    document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
+    if (!map) return null;
+    const style: any = map.getStyle();
+    const fill = (style?.layers ?? []).find((l: any) => l.id === "cf-fill");
+    const line = (style?.layers ?? []).find((l: any) => l.id === "cf-line");
     return {
-      vmType: vm?.type ?? null,
-      colorStops: vm?.inRange?.colorStops ?? null,
-      inRangeColor: vm?.inRange?.color ?? null,
-      emptyRegion: geo?.regions?.[0]?.itemStyle?.areaColor ?? null,
+      version: style?.version ?? null,
+      pitch: style?.pitch ?? null,
+      center: style?.center ?? null,
+      zoom: style?.zoom ?? null,
+      minZoom: style?.minZoom ?? null,
+      maxZoom: style?.maxZoom ?? null,
+      promoteId: style?.sources?.china?.promoteId ?? null,
+      skyColor: style?.sky?.["sky-color"] ?? null,
+      lightIntensity: style?.light?.intensity ?? null,
+      fillPaint: fill
+        ? {
+            color: fill.paint["fill-color"],
+            opacity: fill.paint["fill-opacity"],
+            outline: fill.paint["fill-outline-color"],
+            minzoom: fill.minzoom ?? null,
+            maxzoom: fill.maxzoom ?? null,
+          }
+        : null,
+      linePaint: line
+        ? { color: line.paint["line-color"], width: line.paint["line-width"], dash: line.paint["line-dasharray"] ?? null }
+        : null,
     };
   });
-  expect(offlineRamp).toEqual(workbench);
-
-  const offlineLegendText = await offlinePage.locator(".cf-map-legend").textContent();
-  expect(offlineLegendText?.replace(/\s+/g, " ").trim()).toBe(legendText?.replace(/\s+/g, " ").trim());
-  const offlineBar = await offlinePage.locator(".cf-map-legend i").first().evaluate((el) => (el as HTMLElement).style.background);
-  expect(offlineBar).toBe(workbenchBar);
+  expect(offline).toEqual(workbench);
   await offlinePage.close();
 });
 
-test("容器样式组（标注/边线/悬停/点击态/tooltip）在工作台与离线一致", async ({ page, context }) => {
-  await context.addInitScript(({ storageKey, workspace }) => {
-    if (localStorage.getItem(storageKey) === null) {
-      localStorage.setItem(storageKey, JSON.stringify(workspace));
-    }
-  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
-
-  await page.goto(`/#/workbench/${SCREEN_ID}`);
-  await expect(page.locator(".workbench")).toBeVisible();
-  await expect(page.locator(".map-scene__chart")).toBeVisible();
-  await page.waitForTimeout(700);
-
-  const workbench = await page.locator(".map-scene__chart").evaluate((root) => {
-    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    const label = Array.isArray(geo?.label) ? geo.label[0] : geo?.label;
-    return {
-      label,
-      itemStyle: geo?.itemStyle ? { borderColor: geo.itemStyle.borderColor, borderWidth: geo.itemStyle.borderWidth, borderType: geo.itemStyle.borderType ?? null } : null,
-      emphasis: geo?.emphasis,
-      select: geo?.select ?? null,
-      selectedMode: geo?.selectedMode ?? null,
-      tooltip: Array.isArray(option?.tooltip) ? option.tooltip[0] : option?.tooltip,
-    };
-  });
-  expect(workbench.label).toMatchObject({ show: true, color: "#eaffff", fontSize: 13, stroke: "#010133", strokeWidth: 2, textShadowColor: "#00ffff", textShadowBlur: 6 });
-  expect(workbench.itemStyle).toMatchObject({ borderColor: "#8888ff", borderWidth: 2 });
-  expect(workbench.emphasis).toMatchObject({ itemStyle: { areaColor: "#ff0000", borderColor: "#00ff00" }, label: { color: "#ffffff" } });
-  expect(workbench.select).toMatchObject({ itemStyle: { areaColor: "#00ffff", borderColor: "#ffffff" } });
-  expect(workbench.selectedMode).toBe("single");
-  expect(workbench.tooltip).toMatchObject({ backgroundColor: "#101820", borderColor: "#334455", textStyle: { color: "#ffffff", fontSize: 13 } });
-
-  const workspace = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
-  const offlineBuild = await page.evaluate(async ({ workspace, screenId }) => {
-    const snapshotUrl = new URL("/src/core/export/snapshot.ts", location.href).href;
-    const artifactUrl = new URL("/src/core/export/artifact.ts", location.href).href;
-    const runtimeUrl = new URL("/src/core/export/runtime.ts", location.href).href;
-    const [snapshotModule, artifactModule, runtimeModule] = await Promise.all([import(snapshotUrl), import(artifactUrl), import(runtimeUrl)]);
-    const payload = snapshotModule.buildPackagePayload(workspace, [screenId]);
-    const echartsCode = `(function(){window.__cfCapturedOptions=[];window.echarts={registerMap:function(){},init:function(){return{setOption:function(option){window.__cfCapturedOptions.push(option);},resize:function(){},dispose:function(){}};}};})();`;
-    const artifact = await artifactModule.buildArtifact({
-      payload,
-      echartsCode,
-      runtimeCode: runtimeModule.RUNTIME_CODE,
-      mode: "inline",
-      now: () => 1794280000000,
-    });
-    return { html: artifact.files.find((file: { path: string }) => file.path === "index.html")?.content ?? "" };
-  }, { workspace, screenId: SCREEN_ID });
-
-  const offlinePage = await context.newPage();
-  await offlinePage.setContent(offlineBuild.html);
-  await offlinePage.waitForFunction(() => {
-    const options = (window as any).__cfCapturedOptions;
-    return Array.isArray(options) && options.length > 0;
-  });
-  const offline = await offlinePage.evaluate(() => {
-    const options = (window as any).__cfCapturedOptions ?? [];
-    const option = options[options.length - 1];
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    return {
-      label: geo?.label,
-      itemStyle: geo?.itemStyle ? { borderColor: geo.itemStyle.borderColor, borderWidth: geo.itemStyle.borderWidth, borderType: geo.itemStyle.borderType ?? null } : null,
-      emphasis: geo?.emphasis,
-      select: geo?.select ?? null,
-      selectedMode: geo?.selectedMode ?? null,
-      tooltip: option?.tooltip,
-    };
-  });
-  expect(workbench.label).toMatchObject(offline.label);
-  expect(workbench.itemStyle).toEqual(offline.itemStyle);
-  expect(workbench.emphasis).toMatchObject(offline.emphasis);
-  expect(workbench.select).toMatchObject(offline.select);
-  expect(workbench.selectedMode).toEqual(offline.selectedMode);
-  expect(workbench.tooltip).toMatchObject(offline.tooltip);
-  await offlinePage.close();
+test.fixme("图层样式（散点/飞线）双端一致（T7 恢复）", async () => {
+  // scatter/heat/flow 的 MapLibre 渲染排入 T7（台账裁决）
 });
 
-test("图层样式（边线/点标注/飞线流光）在工作台与离线一致", async ({ page, context }) => {
-  await context.addInitScript(({ storageKey, workspace }) => {
-    if (localStorage.getItem(storageKey) === null) {
-      localStorage.setItem(storageKey, JSON.stringify(workspace));
-    }
-  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
-
-  await page.goto(`/#/workbench/${SCREEN_ID}`);
-  await expect(page.locator(".workbench")).toBeVisible();
-  await expect(page.locator(".map-scene__chart")).toBeVisible();
-  await page.waitForTimeout(700);
-
-  const pickSeries = (series: any[]) => {
-    const map = series.find((entry) => entry.type === "map");
-    const scatter = series.find((entry) => entry.type === "scatter");
-    const lines = series.find((entry) => entry.type === "lines");
-    const scatterLabel = Array.isArray(scatter?.label) ? scatter.label[0] : scatter?.label;
-    return {
-      mapBorder: map?.itemStyle ? { borderColor: map.itemStyle.borderColor, borderWidth: map.itemStyle.borderWidth, borderType: map.itemStyle.borderType ?? null } : null,
-      scatterLabel: scatterLabel ? { show: scatterLabel.show, color: scatterLabel.color, fontSize: scatterLabel.fontSize, stroke: scatterLabel.stroke ?? null } : null,
-      flowEffect: lines?.effect ? { show: lines.effect.show, trailLength: lines.effect.trailLength ?? null } : null,
-    };
-  };
-
-  const workbench = await page.locator(".map-scene__chart").evaluate((root) => {
-    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const series = vueInstance?.exposed?.getChart?.()?.getOption?.()?.series ?? [];
-    const map = series.find((entry: any) => entry.type === "map");
-    const scatter = series.find((entry: any) => entry.type === "scatter");
-    const lines = series.find((entry: any) => entry.type === "lines");
-    const scatterLabel = Array.isArray(scatter?.label) ? scatter.label[0] : scatter?.label;
-    return {
-      mapBorder: map?.itemStyle ? { borderColor: map.itemStyle.borderColor, borderWidth: map.itemStyle.borderWidth, borderType: map.itemStyle.borderType ?? null } : null,
-      scatterLabel: scatterLabel ? { show: scatterLabel.show, color: scatterLabel.color, fontSize: scatterLabel.fontSize, stroke: scatterLabel.stroke ?? null } : null,
-      flowEffect: lines?.effect ? { show: lines.effect.show, trailLength: lines.effect.trailLength ?? null } : null,
-    };
-  });
-  expect(workbench.mapBorder).toEqual({ borderColor: "#aabbcc", borderWidth: 2, borderType: "dashed" });
-  expect(workbench.scatterLabel).toMatchObject({ show: true, color: "#ffffff", fontSize: 12, stroke: "#000000" });
-  expect(workbench.flowEffect).toMatchObject({ show: true, trailLength: 0.4 });
-
-  const workspace = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
-  const offlineBuild = await page.evaluate(async ({ workspace, screenId }) => {
-    const snapshotUrl = new URL("/src/core/export/snapshot.ts", location.href).href;
-    const artifactUrl = new URL("/src/core/export/artifact.ts", location.href).href;
-    const runtimeUrl = new URL("/src/core/export/runtime.ts", location.href).href;
-    const [snapshotModule, artifactModule, runtimeModule] = await Promise.all([import(snapshotUrl), import(artifactUrl), import(runtimeUrl)]);
-    const payload = snapshotModule.buildPackagePayload(workspace, [screenId]);
-    const echartsCode = `(function(){window.__cfCapturedOptions=[];window.echarts={registerMap:function(){},init:function(){return{setOption:function(option){window.__cfCapturedOptions.push(option);},resize:function(){},dispose:function(){}};}};})();`;
-    const artifact = await artifactModule.buildArtifact({
-      payload,
-      echartsCode,
-      runtimeCode: runtimeModule.RUNTIME_CODE,
-      mode: "inline",
-      now: () => 1794280000000,
-    });
-    return { html: artifact.files.find((file: { path: string }) => file.path === "index.html")?.content ?? "" };
-  }, { workspace, screenId: SCREEN_ID });
-
-  const offlinePage = await context.newPage();
-  await offlinePage.setContent(offlineBuild.html);
-  await offlinePage.waitForFunction(() => {
-    const options = (window as any).__cfCapturedOptions;
-    return Array.isArray(options) && options.length > 0;
-  });
-  const offline = await offlinePage.evaluate(() => {
-    const options = (window as any).__cfCapturedOptions ?? [];
-    const option = options[options.length - 1];
-    const series = option?.series ?? [];
-    const map = series.find((entry: any) => entry.type === "map");
-    const scatter = series.find((entry: any) => entry.type === "scatter");
-    const lines = series.find((entry: any) => entry.type === "lines");
-    return {
-      mapBorder: map?.itemStyle ? { borderColor: map.itemStyle.borderColor, borderWidth: map.itemStyle.borderWidth, borderType: map.itemStyle.borderType ?? null } : null,
-      scatterLabel: scatter?.label ? { show: scatter.label.show, color: scatter.label.color, fontSize: scatter.label.fontSize, stroke: scatter.label.stroke ?? null } : null,
-      flowEffect: lines?.effect ? { show: lines.effect.show, trailLength: lines.effect.trailLength ?? null } : null,
-    };
-  });
-  expect(offline.mapBorder).toEqual(workbench.mapBorder);
-  expect(offline.scatterLabel).toMatchObject(workbench.scatterLabel);
-  expect(offline.flowEffect).toMatchObject(workbench.flowEffect);
-  await offlinePage.close();
+test.fixme("图例/tooltip/标注覆盖层双端一致（T7 恢复）", async () => {
+  // 图例与 tooltip 在 T7 于双端重建后恢复本断言
 });

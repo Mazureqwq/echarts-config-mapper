@@ -1,5 +1,4 @@
 import echartsUrl from "echarts/dist/echarts.min.js?url";
-import maplibreUrl from "maplibre-gl/dist/maplibre-gl.mjs?url";
 import chinaGeo from "@/assets/geo/china.json";
 import { RUNTIME_CODE } from "./runtime";
 import type { PackagePayload } from "./model";
@@ -20,13 +19,22 @@ export async function loadEchartsSource(): Promise<string> {
 
 let maplibreCache: string | null = null;
 
-/** 取 MapLibre GL JS UMD 源码（机制同 loadEchartsSource：?url 资源按需 fetch）。 */
+/** 取 MapLibre GL JS 源码：动态 ?raw 懒加载（dev/prod 均为磁盘原文，绕开 dev 对 .mjs 的转换）。 */
 export async function loadMaplibreSource(): Promise<string> {
   if (maplibreCache) return maplibreCache;
-  const res = await fetch(maplibreUrl);
-  if (!res.ok) throw new Error(`加载 MapLibre 运行时失败（HTTP ${res.status}）`);
-  maplibreCache = await res.text();
+  const mod = await import("maplibre-gl/dist/maplibre-gl.mjs?raw");
+  maplibreCache = mod.default as string;
   return maplibreCache;
+}
+
+let maplibreWorkerCache: string | null = null;
+
+/** 取 MapLibre worker 源码（动态 ?raw 懒加载；离线产物以 JSON 数据内联，运行时转 Blob URL）。 */
+export async function loadMaplibreWorkerSource(): Promise<string> {
+  if (maplibreWorkerCache) return maplibreWorkerCache;
+  const mod = await import("maplibre-gl/dist/maplibre-gl-worker.mjs?raw");
+  maplibreWorkerCache = mod.default as string;
+  return maplibreWorkerCache;
 }
 
 export function runtimeSource(): string {

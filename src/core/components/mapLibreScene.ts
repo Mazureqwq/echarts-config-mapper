@@ -28,6 +28,8 @@ export interface MapLibreSceneLabel {
 export interface MapLibreSceneResult {
   /** MapLibre style（v8）：camera/lights/fog/sources/layers 全量描述 */
   style: Record<string, unknown>;
+  /** 中国范围 bounds [[minLng,minLat],[maxLng,maxLat]]（默认视角 fitBounds 用；无 geo 时为 null） */
+  bounds: [[number, number], [number, number]] | null;
   /** 省全称 → 数值（区域事件 value 载荷与色带计算共用） */
   regionValues: Record<string, number>;
   /** 省名 + bbox 中心（HTML 标注覆盖层数据源） */
@@ -154,13 +156,35 @@ export function buildMapLibreScene(
   ];
 
   const labels: MapLibreSceneLabel[] = [];
-  const collection = geoJson as { features?: Array<{ properties?: { name?: string } }> } | undefined;
+  const collection = geoJson as { features?: Array<{ properties?: { name?: string }; geometry?: unknown }> } | undefined;
+  let minLng = Infinity;
+  let minLat = Infinity;
+  let maxLng = -Infinity;
+  let maxLat = -Infinity;
+  const collectCoords = (value: unknown): void => {
+    if (!Array.isArray(value)) return;
+    if (typeof value[0] === "number" && typeof value[1] === "number") {
+      minLng = Math.min(minLng, value[0]);
+      maxLng = Math.max(maxLng, value[0]);
+      minLat = Math.min(minLat, value[1]);
+      maxLat = Math.max(maxLat, value[1]);
+      return;
+    }
+    value.forEach(collectCoords);
+  };
   for (const feature of collection?.features ?? []) {
     const name = feature.properties?.name;
+    const geometry = feature.geometry as { type?: string; coordinates?: unknown; geometries?: Array<{ coordinates?: unknown }> } | undefined;
+    if (geometry) {
+      if (geometry.type === "GeometryCollection") (geometry.geometries ?? []).forEach((entry) => collectCoords(entry.coordinates));
+      else collectCoords(geometry.coordinates);
+    }
     if (!name) continue;
     const centroid = computeRegionCenter(geoJson, name);
     if (centroid) labels.push({ name, centroid });
   }
+  const bounds: [[number, number], [number, number]] | null =
+    Number.isFinite(minLng) && Number.isFinite(minLat) ? [[minLng, minLat], [maxLng, maxLat]] : null;
 
   const style: Record<string, unknown> = {
     version: 8,
@@ -180,6 +204,7 @@ export function buildMapLibreScene(
 
   return {
     style,
+    bounds,
     regionValues,
     labels,
     flags: {

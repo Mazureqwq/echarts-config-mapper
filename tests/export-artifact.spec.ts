@@ -198,10 +198,34 @@ describe("export/artifact maplibre 注入", () => {
       runtimeCode: RUNTIME_CODE,
       mode: "folder",
     });
-    const lib = out.files.find((f) => f.path === "assets/maplibre-gl.mjs");
-    expect(lib?.content).toContain("maplibre stub");
     const html = out.files.find((f) => f.path === "index.html")!.content;
-    expect(html).toContain("assets/maplibre-gl.mjs");
+    expect(html).toContain('id="cf-maplibre"');
+    expect(html).toContain("maplibre stub");
+    expect(out.files.some((f) => f.path === "assets/maplibre-gl.mjs")).toBe(false);
+  });
+
+  it("worker 源以 JSON 数据标签内联（cf-maplibre-worker）", async () => {
+    const out = await buildArtifact({
+      payload: payloadWith("大屏"),
+      echartsCode: ECHARTS_STUB,
+      maplibreCode: "/* maplibre stub */",
+      maplibreWorkerCode: "/* worker stub */",
+      runtimeCode: RUNTIME_CODE,
+      mode: "inline",
+    });
+    const html = out.files.find((f) => f.path === "index.html")!.content;
+    expect(html).toContain('id="cf-maplibre-worker"');
+    expect(html).toContain("worker stub");
+    const folder = await buildArtifact({
+      payload: payloadWith("大屏"),
+      echartsCode: ECHARTS_STUB,
+      maplibreCode: "/* maplibre stub */",
+      maplibreWorkerCode: "/* worker stub */",
+      runtimeCode: RUNTIME_CODE,
+      mode: "folder",
+    });
+    const folderHtml = folder.files.find((f) => f.path === "index.html")!.content;
+    expect(folderHtml).toContain('id="cf-maplibre-worker"');
   });
 });
 

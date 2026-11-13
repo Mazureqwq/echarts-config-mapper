@@ -17,8 +17,10 @@ export interface ArtifactInput {
   payload: PackagePayload;
   /** echarts UMD 源码（内联或落盘为 assets/echarts.min.js） */
   echartsCode: string;
-  /** maplibre-gl UMD 源码（可选；非空时内联或落盘为 assets/maplibre-gl.js） */
+  /** maplibre-gl ESM 源码（可选；非空时以 module 脚本注入） */
   maplibreCode?: string;
+  /** maplibre worker 源码（可选；非空时以 JSON 数据标签注入，运行时转 Blob URL） */
+  maplibreWorkerCode?: string;
   /** 产物运行时源码 */
   runtimeCode: string;
   mode: ArtifactMode;
@@ -164,7 +166,7 @@ function readmeText(payload: PackagePayload, mode: ArtifactMode): string {
   return lines.join("\n") + "\n";
 }
 
-function cspPolicy(scriptSrc: string): string {
+function cspPolicy(scriptSrc: string, connectSrc = "'none'"): string {
   return [
     "default-src 'none'",
     "base-uri 'none'",
@@ -172,7 +174,7 @@ function cspPolicy(scriptSrc: string): string {
     "img-src data:",
     "style-src 'unsafe-inline'",
     `script-src ${scriptSrc}`,
-    "connect-src 'none'",
+    `connect-src ${connectSrc}`,
   ].join("; ");
 }
 
@@ -182,7 +184,8 @@ interface HtmlInput {
   cspScriptSrc: string;
   payloadJson: string;
   echarts: string;
-  maplibre?: string;
+  maplibreJson?: string;
+  maplibreWorkerJson?: string;
   runtime: string;
   /** folder 模式下的资源路径与完整性摘要 */
   echartsSrc?: string;
@@ -197,18 +200,12 @@ interface HtmlInput {
 function buildIndexHtml(input: HtmlInput): string {
   const title = escapeHtml(input.payload.title || "大屏");
   const inline = input.mode === "inline";
-  // maplibre v6 仅提供 ESM：内联用 type="module"（顺序：maplibre → runtime 模块；echarts 维持经典脚本先执行）
-  const safeMaplibre = input.maplibre ? input.maplibre.replace(/<\/script/gi, "<\\/script") : "";
   const scriptTags = inline
-    ? (input.maplibre
-        ? [`<script type="module">${safeMaplibre}</script>`, `<script>${input.echarts}</script>`, `<script type="module">${input.runtime}</script>`]
-        : [`<script>${input.echarts}</script>`, `<script>${input.runtime}</script>`]
-      ).join("\n")
+    ? `<script>${input.echarts}</script>\n<script>${input.runtime}</script>`
     : [
-        input.maplibreSrc ? `<script src="${input.maplibreSrc}" type="module" integrity="${input.maplibreIntegrity}" defer></script>` : "",
         `<script src="${input.echartsSrc}" integrity="${input.echartsIntegrity}" defer></script>`,
         `<script src="${input.runtimeSrc}" integrity="${input.runtimeIntegrity}" defer></script>`,
-      ].filter(Boolean).join("\n");
+      ].join("\n");
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -226,6 +223,8 @@ function buildIndexHtml(input: HtmlInput): string {
 <div id="cf-root" role="application" aria-label="${title}"></div>
 <noscript><div class="cf-noscript">这个页面需要启用 JavaScript 才能显示大屏内容。</div></noscript>
 <script type="application/json" id="cf-payload">${input.payloadJson}</script>
+${input.maplibreJson ? `<script type="application/json" id="cf-maplibre">${input.maplibreJson}</script>` : ""}
+${input.maplibreWorkerJson ? `<script type="application/json" id="cf-maplibre-worker">${input.maplibreWorkerJson}</script>` : ""}
 ${input.manifestJson ? `<script type="application/json" id="cf-manifest">${input.manifestJson}</script>` : ""}
 <!-- 第三方许可证：ECharts 依 Apache-2.0 分发，版权头保留在下方脚本与 NOTICE-ECHARTS.txt 中 -->
 ${scriptTags}
@@ -253,44 +252,41 @@ export async function buildArtifact(input: ArtifactInput): Promise<ArtifactOutpu
   let indexHtml: string;
 
   if (input.mode === "inline") {
-    const [echartsH, runtimeH, maplibreH] = await Promise.all([
+    const [echartsH, runtimeH] = await Promise.all([
       cspHash(input.echartsCode, digest),
       cspHash(input.runtimeCode, digest),
-      input.maplibreCode ? cspHash(input.maplibreCode, digest) : Promise.resolve(null),
     ]);
-    const inlineHashes = [maplibreH, echartsH, runtimeH].filter(Boolean).map((h) => `'${h}'`).join(" ");
     indexHtml = buildIndexHtml({
       payload: input.payload,
       mode: "inline",
-      cspScriptSrc: cspPolicy(inlineHashes),
+      cspScriptSrc: cspPolicy([`'${echartsH}'`, `'${runtimeH}'`, input.maplibreCode ? "blob:" : ""].filter(Boolean).join(" "), input.maplibreCode ? "blob:" : "'none'"),
       payloadJson,
       echarts: input.echartsCode,
-      maplibre: input.maplibreCode,
+      maplibreJson: input.maplibreCode ? escapeJsonForScript(JSON.stringify(input.maplibreCode)) : undefined,
+      maplibreWorkerJson: input.maplibreWorkerCode ? escapeJsonForScript(JSON.stringify(input.maplibreWorkerCode)) : undefined,
       runtime: input.runtimeCode,
     });
     files.push({ path: "index.html", content: indexHtml });
   } else {
-    const [echartsInt, runtimeInt, maplibreInt] = await Promise.all([
+    const [echartsInt, runtimeInt] = await Promise.all([
       sriHash(input.echartsCode, digest),
       sriHash(input.runtimeCode, digest),
-      input.maplibreCode ? sriHash(input.maplibreCode, digest) : Promise.resolve(null),
     ]);
     indexHtml = buildIndexHtml({
       payload: input.payload,
       mode: "folder",
-      cspScriptSrc: cspPolicy("'self'"),
+      cspScriptSrc: cspPolicy(input.maplibreCode ? "'self' blob:" : "'self'", input.maplibreCode ? "blob:" : "'none'"),
       payloadJson,
       echarts: input.echartsCode,
       runtime: input.runtimeCode,
+      maplibreJson: input.maplibreCode ? escapeJsonForScript(JSON.stringify(input.maplibreCode)) : undefined,
+      maplibreWorkerJson: input.maplibreWorkerCode ? escapeJsonForScript(JSON.stringify(input.maplibreWorkerCode)) : undefined,
       echartsSrc: "assets/echarts.min.js",
       echartsIntegrity: echartsInt,
-      maplibreSrc: input.maplibreCode ? "assets/maplibre-gl.mjs" : undefined,
-      maplibreIntegrity: maplibreInt ?? undefined,
       runtimeSrc: "assets/app.js",
       runtimeIntegrity: runtimeInt,
     });
     files.push({ path: "index.html", content: indexHtml });
-    if (input.maplibreCode) files.push({ path: "assets/maplibre-gl.mjs", content: input.maplibreCode });
     files.push({ path: "assets/echarts.min.js", content: input.echartsCode });
     files.push({ path: "assets/app.js", content: input.runtimeCode });
   }

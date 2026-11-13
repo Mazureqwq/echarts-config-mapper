@@ -7,11 +7,54 @@
  * 约束：不得使用 eval / new Function / innerHTML（CSP 与安全清单要求）。
  */
 export const RUNTIME_CODE = String.raw`
-(function () {
+(async function () {
   "use strict";
   var doc = document;
   var root = doc.getElementById("cf-root");
   var failed = false;
+
+  // MapLibre 源与 worker 以 JSON 数据标签内联；此处转 Blob 动态导入（单 HTML file:// 可用）。
+  var maplibrePromise = (async function () {
+    try {
+      var mlEl = doc.getElementById("cf-maplibre");
+      if (!mlEl) return null;
+      var source = JSON.parse(mlEl.textContent || '""');
+      if (typeof source !== "string" || !source) return null;
+      var mod = await import(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+      var wkEl = doc.getElementById("cf-maplibre-worker");
+      if (wkEl && mod && typeof mod.setWorkerUrl === "function") {
+        try {
+          var workerSource = JSON.parse(wkEl.textContent || '""');
+          if (typeof workerSource === "string" && workerSource) {
+            // file:// 下 module worker 因源限制不可用：剥离 ESM export 后以 classic worker 运行（内容等价）。
+            var strippedWorker = workerSource.replace(/export\s*\{[^}]*\};?/, "");
+            var classicWorkerUrl = URL.createObjectURL(new Blob([strippedWorker], { type: "text/javascript" }));
+            var OrigWorker = window.Worker;
+            window.__shimLog = [];
+            window.Worker = function (workerUrl, workerOpts) {
+              var u = String(workerUrl);
+              var optsType = workerOpts && workerOpts.type;
+              var isOurs = u === classicWorkerUrl;
+              var isMaplibreDataModule = optsType === "module" && u.indexOf("data:") === 0 && u.indexOf("MapLibre") > -1;
+              window.__shimLog.push({ url: u.slice(0, 70), opts: workerOpts ? JSON.stringify(workerOpts) : null, forced: Boolean(isOurs || isMaplibreDataModule) });
+              if (isOurs || isMaplibreDataModule) return new OrigWorker(classicWorkerUrl);
+              return new OrigWorker(workerUrl, workerOpts);
+            };
+            var probe = new OrigWorker(classicWorkerUrl);
+            probe.onerror = function (probeErr) {
+              window.__shimLog.push({ probeError: (probeErr && probeErr.message) || "empty", err: String(probeErr && probeErr.error ? probeErr.error : "") });
+              try { probe.terminate(); } catch (e) {}
+            };
+            setTimeout(function () { try { probe.terminate(); } catch (e) {} }, 4000);
+            mod.setWorkerUrl(classicWorkerUrl);
+          }
+        } catch (workerErr) { /* worker 配置失败不阻断地图渲染 */ }
+      }
+      return mod;
+    } catch (loadErr) {
+      return null;
+    }
+  })();
 
   function fail(message) {
     failed = true;
@@ -518,6 +561,382 @@ export const RUNTIME_CODE = String.raw`
     return fmt && typeof fmt.suffix === "string" && fmt.suffix ? text + fmt.suffix : text;
   }
   var CF_CHINA_REGIONS = ["新疆维吾尔自治区", "西藏自治区", "内蒙古自治区", "青海省", "四川省", "黑龙江省", "甘肃省", "云南省", "广西壮族自治区", "湖南省", "陕西省", "广东省", "吉林省", "河北省", "湖北省", "贵州省", "山东省", "江西省", "河南省", "辽宁省", "山西省", "安徽省", "福建省", "浙江省", "江苏省", "重庆市", "宁夏回族自治区", "海南省", "台湾省", "北京市", "天津市", "上海市", "香港特别行政区", "澳门特别行政区"];
+  function safeMapSceneMaplibre(item, rootEl, rows, props, screen) {
+    var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
+    var presentation = props.presentation === "tilted" || props.presentation === "flat" ? props.presentation : fallbackPresentation;
+    var rawView = props.view && typeof props.view === "object" ? props.view : {};
+    var rawCenter = Array.isArray(rawView.center) ? rawView.center : [];
+    var minZoom = boundedWidgetNumber(rawView.minZoom, 1, 0.5, 20);
+    var maxZoom = boundedWidgetNumber(rawView.maxZoom, Math.max(minZoom, 8), minZoom, 20);
+    var zoomFallback = Math.min(maxZoom, Math.max(minZoom, 1.05));
+    var view = {
+      center: [boundedWidgetNumber(rawCenter[0], 104.114129, -180, 180), boundedWidgetNumber(rawCenter[1], 35.550339, -90, 90)],
+      zoom: boundedWidgetNumber(rawView.zoom, zoomFallback, minZoom, maxZoom), minZoom: minZoom, maxZoom: maxZoom,
+      dragEnabled: typeof rawView.dragEnabled === "boolean" ? rawView.dragEnabled : true,
+      zoomEnabled: typeof rawView.zoomEnabled === "boolean" ? rawView.zoomEnabled : true,
+      showLabels: typeof rawView.showLabels === "boolean" ? rawView.showLabels : true,
+      backgroundColor: safeWidgetColor(rawView.backgroundColor, "#081622")
+    };
+    var pitch = presentation === "tilted" ? boundedWidgetNumber(props.pitch, 28, 0, 60) : 0;
+    var labelGroup = props.label && typeof props.label === "object" ? props.label : { show: true, color: "#e7fbff", size: 10 };
+    var labelShow = view.showLabels && labelGroup.show !== false;
+    var labelColor = safeWidgetColor(labelGroup.color, "#e7fbff");
+    var labelSize = boundedWidgetNumber(labelGroup.size, 10, 8, 40);
+    var labelShadow = typeof labelGroup.shadow === "string" && /^#[0-9a-fA-F]{6}$/.test(labelGroup.shadow) ? labelGroup.shadow
+      : (typeof labelGroup.stroke === "string" && /^#[0-9a-fA-F]{6}$/.test(labelGroup.stroke) ? labelGroup.stroke : "");
+    var borderGroup = props.border && typeof props.border === "object" ? props.border : { color: "#c0f3fb", width: 1, type: "solid" };
+    var borderColor = safeWidgetColor(borderGroup.color, "#c0f3fb");
+    var borderWidth = boundedWidgetNumber(borderGroup.width, 1, 0, 8);
+    var borderType = borderGroup.type === "dashed" ? "dashed" : "solid";
+    var emphasisGroup = props.emphasis && typeof props.emphasis === "object" ? props.emphasis : null;
+    var selectedGroup = props.selected && typeof props.selected === "object" ? props.selected : null;
+    var valueFormat = props.valueFormat && typeof props.valueFormat === "object" ? props.valueFormat : null;
+    var emphasisColor = emphasisGroup ? safeWidgetColor(emphasisGroup.areaColor, "#3a95fd") : "#3a95fd";
+    var selectedColor = selectedGroup ? safeWidgetColor(selectedGroup.areaColor, "#58d6ff") : "#58d6ff";
+
+    var rawLayers = Array.isArray(props.layers) ? props.layers.slice(0, 50) : [];
+    var layers = [];
+    rawLayers.forEach(function (entry, index) {
+      if (!entry || typeof entry !== "object") return;
+      var defaults = { regionFill: "区域填色", geoScatter: "地理散点", geoHeatmap: "点热力", geoFlow: "OD 飞线" };
+      if (!defaults[entry.type]) return;
+      var style = entry.style && typeof entry.style === "object" ? entry.style : {};
+      var layerColor = safeWidgetColor(style.color, entry.type === "geoHeatmap" ? "#ff6b6b" : entry.type === "geoScatter" ? "#ffcc66" : "#32d6ff");
+      layers.push({
+        id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim().slice(0, 80) : "layer-" + (index + 1),
+        type: entry.type,
+        name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim().slice(0, 48) : defaults[entry.type],
+        visible: typeof entry.visible === "boolean" ? entry.visible : true,
+        color: layerColor,
+        opacity: boundedWidgetNumber(style.opacity, 0.85, 0, 1),
+        size: boundedWidgetNumber(style.size, 12, 1, 100),
+        border: style.border && typeof style.border === "object" ? {
+          color: safeWidgetColor(style.border.color, "#5db9d2"),
+          width: boundedWidgetNumber(style.border.width, 0.65, 0, 8),
+          type: style.border.type === "dashed" ? "dashed" : "solid"
+        } : null,
+        animated: style.animated === true,
+        minZoom: typeof entry.minZoom === "number" && isFinite(entry.minZoom) ? entry.minZoom : null,
+        maxZoom: typeof entry.maxZoom === "number" && isFinite(entry.maxZoom) ? entry.maxZoom : null,
+        colorMode: style.colorMode === "gradient" || style.colorMode === "segments" ? style.colorMode : "",
+        colors: style.colors && typeof style.colors === "object" ? {
+          min: safeWidgetColor(style.colors.min, "#102b3d"),
+          mid: safeWidgetColor(style.colors.mid, "#1c5f8f"),
+          max: safeWidgetColor(style.colors.max, layerColor),
+          empty: safeWidgetColor(style.colors.empty, "#0d1a26")
+        } : null,
+        segments: typeof style.segments === "number" && isFinite(style.segments) ? Math.min(10, Math.max(2, Math.round(style.segments))) : 5,
+        dataBinding: entry.dataBinding && typeof entry.dataBinding === "object" && typeof entry.dataBinding.datasetId === "string" && entry.dataBinding.datasetId.trim() ? entry.dataBinding : null
+      });
+    });
+
+    rootEl.className += " cf-map-scene cf-map-scene--" + presentation;
+    rootEl.style.overflow = "hidden";
+    rootEl.style.backgroundColor = view.backgroundColor;
+    rootEl.setAttribute("role", "img");
+    rootEl.setAttribute("aria-label", presentation === "tilted" ? "2.5D 立体地图（WebGL）" : "平面地图（2D WebGL）");
+    var plane = doc.createElement("div");
+    plane.style.position = "absolute"; plane.style.inset = "0"; plane.style.overflow = "hidden";
+    plane.style.backgroundColor = view.backgroundColor;
+    var canvas = doc.createElement("div");
+    canvas.setAttribute("data-item", item.id || "");
+    canvas.style.position = "absolute"; canvas.style.inset = "0";
+    plane.appendChild(canvas); rootEl.appendChild(plane);
+    var title = doc.createElement("div"); title.className = "cf-map-scene__caption";
+    title.textContent = presentation === "tilted" ? "立体地图 · 2.5D" : "平面地图 · 2D";
+    title.style.position = "absolute"; title.style.zIndex = "2"; title.style.top = "10px"; title.style.left = "10px";
+    title.style.padding = "5px 8px"; title.style.border = "1px solid #54bad744"; title.style.borderRadius = "4px"; title.style.background = "#061622c9"; title.style.color = "#b9e9f5"; title.style.fontSize = "11px";
+    rootEl.appendChild(title);
+    var visibleCount = layers.filter(function (layer) { return layer.visible; }).length;
+    var badge = doc.createElement("div"); badge.textContent = visibleCount + " 个可见图层";
+    badge.style.position = "absolute"; badge.style.zIndex = "2"; badge.style.right = "10px"; badge.style.bottom = "10px";
+    badge.style.padding = "5px 8px"; badge.style.border = "1px solid #54bad744"; badge.style.borderRadius = "4px"; badge.style.background = "#061622c9"; badge.style.color = "#b9e9f5"; badge.style.fontSize = "11px";
+    rootEl.appendChild(badge);
+    var labelsBox = doc.createElement("div");
+    labelsBox.className = "cf-map-labels";
+    labelsBox.style.position = "absolute"; labelsBox.style.inset = "0"; labelsBox.style.zIndex = "2"; labelsBox.style.pointerEvents = "none"; labelsBox.style.overflow = "hidden";
+    rootEl.appendChild(labelsBox);
+    var statusEl = null;
+    function showStatus(text) {
+      if (!text) { if (statusEl && statusEl.parentNode) statusEl.parentNode.removeChild(statusEl); statusEl = null; return; }
+      if (!statusEl) {
+        statusEl = doc.createElement("div");
+        statusEl.className = "cf-map-scene__status";
+        statusEl.setAttribute("role", "status");
+        statusEl.style.position = "absolute"; statusEl.style.zIndex = "3"; statusEl.style.left = "50%"; statusEl.style.bottom = "10px";
+        statusEl.style.transform = "translateX(-50%)"; statusEl.style.maxWidth = "75%";
+        statusEl.style.padding = "5px 8px"; statusEl.style.borderRadius = "4px"; statusEl.style.background = "#07121dd9";
+        statusEl.style.color = "#ffd17b"; statusEl.style.fontSize = "10px"; statusEl.style.textAlign = "center"; statusEl.style.pointerEvents = "none";
+        rootEl.appendChild(statusEl);
+      }
+      statusEl.textContent = text;
+    }
+
+    var errors = [];
+    var containerFields = item.dataBinding && item.dataBinding.fields ? item.dataBinding.fields : {};
+    function field(source, key) { return typeof source[key] === "string" && source[key].trim() && safeKey(source[key].trim()) ? source[key].trim() : ""; }
+    function asNum(value) {
+      if (typeof value === "number" && isFinite(value)) return value;
+      if (typeof value === "string" && value.trim()) { var parsed = Number(value); return isFinite(parsed) ? parsed : null; }
+      return null;
+    }
+
+    function cfMix(a, b, t) {
+      function px(hex) { return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]; }
+      var pa = px(a); var pb = px(b);
+      var k = Math.min(1, Math.max(0, t));
+      var out = "#";
+      for (var i = 0; i < 3; i++) { var v = Math.round(pa[i] + (pb[i] - pa[i]) * k); out += (v < 16 ? "0" : "") + v.toString(16); }
+      return out;
+    }
+    function cfRamp(colors, t) {
+      var c = Math.min(1, Math.max(0, t));
+      return c <= 0.5 ? cfMix(colors.min, colors.mid, c * 2) : cfMix(colors.mid, colors.max, (c - 0.5) * 2);
+    }
+    function cfColorFor(value, min, max, colors, mode, segments) {
+      var span = max - min;
+      var t = span > 0 ? (value - min) / span : 0;
+      if (mode === "segments") {
+        var n = Math.min(10, Math.max(2, Math.round(segments)));
+        var k = Math.min(n - 1, Math.max(0, Math.floor(t * n)));
+        return k === 0 ? colors.min : k === n - 1 ? colors.max : cfRamp(colors, k / (n - 1));
+      }
+      return cfRamp(colors, t);
+    }
+    function cfFormatValue(value, fmt) {
+      if (value === null || value === undefined || !isFinite(value)) return "—";
+      var decimals = fmt && typeof fmt.decimals === "number" ? Math.min(4, Math.max(0, Math.round(fmt.decimals))) : 0;
+      var text = value.toFixed(decimals);
+      return fmt && typeof fmt.suffix === "string" && fmt.suffix ? text + fmt.suffix : text;
+    }
+
+    var regionFillLayer = null;
+    for (var li = 0; li < layers.length; li++) {
+      if (layers[li].visible && layers[li].type === "regionFill") { regionFillLayer = layers[li]; break; }
+    }
+    // 校验所有可见区域填色层（首个由渲染段处理，避免重复报错）
+    for (var vi = 0; vi < layers.length; vi++) {
+      var vlay = layers[vi];
+      if (!vlay.visible || vlay.type !== "regionFill" || vlay === regionFillLayer) continue;
+      var vr = vlay.dataBinding ? datasetRows(vlay.dataBinding, screen) : rows;
+      var vf = vlay.dataBinding ? (vlay.dataBinding.fields || {}) : containerFields;
+      var vn = field(vf, "category");
+      var vv = field(vf, "value");
+      if (!vn || !vv) { errors.push(vlay.name + "：区域填色需要配置区域名称与数值字段映射"); continue; }
+      if (vr.length && (!vr.some(function (row) { return Object.prototype.hasOwnProperty.call(row, vn); }) || !vr.some(function (row) { return Object.prototype.hasOwnProperty.call(row, vv); }))) {
+        errors.push(vlay.name + "：加工后数据缺少已映射的区域名称或数值列");
+        continue;
+      }
+      if (vr.length) {
+        var anyValid = vr.some(function (row) { return Object.prototype.hasOwnProperty.call(row, vn) && Object.prototype.hasOwnProperty.call(row, vv); });
+        if (!anyValid) errors.push(vlay.name + "：没有有效的区域名称/数值行");
+      }
+    }
+    var regionValues = {};
+    var fillColor = "#32d6ff";
+    var fillOpacity = 0.7;
+    var fillWindow = {};
+    if (regionFillLayer) {
+      fillOpacity = regionFillLayer.opacity;
+      if (regionFillLayer.minZoom !== null) fillWindow.minzoom = regionFillLayer.minZoom;
+      if (regionFillLayer.maxZoom !== null) fillWindow.maxzoom = regionFillLayer.maxZoom;
+      var fillRows = regionFillLayer.dataBinding ? datasetRows(regionFillLayer.dataBinding, screen) : rows;
+      var fillFields = regionFillLayer.dataBinding ? (regionFillLayer.dataBinding.fields || {}) : containerFields;
+      var nameField = field(fillFields, "category");
+      var valueField = field(fillFields, "value");
+      if (!nameField || !valueField) {
+        errors.push(regionFillLayer.name + "：区域填色需要配置区域名称与数值字段映射");
+      } else {
+        if (fillRows.length && (!fillRows.some(function (row) { return Object.prototype.hasOwnProperty.call(row, nameField); }) || !fillRows.some(function (row) { return Object.prototype.hasOwnProperty.call(row, valueField); }))) {
+          errors.push(regionFillLayer.name + "：加工后数据缺少已映射的区域名称或数值列");
+        } else {
+          fillRows.forEach(function (row) {
+            var rawName = row[nameField];
+            var name = typeof rawName === "string" || typeof rawName === "number" ? String(rawName).trim() : "";
+            var value = asNum(row[valueField]);
+            if (name && value !== null) regionValues[name] = value;
+          });
+          if (fillRows.length && !Object.keys(regionValues).length) {
+            errors.push(regionFillLayer.name + "：没有有效的区域名称/数值行");
+          }
+        }
+        var names = Object.keys(regionValues);
+        if (names.length) {
+          var values = names.map(function (n) { return regionValues[n]; });
+          var minimum = values.reduce(function (m, v) { return Math.min(m, v); }, Infinity);
+          var maximum = values.reduce(function (m, v) { return Math.max(m, v); }, -Infinity);
+          var colors = regionFillLayer.colors || { min: "#102b3d", mid: "#1c5f8f", max: regionFillLayer.color, empty: "#0d1a26" };
+          var mode = regionFillLayer.colorMode === "segments" ? "segments" : "gradient";
+          var entries = [];
+          names.forEach(function (n) { entries.push(n); entries.push(cfColorFor(regionValues[n], minimum, maximum, colors, mode, regionFillLayer.segments || 5)); });
+          var matchExpr = ["match", ["get", "name"]].concat(entries).concat([colors.empty]);
+          if (regionFillLayer.colorMode || regionFillLayer.colors) {
+            fillColor = ["case",
+              ["boolean", ["feature-state", "cf_selected"], false], selectedColor,
+              ["boolean", ["feature-state", "cf_hover"], false], emphasisColor,
+              matchExpr];
+          } else {
+            fillColor = ["case",
+              ["boolean", ["feature-state", "cf_selected"], false], selectedColor,
+              ["boolean", ["feature-state", "cf_hover"], false], emphasisColor,
+              matchExpr];
+          }
+        } else {
+          fillColor = regionFillLayer.color;
+        }
+      }
+      if (!Object.keys(regionValues).length && !errors.length) fillColor = regionFillLayer.color;
+    }
+
+    var dashed = borderType === "dashed";
+    var styleLayers = [
+      Object.assign({
+        id: "cf-fill", type: "fill", source: "china"
+      }, fillWindow, {
+        paint: { "fill-color": fillColor, "fill-opacity": fillOpacity, "fill-outline-color": borderColor }
+      }),
+      Object.assign({
+        id: "cf-line", type: "line", source: "china"
+      }, fillWindow, {
+        paint: Object.assign({ "line-color": borderColor, "line-width": borderWidth }, dashed ? { "line-dasharray": [2, 2] } : {})
+      })
+    ];
+
+    var labels = [];
+    var geoSource = payload && payload.geo && payload.geo.china ? payload.geo.china : null;
+    if (labelShow && geoSource && Array.isArray(geoSource.features)) {
+      geoSource.features.forEach(function (feature) {
+        if (!feature || !feature.properties || typeof feature.properties.name !== "string") return;
+        var geom = feature.geometry;
+        if (!geom) return;
+        var pts = [];
+        function walk(value) {
+          if (!Array.isArray(value)) return;
+          if (typeof value[0] === "number" && typeof value[1] === "number") { pts.push([value[0], value[1]]); return; }
+          for (var w = 0; w < value.length; w++) walk(value[w]);
+        }
+        if (geom.type === "GeometryCollection" && Array.isArray(geom.geometries)) {
+          geom.geometries.forEach(function (g) { if (g) walk(g.coordinates); });
+        } else {
+          walk(geom.coordinates);
+        }
+        if (!pts.length) return;
+        var xs = pts.map(function (p) { return p[0]; });
+        var ys = pts.map(function (p) { return p[1]; });
+        labels.push({
+          name: feature.properties.name,
+          centroid: [(Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2, (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2],
+          el: null
+        });
+      });
+    }
+
+    var style = {
+      version: 8,
+      name: "chartforge-map-scene",
+      sources: { china: { type: "geojson", data: geoSource ? geoSource : { type: "FeatureCollection", features: [] }, promoteId: "name" } },
+      pitch: pitch,
+      center: view.center.slice(),
+      zoom: view.zoom,
+      minZoom: view.minZoom,
+      maxZoom: view.maxZoom,
+      light: { anchor: "map", color: "#ffffff", intensity: 0.4, position: [1.15, 210, 40] },
+      sky: {
+        "sky-color": "#0a1628", "horizon-color": "#12314d", "sky-horizon-blend": 0.5,
+        "fog-color": "#0a1628", "horizon-fog-blend": 0.15, "fog-ground-blend": 0.3, "atmosphere-blend": 0.6
+      },
+      layers: styleLayers
+    };
+
+    if (errors.length) { showStatus(errors.join("；")); }
+    else if (!layers.length) { showStatus("本地离线底图 · 可从图层面板添加区域填色、散点、热力或飞线"); }
+
+    function cfFitIfDefault(mapInstance, styleObj, geo) {
+      if (!geo || !Array.isArray(geo.features) || !geo.features.length) return;
+      var center = styleObj.center || [];
+      var isDefault = center[0] === 104.114129 && center[1] === 35.550339 && styleObj.zoom === 1.05;
+      if (!isDefault) return;
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      function walkB(value) {
+        if (!Array.isArray(value)) return;
+        if (typeof value[0] === "number" && typeof value[1] === "number") {
+          minX = Math.min(minX, value[0]); maxX = Math.max(maxX, value[0]);
+          minY = Math.min(minY, value[1]); maxY = Math.max(maxY, value[1]);
+          return;
+        }
+        for (var wi = 0; wi < value.length; wi++) walkB(value[wi]);
+      }
+      geo.features.forEach(function (f) {
+        if (!f || !f.geometry) return;
+        if (f.geometry.type === "GeometryCollection" && f.geometry.geometries) {
+          f.geometry.geometries.forEach(function (g) { if (g) walkB(g.coordinates); });
+        } else {
+          walkB(f.geometry.coordinates);
+        }
+      });
+      if (!isFinite(minX)) return;
+      mapInstance.fitBounds([[minX, minY], [maxX, maxY]], { padding: 28, duration: 0 });
+    }
+
+    maplibrePromise.then(function (mod) {
+      if (!mod) { if (!statusEl) showStatus("地图运行时缺失：离线包未注入 MapLibre 源"); return; }
+      try {
+        var map = new mod.Map({ container: canvas, style: style, attributionControl: false, interactive: true });
+        canvas.__cfMap = map; // 测试钩子：e2e 读取离线 style
+        if (!view.dragEnabled) map.dragPan.disable();
+        if (!view.zoomEnabled) map.scrollZoom.disable();
+        map.on("error", function (ev) {
+          var err = ev && ev.error ? ev.error : ev;
+          showStatus((err && err.message) || "地图渲染出错");
+        });
+        map.on("click", "cf-fill", function (ev) {
+          var feature = ev && ev.features && ev.features[0];
+          var name = feature && feature.properties ? feature.properties.name : null;
+          if (typeof name !== "string" || !name) return;
+          var value = typeof regionValues[name] === "number" ? regionValues[name] : null;
+          runBlueprint(item, screen, "regionClick", {
+            name: name,
+            value: value,
+            valueText: cfFormatValue(value, valueFormat),
+            presentation: presentation
+          });
+        });
+        function projectLabels() {
+          if (!labels.length) return;
+          var rect = canvas.getBoundingClientRect();
+          labels.forEach(function (label) {
+            if (!label.el) {
+              var span = doc.createElement("span");
+              span.textContent = label.name;
+              span.style.position = "absolute";
+              span.style.transform = "translate(-50%, -50%)";
+              span.style.whiteSpace = "nowrap";
+              span.style.fontSize = labelSize + "px";
+              span.style.color = labelColor;
+              span.style.textShadow = labelShadow ? "0 0 3px " + labelShadow : "0 0 3px #013a4a";
+              labelsBox.appendChild(span);
+              label.el = span;
+            }
+            var pt = map.project(label.centroid);
+            var visible = pt.x >= 0 && pt.y >= 0 && pt.x <= rect.width && pt.y <= rect.height;
+            label.el.style.display = visible ? "block" : "none";
+            if (visible) { label.el.style.left = pt.x + "px"; label.el.style.top = pt.y + "px"; }
+          });
+        }
+        map.on("move", projectLabels);
+        map.on("load", function () {
+          cfFitIfDefault(map, style, geoSource);
+          projectLabels();
+        });
+        cfFitIfDefault(map, style, geoSource);
+        projectLabels();
+        charts.push({ dispose: function () { try { map.remove(); } catch (e) { /* 已销毁 */ } } });
+      } catch (createErr) {
+        showStatus((createErr && createErr.message) || "地图渲染出错");
+      }
+    });
+  }
+
   function safeMapScene(item, rootEl, rows, props, screen) {
     var layerTypes = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"];
     var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
@@ -939,7 +1358,7 @@ export const RUNTIME_CODE = String.raw`
       rootEl.appendChild(sampleNotice);
     }
     if ((item.componentId === "chartforge.map-scene-flat" || item.componentId === "chartforge.map-scene-tilted") && item.componentVersion === 1) {
-      safeMapScene(item, rootEl, rows, props, screen);
+      safeMapSceneMaplibre(item, rootEl, rows, props, screen);
     } else if (item.componentId === "chartforge.data-table" && item.componentVersion === 1) {
       rootEl.className += " cf-data-table";
       var columns = Array.isArray(props.columns) ? props.columns.filter(function (column) { return column && typeof column === "object" && safeField(column.field, ""); }) : [];

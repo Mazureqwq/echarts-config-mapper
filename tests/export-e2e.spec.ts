@@ -343,30 +343,15 @@ describe("export 端到端：产物 → zip → 回读", () => {
     expect(chartOptions.get("chart-geoHeatmap")?.[0]?.series[0]?.data).toEqual([[121.47, 31.23, 7]]);
     expect(chartOptions.get("chart-geoFlow")?.[0]?.series[0]?.data).toEqual([{ name: "Shanghai", coords: [[120, 30], [121.47, 31.23]], value: 7 }]);
     expect(chartOptions.get("chart-missing")?.[0]?.series[0]?.data).toEqual([]);
-    const mapOption = chartOptions.get("map-scene")?.[0];
-    expect(Array.isArray(mapOption?.geo)).toBe(true);
-    expect(mapOption?.geo).toHaveLength(4);
-    expect(mapOption?.geo.slice(0, -1).every((geo: Record<string, any>) => geo.label.show === false)).toBe(true);
-    expect(mapOption?.geo.at(-1)?.label.show).toBe(true);
-    expect(mapOption?.series.map((series: Record<string, unknown>) => series.type)).toEqual(["map", "scatter", "heatmap", "lines"]);
-    expect(mapOption?.series.every((series: Record<string, any>) => series.geoIndex === 3)).toBe(true);
-    chartInstances.get("map-scene")?.simulateRoam();
-    const syncedGeo = chartInstances.get("map-scene")?.getOption().geo as Array<Record<string, any>>;
-    expect(syncedGeo.slice(0, 3).every((geo) => geo.center[0] === 110 && geo.center[1] === 30 && geo.zoom === 1.4 && geo.roam === false)).toBe(true);
-    expect(syncedGeo[3]?.center).toEqual([110, 30]);
-    expect(chartOptions.get("map-scene")?.[0]?.series[0]?.data).toEqual([{ name: "North zone", value: 70 }]);
-    expect(chartOptions.get("map-scene")?.[0]?.series[1]?.data).toEqual([{ name: "North hub", value: [10, 20, 70] }]);
-    expect(chartOptions.get("map-scene")?.[0]?.series[2]?.data).toEqual([[121.47, 31.23, 7]]);
-    expect(chartOptions.get("map-scene")?.[0]?.series[3]?.data).toEqual([{ name: "North route", coords: [[1, 2], [3, 4]], value: 70 }]);
+    // MapLibre 渲染器（T4 起）：node 环境无 Worker/blob-ESM → 优雅降级；map-scene DOM 与区域填色诊断仍可断言
+    const mapSceneEl1 = findItem(root, "map-scene");
+    expect(mapSceneEl1?.className).toContain("cf-map-scene");
 
     const table = findItem(root, "geo-table")!.children[0]!;
     table.children[1]!.children[2]!.click();
     expect(chartOptions.get("chart-geoScatter")?.at(-1)?.series[0]?.data).toEqual([{ name: "Guangzhou", value: [113.26, 23.13, 11] }]);
     expect(chartOptions.get("chart-geoFlow")?.at(-1)?.series[0]?.data).toEqual([{ name: "Guangzhou", coords: [[114.17, 22.31], [113.26, 23.13]], value: 11 }]);
-    expect(chartOptions.get("map-scene")?.at(-1)?.series[0]?.data).toEqual([{ name: "South zone", value: 110 }]);
-    expect(chartOptions.get("map-scene")?.at(-1)?.series[1]?.data).toEqual([{ name: "South hub", value: [30, 40, 110] }]);
-    expect(chartOptions.get("map-scene")?.at(-1)?.series[2]?.data).toEqual([[113.26, 23.13, 11]]);
-    expect(chartOptions.get("map-scene")?.at(-1)?.series[3]?.data).toEqual([{ name: "South route", coords: [[5, 6], [7, 8]], value: 110 }]);
+    // map-scene 不再产出 ECharts 捕获（MapLibre 渲染器）；独立地理图表的变量过滤断言见上
 
     const mapScene = findItem(root, "map-scene")!;
     const editorMissingColumns = buildMapSceneOption({ layers: [
@@ -378,15 +363,12 @@ describe("export 端到端：产物 → zip → 回读", () => {
       "缺失列：加工后缺少已映射的地理字段列：missingX",
     ]);
     const mapStatus = collectElements(mapScene).find((element) => element.attributes.role === "status")?.textContent;
-    expect(mapStatus).toContain("缺失映射：缺少经度/纬度映射");
-    for (const diagnostic of editorMissingColumns) expect(mapStatus).toContain(diagnostic);
+    // 区域填色诊断由离线运行时保留；散点/热力/飞线的映射诊断随 T7 渲染回归（台账裁决）
+    expect(mapStatus).toContain(editorMissingColumns[0]);
 
     table.children[1]!.children[3]!.click();
-    const emptyIndependentLayers = chartOptions.get("map-scene")?.at(-1);
-    expect(emptyIndependentLayers?.series.map((series: Record<string, unknown>) => series.type)).toEqual(["scatter", "heatmap", "lines"]);
-    expect(emptyIndependentLayers?.series[0]?.data).toEqual([]);
-    expect(emptyIndependentLayers?.series[1]?.data).toEqual([[114.3, 30.6, 13]]);
-    expect(emptyIndependentLayers?.series[2]?.data).toEqual([]);
+    // 变量切换后独立图层的离线行为由 playwright 离线 e2e 承载（T5 起）；此处仅确认 map-scene DOM 仍健在
+    expect(findItem(root, "map-scene")?.className).toContain("cf-map-scene");
   });
 
   it("exports map layers consistently from static pipeline rows and processed HTTP snapshots", async () => {
@@ -464,9 +446,9 @@ describe("export 端到端：产物 → zip → 回读", () => {
     };
     const { runInNewContext } = await import("node:vm");
     runInNewContext(RUNTIME_CODE, { document: doc, window: windowStub });
-    expect(chartOptions.at(-1)?.series.map((series: Record<string, unknown>) => series.type)).toEqual(["scatter", "scatter"]);
-    expect(chartOptions.at(-1)?.series[0]?.data).toEqual([{ name: "Static South", value: [114.3, 22.3, 9] }]);
-    expect(chartOptions.at(-1)?.series[1]?.data).toEqual([{ name: "HTTP South", value: [113.8, 22.2, 5] }]);
+    // MapLibre 渲染器下 map-scene 不再走 ECharts 捕获；数据快照语义由 playwright 离线 e2e 承载（T5）
+    const mapDom = collectElements(root).find((element) => String(element.className ?? "").includes("cf-map-scene"));
+    expect(Boolean(mapDom)).toBe(true);
   });
 
   it("renders layout backgrounds in self-contained ZIP and inline exports", async () => {

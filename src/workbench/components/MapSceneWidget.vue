@@ -113,6 +113,20 @@ function onMapError(ev: unknown): void {
   mapError.value = err.error?.message || err.message || "地图渲染出错";
 }
 
+const DEFAULT_CENTER: [number, number] = [104.114129, 35.550339];
+const DEFAULT_ZOOM = 1.05;
+
+function fitIfDefaultView(): void {
+  const instance = map.value;
+  const built = result.value;
+  if (!instance || !built.bounds) return;
+  const center = built.style.center as [number, number];
+  const zoom = built.style.zoom as number;
+  const isDefault = center[0] === DEFAULT_CENTER[0] && center[1] === DEFAULT_CENTER[1] && zoom === DEFAULT_ZOOM;
+  if (!isDefault) return;
+  instance.fitBounds(built.bounds, { padding: 28, duration: 0 });
+}
+
 function applyScene(): void {
   const instance = map.value;
   if (!instance) return;
@@ -124,6 +138,7 @@ function applyScene(): void {
     zoom: built.style.zoom as number,
     pitch: built.style.pitch as number,
   });
+  fitIfDefaultView();
   projectLabels();
 }
 
@@ -155,7 +170,12 @@ onMounted(() => {
     instance.on("error", onMapError as never);
     instance.on("click", "cf-fill", onFillClick);
     instance.on("move", projectLabels);
+    instance.on("load", () => {
+      fitIfDefaultView();
+      projectLabels();
+    });
     map.value = instance;
+    fitIfDefaultView();
     const flags = result.value.flags;
     if (!flags.dragEnabled) instance.dragPan.disable();
     if (!flags.zoomEnabled) instance.scrollZoom.disable();
