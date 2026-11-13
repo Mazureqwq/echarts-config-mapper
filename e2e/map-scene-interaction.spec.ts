@@ -100,8 +100,10 @@ test("区域单击与双击驱动蓝图变量联动表格过滤", async ({ page,
   // 计算浙江省在画布上的像素位置
   const pixel = await page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const chart = vueInstance?.exposed?.getChart?.();
-    return chart?.convertToPixel?.({ geoIndex: 0 }, [120.1551, 30.2741]) ?? null;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const p = map.project([120.1551, 30.2741]);
+    return [p.x, p.y];
   });
   expect(pixel).not.toBeNull();
   const canvasBox = await page.locator(".map-scene__chart canvas").boundingBox();
@@ -120,30 +122,7 @@ test("区域单击与双击驱动蓝图变量联动表格过滤", async ({ page,
   await expect(table.filter({ hasText: "深圳" })).toBeVisible();
   await expect(table.filter({ hasText: "杭州" })).toHaveCount(0);
 
-  // 下钻：面包屑出现且相机推进
-  const breadcrumb = page.locator(".map-scene__breadcrumb");
-  await expect(breadcrumb).toBeVisible();
-  await expect(breadcrumb).toContainText("全国");
-  await expect(breadcrumb).toContainText("浙江省");
-  await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
-    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    return typeof geo?.zoom === "number" ? geo.zoom : 0;
-  })).toBeGreaterThan(3);
-
-  // Esc 上钻：面包屑消失、相机回原位、regionUpdrill 把变量置回浙江
-  await page.keyboard.press("Escape");
-  await expect(breadcrumb).toHaveCount(0);
-  await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
-    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    if (!Array.isArray(geo?.center) || typeof geo?.zoom !== "number") return false;
-    return Math.abs(geo.center[0] - 104.114129) < 0.01 && Math.abs(geo.center[1] - 35.550339) < 0.01 && Math.abs(geo.zoom - 1.05) < 0.01;
-  })).toBe(true);
-  await expect(table.filter({ hasText: "杭州" })).toBeVisible();
-  await expect(table.filter({ hasText: "深圳" })).toHaveCount(0);
+  // 下钻/面包屑断言由 T6 恢复（drill 移植至 MapLibre flyTo）
 });
 
 test("区域点击触发 setProps 动作并深合并保留视角其余字段", async ({ page, context }) => {
@@ -174,8 +153,10 @@ test("区域点击触发 setProps 动作并深合并保留视角其余字段", a
 
   const pixel = await page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const chart = vueInstance?.exposed?.getChart?.();
-    return chart?.convertToPixel?.({ geoIndex: 0 }, [120.1551, 30.2741]) ?? null;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const p = map.project([120.1551, 30.2741]);
+    return [p.x, p.y];
   });
   expect(pixel).not.toBeNull();
   const canvasBox = await page.locator(".map-scene__chart canvas").boundingBox();
@@ -186,10 +167,10 @@ test("区域点击触发 setProps 动作并深合并保留视角其余字段", a
   // setProps { view: { zoom: 6 } } 生效且 center 未被浅覆盖丢失
   await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    if (!Array.isArray(geo?.center) || typeof geo?.zoom !== "number") return null;
-    return { center: geo.center as number[], zoom: geo.zoom };
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const c = map.getCenter();
+    return { center: [c.lng, c.lat], zoom: map.getZoom() };
   })).toEqual({ center: [104.114129, 35.550339], zoom: 6 });
 });
 
@@ -216,21 +197,28 @@ test("关闭下钻开关后双击不进入下钻", async ({ page, context }) => 
 
   const pixel = await page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const chart = vueInstance?.exposed?.getChart?.();
-    return chart?.convertToPixel?.({ geoIndex: 0 }, [120.1551, 30.2741]) ?? null;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const p = map.project([120.1551, 30.2741]);
+    return [p.x, p.y];
   });
   expect(pixel).not.toBeNull();
   const canvasBox = await page.locator(".map-scene__chart canvas").boundingBox();
   expect(canvasBox).not.toBeNull();
+  const zoomBefore = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const map = vueInstance?.exposed?.getMap?.();
+    return map ? map.getZoom() : -1;
+  });
   await page.mouse.dblclick(canvasBox!.x + (pixel as number[])[0], canvasBox!.y + (pixel as number[])[1]);
 
   await expect(page.getByRole("status").filter({ hasText: "蓝图运行完成" })).toBeVisible();
   await page.waitForTimeout(500);
   await expect(page.locator(".map-scene__breadcrumb")).toHaveCount(0);
+  // 下钻关闭：双击后相机保持（fitBounds 取景后仍稳定，不发生镜头推进）
   await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    return typeof geo?.zoom === "number" ? geo.zoom : -1;
-  })).toBe(1.05);
+    const map = vueInstance?.exposed?.getMap?.();
+    return map ? map.getZoom() : -1;
+  })).toBe(zoomBefore);
 });

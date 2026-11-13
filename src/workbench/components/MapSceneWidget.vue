@@ -96,16 +96,17 @@ function projectLabels(): void {
     .filter((point) => point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height);
 }
 
-function onFillClick(ev: { features?: Array<{ properties?: Record<string, unknown> }> }): void {
+function emitRegionEvent(type: "click" | "dblclick", ev: { features?: Array<{ properties?: Record<string, unknown> }> }): void {
   const name = ev.features?.[0]?.properties?.name;
   if (typeof name !== "string" || !name) return;
   const value = result.value.regionValues[name] ?? null;
-  props.emitEvent("regionClick", {
+  props.emitEvent(type === "click" ? "regionClick" : "regionDblclick", {
     name,
     value,
     valueText: formatMapValue(value, scene.value.valueFormat),
     presentation: scene.value.presentation,
   });
+  // T6：双击下钻（startDrill）在此接入
 }
 
 function onMapError(ev: unknown): void {
@@ -168,7 +169,10 @@ onMounted(() => {
       interactive: true,
     });
     instance.on("error", onMapError as never);
-    instance.on("click", "cf-fill", onFillClick);
+    instance.on("click", "cf-fill", (ev) => emitRegionEvent("click", ev));
+    instance.on("dblclick", "cf-fill", (ev) => emitRegionEvent("dblclick", ev));
+    // 双击语义让位给区域下钻（T6），关闭 maplibre 默认双击缩放
+    instance.doubleClickZoom.disable();
     instance.on("move", projectLabels);
     instance.on("load", () => {
       fitIfDefaultView();

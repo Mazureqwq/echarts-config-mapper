@@ -889,18 +889,20 @@ export const RUNTIME_CODE = String.raw`
           var err = ev && ev.error ? ev.error : ev;
           showStatus((err && err.message) || "地图渲染出错");
         });
-        map.on("click", "cf-fill", function (ev) {
+        function cfEmitMapEvent(kind, ev) {
           var feature = ev && ev.features && ev.features[0];
           var name = feature && feature.properties ? feature.properties.name : null;
           if (typeof name !== "string" || !name) return;
           var value = typeof regionValues[name] === "number" ? regionValues[name] : null;
-          runBlueprint(item, screen, "regionClick", {
+          runBlueprint(item, screen, kind, {
             name: name,
             value: value,
             valueText: cfFormatValue(value, valueFormat),
             presentation: presentation
           });
-        });
+        }
+        map.on("click", "cf-fill", function (ev) { cfEmitMapEvent("regionClick", ev); });
+        map.on("dblclick", "cf-fill", function (ev) { cfEmitMapEvent("regionDblclick", ev); });
         function projectLabels() {
           if (!labels.length) return;
           var rect = canvas.getBoundingClientRect();
