@@ -227,7 +227,7 @@ function mixHex(a: string, b: string, t: number): string {
 }
 
 /** Three-stop ramp: min@0, mid@0.5, max@1. */
-function rampColor(colors: MapFillColors, t: number): string {
+export function rampColor(colors: MapFillColors, t: number): string {
   const clamped = Math.min(1, Math.max(0, t));
   return clamped <= 0.5 ? mixHex(colors.min, colors.mid, clamped * 2) : mixHex(colors.mid, colors.max, (clamped - 0.5) * 2);
 }
@@ -445,7 +445,7 @@ function finiteNumber(value: unknown): number | null {
   return null;
 }
 
-function regionRows(rows: readonly MapRow[], binding: DatasetBinding["fields"]): { data: Array<{ name: string; value: number }>; error: string } {
+export function regionRows(rows: readonly MapRow[], binding: DatasetBinding["fields"]): { data: Array<{ name: string; value: number }>; error: string } {
   const nameField = binding?.category?.trim() ?? "";
   const valueField = binding?.value?.trim() ?? "";
   if (!nameField || !valueField) return { data: [], error: "区域填色需要配置区域名称与数值字段映射" };
