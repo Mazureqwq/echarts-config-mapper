@@ -36,17 +36,22 @@ export interface MapLibreSceneResult {
   errors: string[];
 }
 
-const SCENE_LIGHTS = [
-  { id: "cf-ambient", type: "ambient", color: "#ffffff", intensity: 0.4 },
-  { id: "cf-directional", type: "directional", color: "#ffffff", intensity: 0.4, position: [210, 40, 80] },
-] as const;
+// MapLibre v6：样式根只有经典单数 light 对象与 sky 对象（无根 fog/lights）
+const SCENE_LIGHT = {
+  anchor: "map",
+  color: "#ffffff",
+  intensity: 0.4,
+  position: [1.15, 210, 40],
+} as const;
 
-const SCENE_FOG = {
-  color: "#0a1628",
-  "high-color": "#12314d",
-  "horizon-blend": 0.12,
-  "space-color": "#050b12",
-  range: [0.5, 14],
+const SCENE_SKY = {
+  "sky-color": "#0a1628",
+  "horizon-color": "#12314d",
+  "sky-horizon-blend": 0.5,
+  "fog-color": "#0a1628",
+  "horizon-fog-blend": 0.15,
+  "fog-ground-blend": 0.3,
+  "atmosphere-blend": 0.6,
 } as const;
 
 const HOVER_STATE = "cf_hover";
@@ -168,8 +173,8 @@ export function buildMapLibreScene(
     zoom: scene.view.zoom,
     minZoom: scene.view.minZoom,
     maxZoom: scene.view.maxZoom,
-    lights: SCENE_LIGHTS.map((light) => ({ ...light })),
-    fog: { ...SCENE_FOG },
+    light: { ...SCENE_LIGHT },
+    sky: { ...SCENE_SKY },
     layers,
   };
 

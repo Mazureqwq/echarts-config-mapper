@@ -25,8 +25,8 @@ describe("buildMapLibreScene", () => {
     expect(r.style.zoom).toBe(2);
     expect(r.style.minZoom).toBe(1);
     expect(r.style.maxZoom).toBe(8);
-    expect(Array.isArray(r.style.lights) ? (r.style.lights as unknown[]).length : 0).toBeGreaterThan(0);
-    expect(r.style.fog).toBeTruthy();
+    expect((r.style.light as any)?.intensity).toBeGreaterThan(0);
+    expect((r.style.sky as any)?.["sky-color"]).toBeTruthy();
     const source = (r.style.sources as any).china;
     expect(source.type).toBe("geojson");
     expect(source.data).toBe(chinaFixture);
