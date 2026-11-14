@@ -16,7 +16,9 @@ import {
   type MapLayerType,
 } from "@/core/components/mapScene";
 import { useUiStore } from "@/stores/uiStore";
+import { applyMapQuickStyle } from "@/core/components/mapQuickStyles";
 import DatasetBindingEditor from "./DatasetBindingEditor.vue";
+import MapQuickStylePicker from "./MapQuickStylePicker.vue";
 
 const props = defineProps<{ item: ComponentItem }>();
 const emit = defineEmits<{ (event: "update:props", value: Record<string, unknown>): void; (event: "update:data-binding", value: ComponentItem["dataBinding"]): void }>();
@@ -30,6 +32,10 @@ function updateProps(patch: Record<string, unknown>): void { emit("update:props"
 function changePresentation(value: string): void {
   if (value !== "flat" && value !== "tilted") return;
   updateProps({ presentation: value });
+}
+/** 快速样式：把预设的具体色值写回 props（令牌随 props 持久化，双端同源）。 */
+function applyQuickStyle(id: string): void {
+  emit("update:props", applyMapQuickStyle({ ...props.item.props }, id));
 }
 function updateView(patch: Partial<MapSceneView>): void { updateProps({ view: { ...scene.value.view, ...patch } }); }
 function changeCenter(index: 0 | 1, event: Event): void {
@@ -157,6 +163,9 @@ function moveLayer(index: number, delta: number): void {
     <template v-if="tab === 'style'">
     <section class="map-scene-inspector__section">
       <h3>地图容器</h3>
+      <div class="map-scene-inspector__field">
+        <MapQuickStylePicker :active-id="scene.quickStyle?.id" @select="applyQuickStyle" />
+      </div>
       <label class="map-scene-inspector__field">地图预设
         <select class="cf-control cf-control--compact" :value="scene.presentation" @change="changePresentation(($event.target as HTMLSelectElement).value)">
           <option value="flat">2D 平面地图</option><option value="tilted">2.5D 立体地图</option>

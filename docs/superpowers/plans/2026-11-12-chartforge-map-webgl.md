@@ -43,6 +43,10 @@
 - `src/core/export/runtime.ts` — 地图分支 MapLibre 化（style 同构、点击/flyTo/面包屑）
 - `tests/map-libre-scene.spec.ts` — **新增**构建器单测（旧 `map-scene-style/model` 的 option 断言在 T9 前保留）
 - `e2e/map-scene-*.spec.ts` — 各任务按切换进度改写（见各任务 Files）
+- `src/core/components/mapQuickStyles.ts` — **新增**（Task 11）六项快速样式预设注册表 + 令牌 + 归一化 + 非变异写回
+- `src/assets/geo/chinaPreview.ts` — **新增**（Task 11）34 省缩略图生成物（`scripts/build-china-preview.py` 产出）
+- `src/workbench/components/MapQuickStylePicker.vue` / `MapQuickStyleThumbnail.vue` — **新增**（Task 11）3×2 快速样式选择器与真实国地图缩略图
+- `tests/map-quick-styles.spec.ts` / `e2e/map-quick-style.spec.ts` — **新增**（Task 11）预设单测与双端 parity e2e
 - `docs/superpowers/plans/2026-11-12-chartforge-map-webgl.md` — 本计划
 
 ---
@@ -431,6 +435,69 @@ git commit -m "test+docs: map webgl migration acceptance record and plan checkli
 - `Ruling:` 工作台与离线端继续共享同一套语义源（`buildMapLibreScene` 为工作台权威实现，离线 runtime 为同源镜像实现），几何/图层/标注双端 parity 由 `e2e/map-scene-style-parity.spec.ts` 守护。
 - `Ruling:` 散点/热力/飞线的行转换沿用既有 `buildGeoChartDataFromRows`（离线端为等价镜像实现），字段缺失与无效行按旧 ECharts 文案报错，不静默丢层。
 - `Ruling:` `main` 不合并，`feature/chartforge-datav-lite` 保持独立分支等待人工确认。
+
+### Task 11: 地图「快速样式」内置预设集（3×2 缩略图选择器）
+
+**来源**：用户提供的视觉参考 `/home/user/uploads/image-1.png` —— 深色「快速样式」下拉 + 3×2 六张地图缩略图 + 选中态。
+
+**Files:**
+- Create: `src/core/components/mapQuickStyles.ts`（六预设注册表 + 令牌 + 归一化 + 非变异写回）
+- Create: `src/assets/geo/chinaPreview.ts`（生成物：34 省真实轮廓缩略图）
+- Create: `scripts/build-china-preview.py`（缩略图生成器，投影/简化/最小环回退/独立孔洞）
+- Create: `src/workbench/components/MapQuickStylePicker.vue`（下拉触发 + 3×2 网格 + 选中态）
+- Create: `src/workbench/components/MapQuickStyleThumbnail.vue`（真实 SVG 国地图缩略图）
+- Modify: `src/core/components/mapScene.ts`（持久化 `quickStyle: { id, tokens }`）
+- Modify: `src/core/components/mapLibreScene.ts`（共享构建器消费预设色带/大气）
+- Modify: `src/core/export/runtime.ts`（离线端同源消费预设色带/大气）
+- Modify: `src/workbench/components/MapSceneInspector.vue`（检查器「样式」页接入选择器）
+- Create: `tests/map-quick-styles.spec.ts`（12 条单测）
+- Create: `e2e/map-quick-style.spec.ts`（3 条 e2e）
+- Create: `examples/screens/demo-seed-t11.js` + Modify: `vite.config.ts`（`?demo=t11` 演示种子）
+
+- [x] **Step 1: RED 单测** — 注册表六项 / id 唯一 / 令牌结构 / 归一化重解析 / 写回不变异 / 未知 id 不改 props。
+- [x] **Step 2: GREEN 实现** — `mapQuickStyles.ts` + `mapScene.ts` 归一化 + `mapLibreScene.ts` / `runtime.ts` 同源消费。
+- [x] **Step 3: 选择器 UI** — 3×2 网格、真实 34 省 SVG 缩略图、选中态描边/底色。
+- [x] **Step 4: 双端 parity e2e** — 工作台与离线产物的大气（sky/horizon/fog）与完整 fill 表达式逐字节一致。
+- [x] **Step 5: 门禁 + 演示** — typecheck / vitest / build / e2e / diff / 废弃 grep / 离线体积；`?demo=t11` 可直接查看。
+
+### Task 11 执行记录（2026-11-14）
+
+**Step 1–2 质量门**
+
+| 门禁 | 实测 |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run tests` | 59 文件 / **508** 测试全绿（原 496 + Task 11 新增 12） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | **22/22** 通过（原 19 + Task 11 新增 3） |
+| `git diff --check` | 0 |
+| grep `MAP_SKINS|applyMapSkin|buildMapSceneOption`（代码域） | 0 命中 |
+| grep `underlay|appliedSkin`（`src/`） | 0 命中 |
+| `src/core/components/mapSkins.ts` / `tests/map-skins.spec.ts` | 均不存在（未复活旧皮肤体系） |
+| `eval(`/`new Function`/`innerHTML`（`src/core/export/`） | 0 |
+| 离线单 HTML | **1,917,811 字节 ≈ 1.828 MiB** ≤ 5 MB 预算 |
+
+**Step 4 双端 parity 实测**（`verify-t11.mjs`，工作台 vs 离线单 HTML）
+
+| 维度 | 结果 |
+|---|---|
+| 选择器网格 | 6 项 / 3 列 / 2 行，id = `deep-sea` `jade` `sandstone` `nebula` `contour` `parchment` |
+| 缩略图真实度 | 每张 **34** 条真实省界路径（`china.json` 派生，非占位色块） |
+| 大气 parity | sky `#120a22` ✅ / horizon `#2f1d55` ✅ / fog `#120a22` ✅ |
+| fill 表达式 parity | 完整 `case/match` 表达式**逐字符一致** ✅ |
+| 控制台错误 | 工作台 0，离线页 0 |
+
+**Ruling 摘要**
+
+- `Ruling:` 预设**不复用**已废弃的旧 ECharts 皮肤体系（`mapSkins.ts` 及其调用一律不恢复）；新注册表只输出「氛围 + 色板」两组可落地的具体色值，不含 2.5D 叠片挤出几何。
+- `Ruling:` 预设落盘为 **具体色值**（`quickStyle: { id, tokens }`）而非隐藏状态引用，工作台与离线产物读到的 props 完全一致；归一化时按 id 从注册表**重新解析**令牌，手写/过期令牌一律作废，保证「预设 id → 具体色值」单一来源。
+- `Ruling:` 图层自带色带（`layer.style.colors`）**优先于**预设色带，避免用户逐项微调被预设覆盖；预设仅作兜底。
+- `Ruling:` 缩略图由 `src/assets/geo/china.json` 经 `scripts/build-china-preview.py` 离线生成，运行时零网络依赖（沿用 D2/D3 无外链约束）。
+- `Ruling:` `main` 不合并；`feature/chartforge-datav-lite` 保持独立分支等待人工确认。
+
+**演示入口**：`http://localhost:5174/?demo=t11#/workbench/t11-quick-style`（`vite.config.ts` 仅在 `?demo=t9|t10|t11` 时注入演示种子，不改业务源码）。
+
+**遗留（Minor，deferred）**：参考图为球面/栅格渲染质感，当前缩略图为等价 2D 真实国界投影；若后续需要三维球面缩略图可另立 spec。
 
 
 ## 执行方式

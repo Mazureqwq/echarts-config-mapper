@@ -633,9 +633,46 @@ export const RUNTIME_CODE = String.raw`
     return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
   }
   var CF_CHINA_REGIONS = ["新疆维吾尔自治区", "西藏自治区", "内蒙古自治区", "青海省", "四川省", "黑龙江省", "甘肃省", "云南省", "广西壮族自治区", "湖南省", "陕西省", "广东省", "吉林省", "河北省", "湖北省", "贵州省", "山东省", "江西省", "河南省", "辽宁省", "山西省", "安徽省", "福建省", "浙江省", "江苏省", "重庆市", "宁夏回族自治区", "海南省", "台湾省", "北京市", "天津市", "上海市", "香港特别行政区", "澳门特别行政区"];
+  function cfHex(value, fallback) {
+    return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+  }
+  /**
+   * 快速样式预设令牌：props.quickStyle.tokens 由导出期的归一化写入，
+   * 这里只做防御性读取，非法色值一律回落到缺省色。
+   */
+  function cfQuickStyleTokens(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var tokens = raw.tokens;
+    if (!tokens || typeof tokens !== "object") return null;
+    var fill = tokens.fill && typeof tokens.fill === "object" ? tokens.fill : {};
+    var border = tokens.border && typeof tokens.border === "object" ? tokens.border : {};
+    var label = tokens.label && typeof tokens.label === "object" ? tokens.label : {};
+    var emphasis = tokens.emphasis && typeof tokens.emphasis === "object" ? tokens.emphasis : {};
+    var selected = tokens.selected && typeof tokens.selected === "object" ? tokens.selected : {};
+    var tooltip = tokens.tooltip && typeof tokens.tooltip === "object" ? tokens.tooltip : {};
+    var atmosphere = tokens.atmosphere && typeof tokens.atmosphere === "object" ? tokens.atmosphere : {};
+    return {
+      background: cfHex(tokens.background, "#081622"),
+      accent: cfHex(tokens.accent, "#32d6ff"),
+      fill: {
+        min: cfHex(fill.min, "#102b3d"), mid: cfHex(fill.mid, "#1c5f8f"),
+        max: cfHex(fill.max, "#32d6ff"), empty: cfHex(fill.empty, "#0d1a26")
+      },
+      border: { color: cfHex(border.color, "#c0f3fb"), width: typeof border.width === "number" && isFinite(border.width) ? border.width : 1 },
+      label: { color: cfHex(label.color, "#e7fbff"), stroke: cfHex(label.stroke, "#013a4a") },
+      emphasis: { areaColor: cfHex(emphasis.areaColor, "#3a95fd"), borderColor: cfHex(emphasis.borderColor, "#ffffff") },
+      selected: { areaColor: cfHex(selected.areaColor, "#58d6ff"), borderColor: cfHex(selected.borderColor, "#ffffff") },
+      tooltip: { background: cfHex(tooltip.background, "#07121d"), borderColor: cfHex(tooltip.borderColor, "#1f2a3a"), color: cfHex(tooltip.color, "#e7fbff") },
+      atmosphere: {
+        sky: cfHex(atmosphere.sky, "#0a1628"), horizon: cfHex(atmosphere.horizon, "#12314d"), fog: cfHex(atmosphere.fog, "#0a1628")
+      }
+    };
+  }
   function safeMapSceneMaplibre(item, rootEl, rows, props, screen) {
     var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
     var presentation = props.presentation === "tilted" || props.presentation === "flat" ? props.presentation : fallbackPresentation;
+    // 快速样式预设令牌（随 props 持久化，与工作台 buildMapLibreScene 同源）
+    var quickStyleTokens = cfQuickStyleTokens(props.quickStyle);
     var rawView = props.view && typeof props.view === "object" ? props.view : {};
     var rawCenter = Array.isArray(rawView.center) ? rawView.center : [];
     var minZoom = boundedWidgetNumber(rawView.minZoom, 1, 0.5, 20);
@@ -886,7 +923,7 @@ export const RUNTIME_CODE = String.raw`
           var values = names.map(function (n) { return regionValues[n]; });
           var minimum = values.reduce(function (m, v) { return Math.min(m, v); }, Infinity);
           var maximum = values.reduce(function (m, v) { return Math.max(m, v); }, -Infinity);
-          var colors = regionFillLayer.colors || { min: "#102b3d", mid: "#1c5f8f", max: regionFillLayer.color, empty: "#0d1a26" };
+          var colors = regionFillLayer.colors || (quickStyleTokens ? quickStyleTokens.fill : null) || { min: "#102b3d", mid: "#1c5f8f", max: regionFillLayer.color, empty: "#0d1a26" };
           var mode = regionFillLayer.colorMode === "segments" ? "segments" : "gradient";
           var entries = [];
           names.forEach(function (n) { entries.push(n); entries.push(cfColorFor(regionValues[n], minimum, maximum, colors, mode, regionFillLayer.segments || 5)); });
@@ -1124,8 +1161,11 @@ export const RUNTIME_CODE = String.raw`
       maxZoom: view.maxZoom,
       light: { anchor: "map", color: "#ffffff", intensity: 0.4, position: [1.15, 210, 40] },
       sky: {
-        "sky-color": "#0a1628", "horizon-color": "#12314d", "sky-horizon-blend": 0.5,
-        "fog-color": "#0a1628", "horizon-fog-blend": 0.15, "fog-ground-blend": 0.3, "atmosphere-blend": 0.6
+        "sky-color": quickStyleTokens ? quickStyleTokens.atmosphere.sky : "#0a1628",
+        "horizon-color": quickStyleTokens ? quickStyleTokens.atmosphere.horizon : "#12314d",
+        "sky-horizon-blend": 0.5,
+        "fog-color": quickStyleTokens ? quickStyleTokens.atmosphere.fog : "#0a1628",
+        "horizon-fog-blend": 0.15, "fog-ground-blend": 0.3, "atmosphere-blend": 0.6
       },
       layers: styleLayers
     };

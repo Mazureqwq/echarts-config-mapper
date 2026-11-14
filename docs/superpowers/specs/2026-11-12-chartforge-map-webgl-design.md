@@ -136,6 +136,26 @@
 - **Minor（deferred）**：旧 ECharts 飞线 `animated` 的流动拖尾降级为静态虚线——MapLibre 的 `line-dasharray` 无过渡属性，逐帧 `setPaintProperty` 会让 style 常驻 dirty（`map.loaded()`/`idle` 永不触发、看板持续重绘烧 CPU）。如需恢复流动效果需另立 spec（如 WebGL custom layer 或纹理流动）。
 - **Minor（deferred）**：`geoHeatmap` 在 MapLibre 侧以 `heatmap-density` 色带表达，旧 ECharts 为单色 radial 渐变，密度分布观感略有差异（能力不缺）。
 
+### 6.3 快速样式预设集（Task 11，2026-11-14）
+
+在既有 MapLibre 体系之上新增**内置**「快速样式」预设集，不改变渲染器架构、不复活任何已废弃能力。
+
+| # | 结论 | 证据 |
+|---|---|---|
+| T11-1 | ✅ | 六项预设注册于 `src/core/components/mapQuickStyles.ts`，id = `deep-sea` `jade` `sandstone` `nebula` `contour` `parchment`（深海蓝 / 山地绿洲 / 暖沙金 / 霓虹紫蓝 / 靛蓝等高线 / 素雅宣纸），顺序即 3×2 网格展示顺序 |
+| T11-2 | ✅ | 检查器「样式」页提供深色「快速样式」下拉 + 3×2 网格 + 选中态描边/底色（`MapQuickStylePicker.vue`）；选中态与参考图一致 |
+| T11-3 | ✅ | 每张缩略图为 `china.json` 派生的**真实 34 省 SVG 轮廓**（`MapQuickStyleThumbnail.vue` + 生成物 `src/assets/geo/chinaPreview.ts`），非占位色块；生成器 `scripts/build-china-preview.py` 离线运行，运行时零网络依赖 |
+| T11-4 | ✅ | 预设落盘为具体色值 `quickStyle: { id, tokens }`；归一化按 id 从注册表重新解析，手写/过期令牌作废（「预设 id → 具体色值」单一来源） |
+| T11-5 | ✅ | 工作台（`buildMapLibreScene`）与离线（`RUNTIME_CODE`）同源消费预设 fill 色带与 atmosphere（sky/horizon/fog）；实测大气三项与完整 fill 表达式逐字符一致 |
+| T11-6 | ✅ | 图层自带色带 `layer.style.colors` 优先于预设色带，预设仅兜底，用户逐项微调不被覆盖 |
+| T11-7 | ✅ | 未复活旧皮肤体系：`mapSkins.ts` 不存在，代码域 grep `MAP_SKINS|applyMapSkin|buildMapSceneOption|underlay|appliedSkin` 均 0 命中；旧皮肤字段仍被忽略（`e2e/map-legacy-compat.spec.ts` 保持绿） |
+| T11-8 | ✅ | 未选预设时外观与既有行为完全一致（`e2e/map-quick-style.spec.ts` 第三条用例守护） |
+| T11-9 | ✅ | 门禁全绿：typecheck / vitest 59 文件 508 测试 / build / e2e 22/22 / `git diff --check` 0 / 离线单 HTML 1,917,811 字节 ≤ 5 MB |
+
+**演示入口**：`http://localhost:5174/?demo=t11#/workbench/t11-quick-style`（`vite.config.ts` 仅在 `?demo=t9|t10|t11` 时注入演示种子，不改业务源码）。
+
+**遗留（Minor，deferred）**：参考图为球面/栅格渲染质感，当前缩略图为等价 2D 真实国界投影；如需三维球面缩略图另立 spec。
+
 
 ## 7. 风险与开放问题
 

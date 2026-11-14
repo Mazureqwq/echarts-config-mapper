@@ -1,4 +1,5 @@
 import type { DatasetBinding } from "../model/types";
+import { normalizeMapQuickStyle, type MapQuickStyleState } from "./mapQuickStyles";
 
 export const MAP_LAYER_TYPES = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"] as const;
 export const MAP_REGION_EVENTS = ["regionClick", "regionDblclick", "regionUpdrill"] as const;
@@ -77,6 +78,8 @@ export interface MapSceneProps extends Record<string, unknown> {
   border?: MapBorderStyle;
   scaleBar?: MapScaleBarConfig;
   drill?: { enabled: boolean };
+  /** 快速样式预设 id + 解析后的具体令牌（离线产物据此同源渲染）。 */
+  quickStyle?: MapQuickStyleState;
 }
 
 const LAYER_DEFAULTS: Record<MapLayerType, { name: string; color: string }> = {
@@ -220,6 +223,8 @@ function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProp
     };
   }
   if (isRecord(input.drill)) out.drill = { enabled: typeof input.drill.enabled === "boolean" ? input.drill.enabled : true };
+  const quickStyle = normalizeMapQuickStyle(input.quickStyle);
+  if (quickStyle) out.quickStyle = quickStyle;
   return out;
 }
 

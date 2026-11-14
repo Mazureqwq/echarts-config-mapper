@@ -146,6 +146,9 @@ export function buildMapLibreScene(
   const regionFill = scene.layers.find((layer) => layer.visible && layer.type === "regionFill");
   const regionValues: Record<string, number> = {};
 
+  // 快速样式预设：色带与氛围令牌（工作台与离线同源，令牌随 props 持久化）。
+  const quickStyle = scene.quickStyle;
+
   let fillColor: unknown = regionFill ? regionFill.style.color : "#32d6ff";
   let fillOpacity = regionFill ? regionFill.style.opacity : 0.7;
   let windowKeys: Record<string, unknown> = {};
@@ -160,7 +163,9 @@ export function buildMapLibreScene(
       const values = converted.data.map((row) => row.value);
       const min = Math.min(...values);
       const max = Math.max(...values);
-      const colors = regionFill.style.colors ?? {
+      // 优先级：图层自带色带 > 快速样式预设色带 > 内置默认。
+      // 预设色带只在图层未显式设置时兜底，避免用户逐项微调被覆盖。
+      const colors = regionFill.style.colors ?? quickStyle?.tokens.fill ?? {
         min: MAP_FILL_DEFAULT_MIN,
         mid: MAP_FILL_DEFAULT_MID,
         max: regionFill.style.color,
@@ -428,7 +433,14 @@ export function buildMapLibreScene(
     minZoom: scene.view.minZoom,
     maxZoom: scene.view.maxZoom,
     light: { ...SCENE_LIGHT },
-    sky: { ...SCENE_SKY },
+    sky: quickStyle
+      ? {
+          ...SCENE_SKY,
+          "sky-color": quickStyle.tokens.atmosphere.sky,
+          "horizon-color": quickStyle.tokens.atmosphere.horizon,
+          "fog-color": quickStyle.tokens.atmosphere.fog,
+        }
+      : { ...SCENE_SKY },
     layers,
   };
 
