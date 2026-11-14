@@ -209,9 +209,9 @@ describe("export/snapshot 快照与白名单", () => {
     ]);
     expect(payload.screens[0]?.items.find((entry) => entry.kind === "component" && entry.componentId === "chartforge.map-scene-flat"))
       .toMatchObject({ props: { layers: [{ dataBinding: { datasetId: "layer-regions", fields: { category: "province", value: "score" } } }] } });
-    expect(runtimeSource()).toContain("datasetRows(layer.dataBinding, screen)");
-    expect(runtimeSource()).toContain("layer.dataBinding.fields || {}");
-    expect(runtimeSource()).toContain("layerRows.forEach(function (row)");
+    expect(runtimeSource()).toContain("datasetRows(vlay.dataBinding, screen)");
+    expect(runtimeSource()).toContain("vlay.dataBinding ? (vlay.dataBinding.fields || {}) : containerFields");
+    expect(runtimeSource()).toContain("fillRows.forEach(function (row)");
   });
 
   it("exports stale dataset rows and warns that the last successful snapshot is stale", () => {

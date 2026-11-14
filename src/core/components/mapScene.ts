@@ -1,3 +1,5 @@
+import type { DatasetBinding } from "../model/types";
+
 export const MAP_LAYER_TYPES = ["regionFill", "geoScatter", "geoHeatmap", "geoFlow"] as const;
 export const MAP_REGION_EVENTS = ["regionClick", "regionDblclick", "regionUpdrill"] as const;
 export type MapLayerType = typeof MAP_LAYER_TYPES[number];
@@ -30,7 +32,6 @@ export interface MapLabelStyle { show: boolean; color: string; size: number; str
 /** 外轮廓强化层：由省级几何共享边分析重建的精确国界外环 */
 export interface MapBorderOutlineStyle { show: boolean; color: string; width: number }
 export interface MapBorderStyle { color: string; width: number; type: "solid" | "dashed"; outline?: MapBorderOutlineStyle }
-export interface MapUnderlayLayer { areaColor: string; borderColor: string; shadowColor: string }
 export interface MapFillColors { min: string; mid: string; max: string; empty: string }
 export interface MapLayerBorder { color: string; width: number; type: "solid" | "dashed" }
 export interface MapPointLabel { show: boolean; color: string; size: number; stroke?: string }
@@ -75,9 +76,7 @@ export interface MapSceneProps extends Record<string, unknown> {
   label?: MapLabelStyle;
   border?: MapBorderStyle;
   scaleBar?: MapScaleBarConfig;
-  underlay?: MapUnderlayLayer[];
   drill?: { enabled: boolean };
-  appliedSkin?: string;
 }
 
 const LAYER_DEFAULTS: Record<MapLayerType, { name: string; color: string }> = {
@@ -220,16 +219,7 @@ function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProp
         : MAP_SCALE_BAR_DEFAULT.position,
     };
   }
-  if (Array.isArray(input.underlay)) {
-    const entries = input.underlay.slice(0, 3).filter(isRecord).map((entry) => ({
-      areaColor: normalizeHex(entry.areaColor, "#10273a"),
-      borderColor: normalizeHex(entry.borderColor, "#b5f3ff"),
-      shadowColor: normalizeHex(entry.shadowColor, "#8cd3ef"),
-    }));
-    if (entries.length) out.underlay = entries;
-  }
   if (isRecord(input.drill)) out.drill = { enabled: typeof input.drill.enabled === "boolean" ? input.drill.enabled : true };
-  if (typeof input.appliedSkin === "string" && input.appliedSkin.trim()) out.appliedSkin = input.appliedSkin.trim().slice(0, 48);
   return out;
 }
 
@@ -359,16 +349,6 @@ export function formatScaleDistance(meters: number): string {
     return `${Number(km.toFixed(km >= 10 ? 0 : 1))} km`;
   }
   return `${Math.round(meters)} m`;
-}
-
-/** 国界外环几何（FeatureCollection + MultiLineString） */
-export interface MapOutlineCollection {
-  type: "FeatureCollection";
-  features: Array<{
-    type: "Feature";
-    properties: { name: string };
-    geometry: { type: "MultiLineString"; coordinates: number[][][] };
-  }>;
 }
 
 /** 国界外环几何（FeatureCollection + MultiLineString） */
@@ -951,11 +931,6 @@ export function normalizeMapSceneProps(raw: unknown, fallbackPresentation: MapPr
   };
 }
 
-
-import type { DatasetBinding, GeoChartType } from "../model/types";
-import { buildGeoChartDataFromRows } from "../chart/geoData";
-
-export interface MapSceneOptionResult { option: Record<string, unknown>; errors: string[] }
 type MapRow = Record<string, unknown>;
 
 function finiteNumber(value: unknown): number | null {
@@ -964,6 +939,7 @@ function finiteNumber(value: unknown): number | null {
   return null;
 }
 
+/** Region name/value rows extracted from the container or a layer's own binding. */
 export function regionRows(rows: readonly MapRow[], binding: DatasetBinding["fields"]): { data: Array<{ name: string; value: number }>; error: string } {
   const nameField = binding?.category?.trim() ?? "";
   const valueField = binding?.value?.trim() ?? "";
@@ -978,119 +954,6 @@ export function regionRows(rows: readonly MapRow[], binding: DatasetBinding["fie
     return name && value !== null ? [{ name, value }] : [];
   });
   return { data, error: rows.length && !data.length ? "没有有效的区域名称/数值行" : "" };
-}
-
-function layerError(layer: MapSceneLayer, message: string): string { return `${layer.name}：${message}`; }
-
-/** Build one ECharts geo coordinate system and append the ordered, visible layer series. */
-export function buildMapSceneOption(
-  rawProps: unknown,
-  rows: readonly MapRow[],
-  fields?: DatasetBinding["fields"],
-  rowsByLayerId: Readonly<Record<string, readonly MapRow[]>> = {},
-): MapSceneOptionResult {
-  const scene = normalizeMapSceneProps(rawProps);
-  const errors: string[] = [];
-  const series: Array<Record<string, unknown>> = [];
-  const visualMaps: Array<Record<string, unknown>> = [];
-  let emptyColor: string | null = null;
-  for (const layer of scene.layers) {
-    if (!layer.visible) continue;
-    const layerRows = layer.dataBinding ? (rowsByLayerId[layer.id] ?? []) : rows;
-    const layerFields = layer.dataBinding ? layer.dataBinding.fields : fields;
-    if (layer.type === "regionFill") {
-      const converted = regionRows(layerRows, layerFields);
-      if (converted.error) { errors.push(layerError(layer, converted.error)); continue; }
-      if (converted.data.length) {
-        const values = converted.data.map((row) => row.value);
-        const minimum = values.reduce((min, value) => Math.min(min, value), Number.POSITIVE_INFINITY);
-        const maximum = values.reduce((max, value) => Math.max(max, value), Number.NEGATIVE_INFINITY);
-        const regionBorder = layer.style.border ?? { color: "#5db9d2", width: 0.65, type: "solid" };
-        series.push({
-          name: layer.name, type: "map", map: "china", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data,
-          itemStyle: { areaColor: layer.style.color, opacity: layer.style.opacity, borderColor: regionBorder.color, borderWidth: regionBorder.width, borderType: regionBorder.type },
-          emphasis: { itemStyle: { areaColor: layer.style.color, opacity: 1 } },
-        });
-        const seriesIndex = series.length - 1;
-        const rampColors = layer.style.colors ?? { min: MAP_FILL_DEFAULT_MIN, mid: MAP_FILL_DEFAULT_MID, max: layer.style.color, empty: MAP_FILL_DEFAULT_EMPTY };
-        if (layer.style.colorMode === "segments") {
-          visualMaps.push({ show: false, type: "piecewise", min: minimum, max: maximum || 1, seriesIndex, pieces: buildSegmentPieces(rampColors, minimum, maximum || 1, layer.style.segments ?? 5) });
-        } else if (layer.style.colorMode === "gradient") {
-          visualMaps.push({ show: false, type: "continuous", min: minimum, max: maximum || 1, seriesIndex, inRange: { colorStops: [{ offset: 0, color: rampColors.min }, { offset: 0.5, color: rampColors.mid }, { offset: 1, color: rampColors.max }] } });
-        } else {
-          visualMaps.push({ show: false, min: minimum, max: maximum || 1, seriesIndex, inRange: { color: ["#102b3d", layer.style.color] } });
-        }
-        if (layer.style.colors?.empty && !emptyColor) emptyColor = layer.style.colors.empty;
-      }
-      continue;
-    }
-    const chartType = layer.type as GeoChartType;
-    const converted = buildGeoChartDataFromRows(layerRows, layerFields?.geo, chartType);
-    if (!converted.ok) { errors.push(layerError(layer, converted.message)); continue; }
-    if (layer.type === "geoScatter" && converted.data.kind === "geoScatter") {
-      const pointLabel = layer.style.label
-        ? { show: layer.style.label.show, color: layer.style.label.color, fontSize: layer.style.label.size, ...(layer.style.label.stroke ? { stroke: layer.style.label.stroke, strokeWidth: 1 } : {}) }
-        : undefined;
-      series.push({ name: layer.name, type: "scatter", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, symbolSize: layer.style.size, data: converted.data.rows.map((point) => ({ name: point.name, value: point.value === undefined ? [point.longitude, point.latitude] : [point.longitude, point.latitude, point.value] })), itemStyle: { color: layer.style.color, opacity: layer.style.opacity }, ...(pointLabel ? { label: pointLabel } : {}) });
-    } else if (layer.type === "geoHeatmap" && converted.data.kind === "geoHeatmap") {
-      series.push({ name: layer.name, type: "heatmap", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data.rows.map((point) => [point.longitude, point.latitude, point.value]), pointSize: layer.style.size, blurSize: Math.max(layer.style.size, 12), itemStyle: { color: layer.style.color, opacity: layer.style.opacity } });
-    } else if (layer.type === "geoFlow" && converted.data.kind === "geoFlow") {
-      series.push({ name: layer.name, type: "lines", coordinateSystem: "geo", geoIndex: scene.presentation === "tilted" ? 3 : 0, data: converted.data.rows.map((line) => ({ name: line.name, coords: [line.from, line.to], ...(line.value !== undefined ? { value: line.value } : {}) })), lineStyle: { color: layer.style.color, width: Math.max(1, layer.style.size / 4), opacity: layer.style.opacity, curveness: 0.2 }, effect: layer.style.animated ? { show: true, trailLength: 0.4, symbol: "arrow", symbolSize: 4 } : { show: false } });
-    }
-  }
-  const view = scene.view;
-  const roam = view.dragEnabled && view.zoomEnabled ? true : view.dragEnabled ? "move" : view.zoomEnabled ? "scale" : false;
-  const labelGroup = scene.label ?? MAP_LABEL_DEFAULT;
-  const labelCfg: Record<string, unknown> = {
-    show: view.showLabels && labelGroup.show,
-    color: labelGroup.color,
-    fontSize: labelGroup.size,
-  };
-  if (labelGroup.stroke) {
-    labelCfg.stroke = labelGroup.stroke;
-    labelCfg.strokeWidth = labelGroup.strokeWidth ?? 1;
-  }
-  if (labelGroup.shadow) {
-    labelCfg.textShadowColor = labelGroup.shadow;
-    labelCfg.textShadowBlur = labelGroup.shadowBlur ?? 0;
-  }
-  const borderGroup = scene.border ?? MAP_BORDER_DEFAULT;
-  const emphasisCfg = scene.emphasis
-    ? { label: { color: scene.emphasis.labelColor }, itemStyle: { areaColor: scene.emphasis.areaColor, borderColor: scene.emphasis.borderColor } }
-    : { label: { color: "#ffffff" }, itemStyle: { areaColor: "rgba(0,254,233,0.6)" } };
-  const tooltipCfg = scene.tooltipStyle
-    ? { trigger: "item", backgroundColor: scene.tooltipStyle.background, borderColor: scene.tooltipStyle.borderColor, textStyle: { color: scene.tooltipStyle.color, fontSize: scene.tooltipStyle.fontSize } }
-    : { trigger: "item" };
-  const geoBase = { map: "china", center: view.center, zoom: view.zoom, roam, scaleLimit: { min: view.minZoom, max: view.maxZoom }, label: labelCfg, itemStyle: { areaColor: { type: "linear", x: 1, y: 0, x2: 0, y2: 0, colorStops: [{ offset: 0, color: "rgba(3,27,78,0.88)" }, { offset: 1, color: "rgba(58,149,253,0.88)" }] }, borderColor: borderGroup.color, borderWidth: borderGroup.width, borderType: borderGroup.type, shadowColor: "#8cd3ef", shadowOffsetY: 10, shadowBlur: 28 }, emphasis: emphasisCfg };
-  // Three purposeful underlays: deep base shadow, mid sidewall, and bright top rim.
-  const DEFAULT_EXTRUSION = [{ offset: 3, areaColor: "rgba(5,21,35,0.12)", borderColor: "rgba(58,149,253,0.45)", shadowColor: "rgba(58,149,253,0.85)", shadowOffsetY: 10, shadowBlur: 8 }, { offset: 2, areaColor: "rgba(5,21,35,0.1)", borderColor: "rgba(58,149,253,0.68)", shadowColor: "rgba(65,214,255,0.72)", shadowOffsetY: 6, shadowBlur: 10 }, { offset: 1, areaColor: "#10273a", borderColor: "#b5f3ff", shadowColor: "#8cd3ef", shadowOffsetY: 4, shadowBlur: 10 }];
-  const extrusionLayers = scene.underlay
-    ? DEFAULT_EXTRUSION.map((base, index) => {
-        const palette = scene.underlay?.[index];
-        return palette ? { ...base, areaColor: palette.areaColor, borderColor: palette.borderColor, shadowColor: palette.shadowColor } : base;
-      })
-    : DEFAULT_EXTRUSION;
-  const geo = scene.presentation === "tilted"
-    ? [...extrusionLayers.map((layer) => ({ ...geoBase, layoutCenter: ["50%", `${49 + layer.offset}%`], layoutSize: "150%", label: { ...geoBase.label, show: false }, roam: false, silent: true, emphasis: { disabled: true }, itemStyle: { areaColor: layer.areaColor, borderColor: layer.borderColor, borderWidth: 1, shadowColor: layer.shadowColor, shadowOffsetY: layer.shadowOffsetY, shadowBlur: layer.shadowBlur } })), { ...geoBase, layoutCenter: ["50%", "49%"], layoutSize: "150%" }]
-    : geoBase;
-  const topGeo = (Array.isArray(geo) ? geo[geo.length - 1] : geo) as Record<string, unknown>;
-  if (emptyColor) {
-    const emptyFill = emptyColor;
-    topGeo.regions = CHINA_REGION_NAMES.map((name) => ({ name, itemStyle: { areaColor: emptyFill } }));
-  }
-  if (scene.selected) {
-    topGeo.selectedMode = "single";
-    topGeo.select = { itemStyle: { areaColor: scene.selected.areaColor, borderColor: scene.selected.borderColor } };
-  }
-  return {
-    option: {
-      backgroundColor: scene.presentation === "tilted" ? "transparent" : view.backgroundColor, animation: false, tooltip: tooltipCfg,
-      ...(visualMaps.length ? { visualMap: visualMaps } : {}),
-      geo,
-      series,
-    },
-    errors,
-  };
 }
 
 export function createMapSceneLayer(type: MapLayerType): MapSceneLayer {

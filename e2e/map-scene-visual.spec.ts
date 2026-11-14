@@ -345,7 +345,7 @@ test("下钻视角与面包屑截图（flat 分段屏）", async ({ page, contex
 });
 
 
-test("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼容回归（T8：迁移到 MapLibre 路径）", async ({ page, context }) => {
+test("分段色带与图例、下钻视角截图及 v1 兼容回归（T9：迁移到 MapLibre 路径）", async ({ page, context }) => {
   await context.addInitScript(({ storageKey, workspace }) => {
     if (localStorage.getItem(storageKey) === null) {
       localStorage.setItem(storageKey, JSON.stringify(workspace));
@@ -381,30 +381,6 @@ test("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼容回�
   await expect(page.locator(".map-scene__breadcrumb")).toBeVisible();
   await page.waitForTimeout(500);
   await page.screenshot({ path: "test-results/visual/09-drill.jpg", type: "jpeg", quality: 62 });
-
-  // --- 皮肤一键切换（翡翠青绿 → 晨曦浅色）---
-  await page.goto(`/?nav=skin#/workbench/${SCREEN_ID}`);
-  await expect(page.locator(".workbench")).toBeVisible();
-  await page.locator(`[data-item-id="${ITEM_ID}"]`).click();
-  const inspector = page.locator(".map-scene-inspector");
-  await expect(inspector.locator(".map-scene-inspector__skin")).toHaveCount(5);
-  await inspector.locator('[title="翡翠青绿"]').click();
-  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
-    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
-    const scene = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId);
-    return scene?.props?.view?.backgroundColor ?? null;
-  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toBe("#06170f");
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: "test-results/visual/07-skin-jade.jpg", type: "jpeg", quality: 62 });
-  await inspector.locator('[title="晨曦浅色"]').click();
-  await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
-    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
-    const scene = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId);
-    return scene?.props?.view?.backgroundColor ?? null;
-  }, { key: STORAGE_KEY, screenId: SCREEN_ID, itemId: ITEM_ID })).toBe("#f4f7fb");
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: "test-results/visual/08-skin-dawn.jpg", type: "jpeg", quality: 62 });
-
 
   // --- v1 旧形状 props 回归：遗留双色 visualMap、无 regions、无图例、无 v2 键 ---
   await page.goto("/?nav=v1#/workbench/map-visual-v1-screen");

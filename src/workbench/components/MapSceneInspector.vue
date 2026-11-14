@@ -15,7 +15,6 @@ import {
   type MapSceneView,
   type MapLayerType,
 } from "@/core/components/mapScene";
-import { applyMapSkin, MAP_SKINS } from "@/core/components/mapSkins";
 import { useUiStore } from "@/stores/uiStore";
 import DatasetBindingEditor from "./DatasetBindingEditor.vue";
 
@@ -28,9 +27,6 @@ const tab = ref<"style" | "data" | "interaction">("style");
 const LAYER_LABELS: Record<MapLayerType, string> = { regionFill: "区域填色", geoScatter: "地理散点", geoHeatmap: "点热力", geoFlow: "OD 飞线" };
 
 function updateProps(patch: Record<string, unknown>): void { emit("update:props", { ...props.item.props, ...patch }); }
-function applySkin(skinId: string): void {
-  emit("update:props", applyMapSkin(props.item.props, skinId) as Record<string, unknown>);
-}
 function changePresentation(value: string): void {
   if (value !== "flat" && value !== "tilted") return;
   updateProps({ presentation: value });
@@ -161,23 +157,6 @@ function moveLayer(index: number, delta: number): void {
     <template v-if="tab === 'style'">
     <section class="map-scene-inspector__section">
       <h3>地图容器</h3>
-      <div class="map-scene-inspector__skins" role="group" aria-label="地图皮肤">
-        <button
-          v-for="skin in MAP_SKINS"
-          :key="skin.id"
-          type="button"
-          class="map-scene-inspector__skin"
-          :class="{ 'map-scene-inspector__skin--active': scene.appliedSkin === skin.id }"
-          :title="skin.name"
-          @click="applySkin(skin.id)"
-        >
-          <span
-            class="map-scene-inspector__skin-swatch"
-            :style="{ background: `linear-gradient(90deg, ${skin.tokens.fill.min}, ${skin.tokens.fill.mid}, ${skin.tokens.fill.max})` }"
-          />
-          <span class="map-scene-inspector__skin-name">{{ skin.name }}</span>
-        </button>
-      </div>
       <label class="map-scene-inspector__field">地图预设
         <select class="cf-control cf-control--compact" :value="scene.presentation" @change="changePresentation(($event.target as HTMLSelectElement).value)">
           <option value="flat">2D 平面地图</option><option value="tilted">2.5D 立体地图</option>
@@ -341,12 +320,6 @@ function moveLayer(index: number, delta: number): void {
 
 <style scoped>
 .map-scene-inspector { display: flex; flex-direction: column; gap: 12px; }
-.map-scene-inspector__skins { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.map-scene-inspector__skin { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--cf-border); border-radius: 6px; background: transparent; cursor: pointer; color: var(--cf-text); font-size: 11px; text-align: left; }
-.map-scene-inspector__skin:hover { border-color: var(--cf-primary); }
-.map-scene-inspector__skin--active { border-color: var(--cf-primary); box-shadow: 0 0 0 1px var(--cf-primary) inset; }
-.map-scene-inspector__skin-swatch { display: block; height: 10px; border-radius: 4px; border: 1px solid var(--cf-border); }
-.map-scene-inspector__skin-name { line-height: 1.2; }
 .map-scene-inspector__section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--cf-border); padding-top: 9px; }
 .map-scene-inspector h3 { margin: 0; color: var(--cf-text); font-size: 11px; font-weight: 650; }
 .map-scene-inspector__field { display: flex; flex-direction: column; gap: 4px; color: var(--cf-text-2); font-size: 10px; }

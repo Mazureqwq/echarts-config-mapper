@@ -3,7 +3,7 @@ import { buildArtifact } from "../src/core/export/artifact";
 import { buildPackagePayload } from "../src/core/export/snapshot";
 import { attachGeo } from "../src/core/export/assets";
 import { RUNTIME_CODE } from "../src/core/export/runtime";
-import { buildMapSceneOption } from "../src/core/components/mapScene";
+import { regionRows as mapRegionRows } from "../src/core/components/mapScene";
 import { DatasetRuntime } from "../src/core/data/datasetRuntime";
 import { createZip, filesToEntries } from "../src/core/export/zip";
 import { createWorkspace, createScreen, createChartSpec } from "../src/core/model/schema";
@@ -354,17 +354,12 @@ describe("export 端到端：产物 → zip → 回读", () => {
     // map-scene 不再产出 ECharts 捕获（MapLibre 渲染器）；独立地理图表的变量过滤断言见上
 
     const mapScene = findItem(root, "map-scene")!;
-    const editorMissingColumns = buildMapSceneOption({ layers: [
-      { id: "missing-region-column", type: "regionFill", name: "缺失区域列", visible: true, style: {}, dataBinding: { datasetId: "geo-regions", fields: { category: "missingZone", value: "total" } } },
-      { id: "missing-column", type: "geoScatter", name: "缺失列", visible: true, style: {}, dataBinding: { datasetId: "geo-points", fields: { geo: { longitude: "missingX", latitude: "y", name: "place" } } } },
-    ] }, [], {}, { "missing-region-column": regionRows, "missing-column": pointRows }).errors;
-    expect(editorMissingColumns).toEqual([
-      "缺失区域列：加工后数据缺少已映射的区域名称或数值列",
-      "缺失列：加工后缺少已映射的地理字段列：missingX",
-    ]);
+    // 区域填色诊断由共享 mapRegionRows 助手与离线运行时共同产生（台账裁决：散点/热力/飞线的
+    // 映射诊断移交 playwright 离线 e2e，此处只断言区域填色一路）。
+    const missingRegion = mapRegionRows(regionRows, { category: "missingZone", value: "total" });
+    expect(missingRegion.error).toBe("加工后数据缺少已映射的区域名称或数值列");
     const mapStatus = collectElements(mapScene).find((element) => element.attributes.role === "status")?.textContent;
-    // 区域填色诊断由离线运行时保留；散点/热力/飞线的映射诊断随 T7 渲染回归（台账裁决）
-    expect(mapStatus).toContain(editorMissingColumns[0]);
+    expect(mapStatus).toContain("缺失区域列：加工后数据缺少已映射的区域名称或数值列");
 
     table.children[1]!.children[3]!.click();
     // 变量切换后独立图层的离线行为由 playwright 离线 e2e 承载（T5 起）；此处仅确认 map-scene DOM 仍健在

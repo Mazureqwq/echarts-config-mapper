@@ -358,10 +358,10 @@ M3 截图包（边界近似/比例尺/视图偏移/悬停动画/标注覆盖层�
 **Interfaces:**
 - Produces: 兼容用例——种子含 (a) 旧 tilted props（无 v2 新字段）(b) 历史皮肤写入的颜色值，断言：渲染不空白（fill 层存在且有颜色）、`pitch===28`、历史 colors 生效、无 `MAP_SKINS` 导出（grep 级断言可放 T10）。
 
-- [ ] **Step 1: RED** — `map-legacy-compat.spec.ts`（旧种子渲染断言）
-- [ ] **Step 2: GREEN** — 先跑通用例确认现状满足（tilted→pitch 渲染与颜色保留若不满足 → 修 widget/buildMapLibreScene）
-- [ ] **Step 3: 废弃清理** — 删除皮肤体系与旧 builder 及其测试/断言 → typecheck（处理残留引用 TS6133 等）→ vitest 全绿
-- [ ] **Step 4: 全量门 + 提交**
+- [x] **Step 1: RED** — `map-legacy-compat.spec.ts`（旧种子渲染断言）
+- [x] **Step 2: GREEN** — 先跑通用例确认现状满足（tilted→pitch 渲染与颜色保留若不满足 → 修 widget/buildMapLibreScene）
+- [x] **Step 3: 废弃清理** — 删除皮肤体系与旧 builder 及其测试/断言 → typecheck（处理残留引用 TS6133 等）→ vitest 全绿
+- [x] **Step 4: 全量门 + 提交**
 
 ```bash
 git add -A src tests e2e

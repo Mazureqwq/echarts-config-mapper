@@ -56,7 +56,6 @@ describe("ComponentInspector theme-inheriting colors", () => {
     expect(html).toContain("地图图层（2）");
     expect(html).toContain("显示运输流向");
     // 容器级「共享数据绑定」随三页签移入数据页；该覆盖由 e2e/map-scene-editor.spec.ts（数据页签）承担。
-    expect(html).toContain("地图皮肤");
     expect(html).toContain("区域热力+图例");
     expect(html).toContain("数据绑定 · 独立");
     expect(html).toContain("数据绑定 · 继承容器");

@@ -27,7 +27,7 @@ const initialWorkspace = {
   settings: { autosave: true },
 };
 
-test("检查器三页签、皮肤、图层模板、缩放级别与交互页", async ({ page, context }) => {
+test("检查器三页签、图层模板、缩放级别与交互页", async ({ page, context }) => {
   await context.addInitScript(({ storageKey, workspace }) => {
     if (localStorage.getItem(storageKey) === null) {
       localStorage.setItem(storageKey, JSON.stringify(workspace));
@@ -40,11 +40,10 @@ test("检查器三页签、皮肤、图层模板、缩放级别与交互页", as
   const inspector = page.locator(".map-scene-inspector");
   await expect(inspector).toBeVisible();
 
-  // 样式页：三页签 + 5 张皮肤卡 + 图层模板按钮
+  // 样式页：三页签 + 图层模板按钮（皮肤体系已随 T9 废弃清理移除）
   await expect(inspector.getByRole("tab", { name: "样式", exact: true })).toBeVisible();
   await expect(inspector.getByRole("tab", { name: "数据", exact: true })).toBeVisible();
   await expect(inspector.getByRole("tab", { name: "交互", exact: true })).toBeVisible();
-  await expect(inspector.locator(".map-scene-inspector__skin")).toHaveCount(5);
   await expect(inspector.getByRole("button", { name: "区域热力+图例" })).toBeVisible();
 
   // 模板：散点+飞线一次生成两层
