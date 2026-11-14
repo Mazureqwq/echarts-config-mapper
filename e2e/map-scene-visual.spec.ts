@@ -5,6 +5,8 @@ const SCREEN_ID = "map-visual-e2e-screen";
 const ITEM_ID = "map-visual-e2e-scene";
 const REGION_DATASET_ID = "map-visual-e2e-regions";
 const POINT_DATASET_ID = "map-visual-e2e-points";
+const T8_SCREEN_ID = "map-visual-t8-screen";
+const T8_ITEM_ID = "map-visual-t8-scene";
 
 const regionRows = [
   { province: "广东省", score: 92 },
@@ -141,6 +143,37 @@ const initialWorkspace = {
       }],
       updatedAt: Date.now(),
     },
+    {
+      id: T8_SCREEN_ID,
+      name: "M3 视觉质感验收",
+      canvas: { width: 1280, height: 720, background: { kind: "color", color: "#050b12" } },
+      items: [{
+        id: T8_ITEM_ID,
+        name: "质感地图",
+        kind: "component",
+        componentId: "chartforge.map-scene-tilted",
+        componentVersion: 1,
+        frame: { x: 60, y: 50, w: 900, h: 560, rotate: 0 },
+        dataBinding: { datasetId: REGION_DATASET_ID, fields: { category: "province", value: "score" } },
+        props: {
+          presentation: "tilted",
+          pitch: 28,
+          legend: { show: true, position: "top-right", mode: "continuous" },
+          scaleBar: { show: true, position: "bottom-left" },
+          label: { show: true, color: "#eaffff", size: 12, minZoom: 1 },
+          border: { color: "#8888ff", width: 1.5, type: "solid", outline: { show: true, color: "#ffd166", width: 3 } },
+          view: { center: [104.114129, 35.550339], zoom: 1.05, minZoom: 1, maxZoom: 8, dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622", offset: { x: 0, y: 0 } },
+          layers: [{
+            id: "t8-fill",
+            type: "regionFill",
+            name: "热度",
+            visible: true,
+            style: { color: "#32d6ff", opacity: 0.85, size: 12, colorMode: "gradient", colors: { min: "#102b3d", mid: "#1c5f8f", max: "#66ffff", empty: "#0d1a26" } },
+          }],
+        },
+      }],
+      updatedAt: Date.now(),
+    },
   ],
   datasets: [
     { id: REGION_DATASET_ID, name: "省级热度集", source: { kind: "static", data: regionRows }, pipeline: { filter: [] } },
@@ -168,12 +201,15 @@ async function readMapStyle(page: Page): Promise<MapStyleShot | null> {
     if (!style) return null;
     const fill = (style.layers ?? []).find((l: any) => l.id === "cf-fill");
     const line = (style.layers ?? []).find((l: any) => l.id === "cf-line");
+    const outline = (style.layers ?? []).find((l: any) => l.id === "cf-outline");
     return {
       pitch: style.pitch,
       sky: style.sky ?? null,
       light: style.light ?? null,
       fillLayer: fill ?? null,
       lineLayer: line ?? null,
+      outlineLayer: outline ?? null,
+      outlineSource: (style.sources as any)?.["china-outline"] ?? null,
       sourcePromoteId: (style.sources as any)?.china?.promoteId ?? null,
       extrusion: JSON.stringify(style).includes("extrusion"),
     };
@@ -309,7 +345,7 @@ test("下钻视角与面包屑截图（flat 分段屏）", async ({ page, contex
 });
 
 
-test.fixme("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼容回归（T7/T8/T9 恢复）", async ({ page, context }) => {
+test("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼容回归（T8：迁移到 MapLibre 路径）", async ({ page, context }) => {
   await context.addInitScript(({ storageKey, workspace }) => {
     if (localStorage.getItem(storageKey) === null) {
       localStorage.setItem(storageKey, JSON.stringify(workspace));
@@ -321,21 +357,22 @@ test.fixme("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼�
   await expect(page.locator(".workbench")).toBeVisible();
   await expect(page.locator(".map-scene__chart")).toBeVisible();
   await page.waitForTimeout(700);
-  const ramp = await page.locator(".map-scene__chart").evaluate((root) => {
-    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const vm = Array.isArray(option?.visualMap) ? option.visualMap[0] : option?.visualMap;
-    return { type: vm?.type ?? null, pieces: Array.isArray(vm?.pieces) ? vm.pieces.length : 0 };
-  });
-  expect(ramp).toEqual({ type: "piecewise", pieces: 5 });
+  const segStyle = await readMapStyle(page);
+  const segColor = JSON.stringify(segStyle?.fillLayer?.paint?.["fill-color"] ?? "");
+  expect(segColor).toContain("广东省");
+  expect(segColor).toContain("#0b1f33");
+  expect(segColor).toContain("#66ffff");
   await expect(page.locator(".map-scene__legend-item")).toHaveCount(5);
+  await expect(page.locator(".map-scene__legend-swatch")).toHaveCount(5);
   await page.screenshot({ path: "test-results/visual/06-segments-legend.jpg", type: "jpeg", quality: 62 });
 
   // --- 下钻视角 + 面包屑截图（flat 分段屏，geoIndex0 路径已在交互 e2e 验证）---
   const flatPixel = await page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const chart = vueInstance?.exposed?.getChart?.();
-    return chart?.convertToPixel?.({ geoIndex: 0 }, [120.1551, 30.2741]) ?? null;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const point = map.project([120.1551, 30.2741]);
+    return [point.x, point.y];
   });
   expect(flatPixel).not.toBeNull();
   const flatBox = await page.locator(".map-scene__chart canvas").boundingBox();
@@ -376,21 +413,107 @@ test.fixme("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼�
   await page.waitForTimeout(700);
   const legacy = await page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    const vm = Array.isArray(option?.visualMap) ? option.visualMap[0] : option?.visualMap;
+    const map = vueInstance?.exposed?.getMap?.();
+    const style: any = map?.getStyle?.();
+    const fill = (style?.layers ?? []).find((l: any) => l.id === "cf-fill");
     return {
-      vmType: vm?.type ?? null,
-      inRangeColor: vm?.inRange?.color ?? null,
-      hasEmptyColor: Array.isArray(geo?.regions) ? geo.regions.some((entry: any) => entry?.itemStyle?.areaColor === "#0d1a26") : false,
+      fillColor: JSON.stringify(fill?.paint?.["fill-color"] ?? ""),
       legendCount: document.querySelectorAll(".map-scene__legend").length,
+      outlineCount: (style?.layers ?? []).filter((l: any) => l.id === "cf-outline").length,
     };
   });
-  expect(legacy.vmType).toBeNull();
-  expect(legacy.inRangeColor).toEqual(["#102b3d", "#336699"]);
-  expect(legacy.hasEmptyColor).toBe(false);
+  // v1 旧 props：无图例、无外轮廓强化层，填色仍按旧双色色带展开
   expect(legacy.legendCount).toBe(0);
+  expect(legacy.outlineCount).toBe(0);
+  expect(legacy.fillColor).toContain("#336699");
+  expect(legacy.fillColor).toContain("#102b3d");
   const persisted = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
   const v1Props = persisted?.screens?.find((s: any) => s.id === "map-visual-v1-screen")?.items?.[0]?.props ?? {};
   expect(Object.keys(v1Props).sort()).toEqual(["layers", "modelVersion", "pitch", "presentation", "view"]);
+});
+
+
+const T8_SCREEN_TITLE = "map-visual-t8-screen";
+
+test("M3 视觉质感：精确外轮廓强化层、比例尺、视图偏移与标注覆盖层（T8）", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(
+    ({ storageKey, workspace }) => {
+      if (localStorage.getItem(storageKey) === null) {
+        localStorage.setItem(storageKey, JSON.stringify(workspace));
+      }
+    },
+    { storageKey: STORAGE_KEY, workspace: initialWorkspace },
+  );
+
+  await page.goto(`/#/workbench/${T8_SCREEN_ID}`);
+  await expect(page.locator(".workbench")).toBeVisible();
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await expect.poll(async () => (await readMapStyle(page))?.fillLayer != null).toBe(true);
+  await page.waitForTimeout(700);
+
+  // ---- 外轮廓强化层：由共享边分析重建的精确国界外环（非 glow 近似）----
+  const styleShot = await readMapStyle(page);
+  expect(styleShot?.outlineLayer?.type).toBe("line");
+  expect(styleShot?.outlineLayer?.source).toBe("china-outline");
+  expect(styleShot?.outlineLayer?.paint?.["line-color"]).toBe("#ffd166");
+  expect(styleShot?.outlineLayer?.paint?.["line-width"]).toBe(3);
+  expect(styleShot?.outlineSource?.type).toBe("geojson");
+  const outlineFeatures = styleShot?.outlineSource?.data?.features ?? [];
+  expect(outlineFeatures.length).toBe(1);
+  const outlineRings = outlineFeatures[0].geometry.coordinates as number[][][];
+  // 精确外环：大陆（含海南）与台湾两条；行政区缝隙不产生独立外环
+  expect(outlineRings.length).toBe(2);
+  const mainland = outlineRings.reduce((a, b) => (a.length >= b.length ? a : b));
+  expect(mainland.length).toBeGreaterThan(500);
+  const taiwan = outlineRings.find((ring) => ring !== mainland)!;
+  const taiwanXs = taiwan.map((point) => point[0]);
+  const taiwanYs = taiwan.map((point) => point[1]);
+  expect(Math.min(...taiwanXs)).toBeGreaterThan(119);
+  expect(Math.max(...taiwanXs)).toBeLessThan(123);
+  expect(Math.min(...taiwanYs)).toBeGreaterThan(21);
+  expect(Math.max(...taiwanYs)).toBeLessThan(26);
+  const mainXs = mainland.map((point) => point[0]);
+  const mainYs = mainland.map((point) => point[1]);
+  expect(Math.min(...mainXs)).toBeLessThan(74);
+  expect(Math.max(...mainXs)).toBeGreaterThan(134);
+  expect(Math.min(...mainYs)).toBeLessThan(19);
+  expect(Math.max(...mainYs)).toBeGreaterThan(53);
+
+  // ---- 比例尺：自绘 DOM，m/km 文本 ----
+  await expect(page.locator(".map-scene__scalebar")).toBeVisible();
+  const scaleText = (await page.locator(".map-scene__scalebar-text").innerText()).trim();
+  expect(scaleText).toMatch(/^\d+(\.\d+)? (m|km)$/);
+
+  // ---- 标注覆盖层：HTML 覆盖层 + 移动重投影 ----
+  await expect(page.locator(".map-scene__label").first()).toBeVisible();
+  expect(await page.locator(".map-scene__label").count()).toBeGreaterThan(5);
+
+  await page.screenshot({ path: "test-results/visual/10-t8-outline-scalebar.jpg", type: "jpeg", quality: 62 });
+
+  // ---- 视图偏移：改动偏移后相机中心随之平移 ----
+  const before = await readMapCamera(page);
+  await page.locator(`[data-item-id="${T8_ITEM_ID}"]`).click();
+  const inspector = page.locator(".map-scene-inspector");
+  await expect(inspector).toBeVisible();
+  await inspector.getByLabel("视图水平偏移").fill("25");
+  await inspector.getByLabel("视图水平偏移").press("Tab");
+  await page.waitForTimeout(700);
+  const after = await readMapCamera(page);
+  expect(after).not.toBeNull();
+  expect(Math.abs(after!.center[0] - before!.center[0])).toBeGreaterThan(0.5);
+  const persisted = await page.evaluate(({ key, screenId, itemId }) => {
+    const ws = JSON.parse(localStorage.getItem(key) ?? "null");
+    const scene = ws?.screens?.find((s: any) => s.id === screenId)?.items?.find((i: any) => i.id === itemId);
+    return scene?.props?.view?.offset ?? null;
+  }, { key: STORAGE_KEY, screenId: T8_SCREEN_ID, itemId: T8_ITEM_ID });
+  expect(persisted).toEqual({ x: 25, y: 0 });
+  await page.screenshot({ path: "test-results/visual/11-t8-view-offset.jpg", type: "jpeg", quality: 62 });
+
+  // ---- 标注缩放阈值：低于阈值隐藏标注 ----
+  await inspector.getByLabel("标注最小缩放").fill("8");
+  await inspector.getByLabel("标注最小缩放").press("Tab");
+  await page.waitForTimeout(600);
+  await expect(page.locator(".map-scene__label")).toHaveCount(0);
 });

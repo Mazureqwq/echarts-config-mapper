@@ -32,3 +32,4 @@ src/assets/screens/
 # Playwright browser test artifacts
 /test-results/
 /playwright-report/
+/t8-shots/

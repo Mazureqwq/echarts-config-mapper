@@ -7,6 +7,7 @@ import {
   MAP_EMPHASIS_DEFAULT,
   MAP_LABEL_DEFAULT,
   MAP_LAYER_TYPES,
+  MAP_OUTLINE_DEFAULT_COLOR,
   MAP_SELECTED_DEFAULT,
   MAP_TOOLTIP_DEFAULT,
   normalizeMapSceneProps,
@@ -48,6 +49,31 @@ function changeZoom(key: "zoom" | "minZoom" | "maxZoom", event: Event): void {
 }
 function changeViewToggle(key: "dragEnabled" | "zoomEnabled" | "showLabels", event: Event): void {
   updateView({ [key]: (event.target as HTMLInputElement).checked });
+}
+/** T8：视图偏移（容器百分比，正 x 右移 / 正 y 下移） */
+function changeViewOffset(axis: "x" | "y", event: Event): void {
+  const value = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(value)) return;
+  const current = scene.value.view.offset ?? { x: 0, y: 0 };
+  updateView({ offset: { ...current, [axis]: value } });
+}
+/** T8：外轮廓强化层（精确国界外环） */
+function updateOutline(patch: Record<string, unknown>): void {
+  const current = (scene.value.border?.outline ?? { show: false, color: MAP_OUTLINE_DEFAULT_COLOR, width: 2 }) as unknown as Record<string, unknown>;
+  updateProps({ border: { ...(scene.value.border ?? MAP_BORDER_DEFAULT), outline: { ...current, ...patch } } });
+}
+/** T8：标注缩放阈值（空值表示不设阈值） */
+function changeLabelMinZoom(event: Event): void {
+  const raw = (event.target as HTMLInputElement).value;
+  const current = { ...(scene.value.label ?? MAP_LABEL_DEFAULT) } as Record<string, unknown>;
+  if (raw === "") {
+    delete current.minZoom;
+    updateProps({ label: current });
+    return;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return;
+  updateProps({ label: { ...current, minZoom: value } });
 }
 function updateLayer(id: string, patch: Omit<Partial<MapLayer>, "style"> & { style?: Partial<MapLayer["style"]> }): void {
   const layers = scene.value.layers.map((layer) => layer.id === id ? { ...layer, ...patch, style: { ...layer.style, ...patch.style } } : layer);
@@ -109,7 +135,7 @@ function openBlueprint(): void {
   ui.setBlueprintOpen(true);
 }
 function updateGroup(
-  key: "legend" | "label" | "border" | "emphasis" | "selected" | "tooltipStyle" | "valueFormat",
+  key: "legend" | "label" | "border" | "emphasis" | "selected" | "tooltipStyle" | "valueFormat" | "scaleBar",
   patch: Record<string, unknown>,
 ): void {
   const current = (scene.value[key] ?? {}) as Record<string, unknown>;
@@ -164,6 +190,8 @@ function moveLayer(index: number, delta: number): void {
         <label>最小缩放<input class="cf-control cf-control--compact" type="number" min="0.5" max="20" step="0.1" :value="scene.view.minZoom" @change="changeZoom('minZoom', $event)" /></label>
         <label>最大缩放<input class="cf-control cf-control--compact" type="number" :min="scene.view.minZoom" max="20" step="0.1" :value="scene.view.maxZoom" @change="changeZoom('maxZoom', $event)" /></label>
         <label>地图背景色<input class="map-scene-inspector__color" type="color" :value="scene.view.backgroundColor" @input="updateView({ backgroundColor: ($event.target as HTMLInputElement).value })" /></label>
+        <label>水平偏移<input class="cf-control cf-control--compact" type="number" min="-100" max="100" step="1" aria-label="视图水平偏移" :value="scene.view.offset?.x ?? 0" @change="changeViewOffset('x', $event)" /></label>
+        <label>垂直偏移<input class="cf-control cf-control--compact" type="number" min="-100" max="100" step="1" aria-label="视图垂直偏移" :value="scene.view.offset?.y ?? 0" @change="changeViewOffset('y', $event)" /></label>
       </div>
       <label class="map-scene-inspector__check"><input type="checkbox" :checked="scene.view.dragEnabled" @change="changeViewToggle('dragEnabled', $event)" />允许拖拽平移</label>
       <label class="map-scene-inspector__check"><input type="checkbox" :checked="scene.view.zoomEnabled" @change="changeViewToggle('zoomEnabled', $event)" />允许滚轮缩放</label>
@@ -202,7 +230,22 @@ function moveLayer(index: number, delta: number): void {
         <label>Tooltip 文字<input type="color" :value="scene.tooltipStyle?.color ?? MAP_TOOLTIP_DEFAULT.color" @input="updateGroup('tooltipStyle', { color: ($event.target as HTMLInputElement).value })" /></label>
         <label>数值小数位<input class="cf-control cf-control--compact" type="number" min="0" max="4" :value="scene.valueFormat?.decimals ?? 0" @change="updateGroup('valueFormat', { decimals: Number(($event.target as HTMLInputElement).value) })" /></label>
         <label>数值单位<input class="cf-control cf-control--compact" type="text" maxlength="12" :value="scene.valueFormat?.suffix ?? ''" @change="updateGroup('valueFormat', { suffix: ($event.target as HTMLInputElement).value })" /></label>
+        <label>标注最小缩放<input class="cf-control cf-control--compact" type="number" min="0.5" max="20" step="0.5" aria-label="标注最小缩放" :value="scene.label?.minZoom ?? ''" placeholder="不限" @change="changeLabelMinZoom($event)" /></label>
+        <label>比例尺位置
+          <select class="cf-control cf-control--compact" aria-label="比例尺位置" :value="scene.scaleBar?.position ?? 'bottom-left'" @change="updateGroup('scaleBar', { position: ($event.target as HTMLSelectElement).value })">
+            <option value="bottom-left">左下</option><option value="bottom-right">右下</option>
+            <option value="top-left">左上</option><option value="top-right">右上</option>
+          </select>
+        </label>
+        <label>外轮廓颜色<input type="color" aria-label="外轮廓颜色" :value="scene.border?.outline?.color ?? MAP_OUTLINE_DEFAULT_COLOR" @input="updateOutline({ color: ($event.target as HTMLInputElement).value })" /></label>
+        <label>外轮廓粗细<input class="cf-control cf-control--compact" type="number" min="0" max="12" step="0.5" aria-label="外轮廓粗细" :value="scene.border?.outline?.width ?? 2" @change="updateOutline({ width: Number(($event.target as HTMLInputElement).value) })" /></label>
       </div>
+      <label class="map-scene-inspector__check">
+        <input type="checkbox" aria-label="显示比例尺" :checked="scene.scaleBar?.show ?? false" @change="updateGroup('scaleBar', { show: ($event.target as HTMLInputElement).checked })" />显示比例尺
+      </label>
+      <label class="map-scene-inspector__check">
+        <input type="checkbox" aria-label="强化外轮廓" :checked="scene.border?.outline?.show ?? false" @change="updateOutline({ show: ($event.target as HTMLInputElement).checked })" />强化外轮廓（精确国界外环）
+      </label>
       <details class="map-scene-inspector__binding">
         <summary>高级：标注描边/阴影、点击态与 Tooltip 边框</summary>
         <div class="map-scene-inspector__view-grid">

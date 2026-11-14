@@ -569,17 +569,24 @@ export const RUNTIME_CODE = String.raw`
     var minZoom = boundedWidgetNumber(rawView.minZoom, 1, 0.5, 20);
     var maxZoom = boundedWidgetNumber(rawView.maxZoom, Math.max(minZoom, 8), minZoom, 20);
     var zoomFallback = Math.min(maxZoom, Math.max(minZoom, 1.05));
+    var rawOffset = rawView.offset && typeof rawView.offset === "object" ? rawView.offset : null;
+    var viewOffset = rawOffset ? {
+      x: boundedWidgetNumber(rawOffset.x, 0, -100, 100),
+      y: boundedWidgetNumber(rawOffset.y, 0, -100, 100)
+    } : null;
     var view = {
       center: [boundedWidgetNumber(rawCenter[0], 104.114129, -180, 180), boundedWidgetNumber(rawCenter[1], 35.550339, -90, 90)],
       zoom: boundedWidgetNumber(rawView.zoom, zoomFallback, minZoom, maxZoom), minZoom: minZoom, maxZoom: maxZoom,
       dragEnabled: typeof rawView.dragEnabled === "boolean" ? rawView.dragEnabled : true,
       zoomEnabled: typeof rawView.zoomEnabled === "boolean" ? rawView.zoomEnabled : true,
       showLabels: typeof rawView.showLabels === "boolean" ? rawView.showLabels : true,
-      backgroundColor: safeWidgetColor(rawView.backgroundColor, "#081622")
+      backgroundColor: safeWidgetColor(rawView.backgroundColor, "#081622"),
+      offset: viewOffset
     };
     var pitch = presentation === "tilted" ? boundedWidgetNumber(props.pitch, 28, 0, 60) : 0;
     var labelGroup = props.label && typeof props.label === "object" ? props.label : { show: true, color: "#e7fbff", size: 10 };
     var labelShow = view.showLabels && labelGroup.show !== false;
+    var labelMinZoom = typeof labelGroup.minZoom === "number" ? boundedWidgetNumber(labelGroup.minZoom, 1, 0.5, 20) : null;
     var labelColor = safeWidgetColor(labelGroup.color, "#e7fbff");
     var labelSize = boundedWidgetNumber(labelGroup.size, 10, 8, 40);
     var labelShadow = typeof labelGroup.shadow === "string" && /^#[0-9a-fA-F]{6}$/.test(labelGroup.shadow) ? labelGroup.shadow
@@ -588,6 +595,13 @@ export const RUNTIME_CODE = String.raw`
     var borderColor = safeWidgetColor(borderGroup.color, "#c0f3fb");
     var borderWidth = boundedWidgetNumber(borderGroup.width, 1, 0, 8);
     var borderType = borderGroup.type === "dashed" ? "dashed" : "solid";
+    var outlineGroup = borderGroup.outline && typeof borderGroup.outline === "object" ? borderGroup.outline : null;
+    var outlineShow = outlineGroup ? outlineGroup.show === true : false;
+    var outlineColor = outlineGroup ? safeWidgetColor(outlineGroup.color, "#bfe9ff") : "#bfe9ff";
+    var outlineWidth = outlineGroup ? boundedWidgetNumber(outlineGroup.width, 2, 0, 12) : 2;
+    var scaleBarGroup = props.scaleBar && typeof props.scaleBar === "object" ? props.scaleBar : null;
+    var scaleBarShow = scaleBarGroup ? scaleBarGroup.show === true : false;
+    var scaleBarPosition = scaleBarGroup && (scaleBarGroup.position === "top-left" || scaleBarGroup.position === "top-right" || scaleBarGroup.position === "bottom-left" || scaleBarGroup.position === "bottom-right") ? scaleBarGroup.position : "bottom-left";
     var emphasisGroup = props.emphasis && typeof props.emphasis === "object" ? props.emphasis : null;
     var selectedGroup = props.selected && typeof props.selected === "object" ? props.selected : null;
     var valueFormat = props.valueFormat && typeof props.valueFormat === "object" ? props.valueFormat : null;
@@ -711,6 +725,33 @@ export const RUNTIME_CODE = String.raw`
       var text = value.toFixed(decimals);
       return fmt && typeof fmt.suffix === "string" && fmt.suffix ? text + fmt.suffix : text;
     }
+    function cfHaversine(a, b) {
+      var radius = 6371008.8;
+      function toRad(v) { return v * Math.PI / 180; }
+      var dLat = toRad(b[1] - a[1]);
+      var dLng = toRad(b[0] - a[0]);
+      var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return 2 * radius * Math.asin(Math.min(1, Math.sqrt(h)));
+    }
+    function cfFormatScaleDistance(meters) {
+      if (!isFinite(meters) || meters <= 0) return "0 m";
+      if (meters >= 1000) {
+        var km = meters / 1000;
+        return String(Number(km.toFixed(km >= 10 ? 0 : 1))) + " km";
+      }
+      return String(Math.round(meters)) + " m";
+    }
+    function cfPickScaleBarDistance(metersPerPixel, maxPixels) {
+      var limit = (isFinite(maxPixels) && maxPixels > 0) ? maxPixels : 110;
+      var perPixel = (isFinite(metersPerPixel) && metersPerPixel > 0) ? metersPerPixel : 1;
+      var target = Math.max(1, perPixel * limit);
+      var base = Math.pow(10, Math.floor(Math.log10(target)));
+      var candidates = [1, 2, 5].map(function (factor) { return factor * base; });
+      var usable = candidates.filter(function (value) { return value <= target; });
+      var meters = usable.length ? usable[usable.length - 1] : base / 10;
+      if (!isFinite(meters) || meters < 1) meters = 1;
+      return { meters: meters, pixels: meters / perPixel, text: cfFormatScaleDistance(meters) };
+    }
 
     var regionFillLayer = null;
     for (var li = 0; li < layers.length; li++) {
@@ -832,11 +873,13 @@ export const RUNTIME_CODE = String.raw`
       Object.assign({
         id: "cf-fill", type: "fill", source: "china"
       }, fillWindow, {
+        "fill-color-transition": { duration: 180, delay: 0 },
         paint: { "fill-color": fillColor, "fill-opacity": fillOpacity, "fill-outline-color": borderColor }
       }),
       Object.assign({
         id: "cf-line", type: "line", source: "china"
       }, fillWindow, {
+        "line-color-transition": { duration: 180, delay: 0 },
         paint: Object.assign({
           "line-color": ["case",
             ["boolean", ["feature-state", "cf_selected"], false], selectedBorderColor,
@@ -876,10 +919,26 @@ export const RUNTIME_CODE = String.raw`
       });
     }
 
+    var outlineData = payload && payload.geo && payload.geo.chinaOutline ? payload.geo.chinaOutline : null;
+    var styleSources = { china: { type: "geojson", data: geoSource ? geoSource : { type: "FeatureCollection", features: [] }, promoteId: "name" } };
+    if (outlineShow && outlineData && outlineData.features && outlineData.features.length) {
+      styleSources["china-outline"] = { type: "geojson", data: outlineData };
+      styleLayers.push(
+        {
+          id: "cf-outline-glow", type: "line", source: "china-outline",
+          paint: { "line-color": outlineColor, "line-width": Math.max(outlineWidth, 1) * 3, "line-opacity": 0.22, "line-blur": 8 }
+        },
+        {
+          id: "cf-outline", type: "line", source: "china-outline",
+          paint: { "line-color": outlineColor, "line-width": outlineWidth, "line-opacity": 0.95 }
+        }
+      );
+    }
+
     var style = {
       version: 8,
       name: "chartforge-map-scene",
-      sources: { china: { type: "geojson", data: geoSource ? geoSource : { type: "FeatureCollection", features: [] }, promoteId: "name" } },
+      sources: styleSources,
       pitch: pitch,
       center: view.center.slice(),
       zoom: view.zoom,
@@ -972,6 +1031,8 @@ export const RUNTIME_CODE = String.raw`
     canvas.__cfRegionValues = regionValues;
     canvas.__cfScene = {
       legend: { show: legendEntries.length > 0, position: legendPosition, mode: legendMode, entries: legendEntries },
+      scaleBar: { show: scaleBarShow, position: scaleBarPosition },
+      labelMinZoom: labelMinZoom,
       tooltip: {
         show: true,
         background: tooltipStyle.background,
@@ -989,6 +1050,7 @@ export const RUNTIME_CODE = String.raw`
           attributionControl: false, interactive: true
         });
         canvas.__cfMap = map; // 测试钩子：e2e 读取离线 style
+        canvas.__cfStyle = style; // 测试钩子：e2e 读取离线构建期 style JSON（含悬停过渡与外轮廓图层）
         if (!view.dragEnabled) map.dragPan.disable();
         if (!view.zoomEnabled) map.scrollZoom.disable();
         map.on("error", function (ev) {
@@ -1142,10 +1204,17 @@ export const RUNTIME_CODE = String.raw`
         rootEl.appendChild(drillEl);
         function projectLabels() {
           if (!labels.length) return;
+          if (!labelShow || (labelMinZoom !== null && map.getZoom() < labelMinZoom)) {
+            labels.forEach(function (label) {
+              if (label.el) label.el.style.display = "none";
+            });
+            return;
+          }
           var rect = canvas.getBoundingClientRect();
           labels.forEach(function (label) {
             if (!label.el) {
               var span = doc.createElement("span");
+              span.className = "cf-map-label";
               span.textContent = label.name;
               span.style.position = "absolute";
               span.style.transform = "translate(-50%, -50%)";
@@ -1162,13 +1231,79 @@ export const RUNTIME_CODE = String.raw`
             if (visible) { label.el.style.left = pt.x + "px"; label.el.style.top = pt.y + "px"; }
           });
         }
-        map.on("move", projectLabels);
-        map.on("load", function () {
+        var scaleBarEl = null;
+        function cfUpdateScaleBar() {
+          if (!scaleBarShow) { if (scaleBarEl) scaleBarEl.style.display = "none"; return; }
+          var mapCanvas = map.getCanvas();
+          var cw = mapCanvas.clientWidth;
+          var ch = mapCanvas.clientHeight;
+          if (!cw || !ch) return;
+          if (!scaleBarEl) {
+            scaleBarEl = doc.createElement("div");
+            scaleBarEl.className = "cf-map-scalebar";
+            scaleBarEl.setAttribute("role", "img");
+            scaleBarEl.setAttribute("aria-label", "比例尺");
+            scaleBarEl.style.position = "absolute"; scaleBarEl.style.zIndex = "3";
+            scaleBarEl.style.display = "flex"; scaleBarEl.style.flexDirection = "column"; scaleBarEl.style.alignItems = "flex-start"; scaleBarEl.style.gap = "2px";
+            scaleBarEl.style.padding = "4px 6px"; scaleBarEl.style.border = "1px solid #54bad744"; scaleBarEl.style.borderRadius = "4px";
+            scaleBarEl.style.background = "#061622c9"; scaleBarEl.style.fontSize = "10px"; scaleBarEl.style.color = "#b9e9f5";
+            scaleBarEl.style.pointerEvents = "none";
+            if (scaleBarPosition === "top-left") { scaleBarEl.style.top = "10px"; scaleBarEl.style.left = "10px"; }
+            else if (scaleBarPosition === "top-right") { scaleBarEl.style.top = "10px"; scaleBarEl.style.right = "10px"; }
+            else if (scaleBarPosition === "bottom-right") { scaleBarEl.style.right = "10px"; scaleBarEl.style.bottom = "34px"; }
+            else { scaleBarEl.style.left = "10px"; scaleBarEl.style.bottom = "10px"; }
+            var scaleBarMark = doc.createElement("span");
+            scaleBarMark.className = "cf-map-scalebar-bar";
+            scaleBarMark.style.display = "block"; scaleBarMark.style.height = "5px";
+            scaleBarMark.style.border = "1px solid #b9e9f5"; scaleBarMark.style.borderTop = "none";
+            var scaleBarText = doc.createElement("span");
+            scaleBarText.className = "cf-map-scalebar-text";
+            scaleBarText.style.whiteSpace = "nowrap";
+            scaleBarEl.appendChild(scaleBarMark);
+            scaleBarEl.appendChild(scaleBarText);
+            rootEl.appendChild(scaleBarEl);
+          }
+          var row = Math.max(1, Math.round(ch / 2));
+          var from = map.unproject([0, row]);
+          var to = map.unproject([100, row]);
+          var metersPerPixel = cfHaversine([from.lng, from.lat], [to.lng, to.lat]) / 100;
+          var picked = cfPickScaleBarDistance(metersPerPixel, 110);
+          var barEl = scaleBarEl.querySelector(".cf-map-scalebar-bar");
+          var textEl = scaleBarEl.querySelector(".cf-map-scalebar-text");
+          if (barEl) barEl.style.width = picked.pixels + "px";
+          if (textEl) textEl.textContent = picked.text;
+        }
+        function cfApplyViewOffset() {
+          if (!viewOffset || (!viewOffset.x && !viewOffset.y)) return;
+          var mapCanvas = map.getCanvas();
+          var cw = mapCanvas.clientWidth;
+          var ch = mapCanvas.clientHeight;
+          if (!cw || !ch) return;
+          var current = map.getCenter();
+          var zoom = map.getZoom();
+          var worldSize = 512 * Math.pow(2, Math.max(0, zoom));
+          var degPerPixelLng = 360 / worldSize;
+          var metersPerPixel = 40075016.686 * Math.cos(current.lat * Math.PI / 180) / worldSize;
+          var degPerPixelLat = metersPerPixel / 111319.49079327358;
+          var shiftX = (viewOffset.x / 100) * cw;
+          var shiftY = (viewOffset.y / 100) * ch;
+          map.jumpTo({ center: [current.lng - shiftX * degPerPixelLng, current.lat + shiftY * degPerPixelLat] });
+        }
+        function cfSyncCamera() {
+          map.jumpTo({ center: view.center.slice(), zoom: view.zoom, pitch: pitch });
           cfFitIfDefault(map, style, geoSource);
+          cfApplyViewOffset();
           projectLabels();
+          cfUpdateScaleBar();
+        }
+        map.on("move", function () {
+          projectLabels();
+          cfUpdateScaleBar();
         });
-        cfFitIfDefault(map, style, geoSource);
-        projectLabels();
+        map.on("load", function () {
+          cfSyncCamera();
+        });
+        cfSyncCamera();
         charts.push({ dispose: function () { try { map.remove(); } catch (e) { /* 已销毁 */ } } });
       } catch (createErr) {
         showStatus((createErr && createErr.message) || "地图渲染出错");

@@ -1,5 +1,6 @@
 import echartsUrl from "echarts/dist/echarts.min.js?url";
 import chinaGeo from "@/assets/geo/china.json";
+import { buildChinaOutline } from "@/core/components/mapScene";
 import { RUNTIME_CODE } from "./runtime";
 import type { PackagePayload } from "./model";
 
@@ -50,5 +51,6 @@ export function attachGeo(payload: PackagePayload): PackagePayload {
     (i.kind === "component" && mapSceneIds.includes(i.componentId) && i.componentVersion === 1)
   ));
   if (!needsGeo) return payload;
-  return { ...payload, geo: { china: chinaGeo } };
+  // chinaOutline：共享边分析重建的精确国界外环（与工作台 buildChinaOutline 同源同结果）
+  return { ...payload, geo: { china: chinaGeo, chinaOutline: buildChinaOutline(chinaGeo) } };
 }

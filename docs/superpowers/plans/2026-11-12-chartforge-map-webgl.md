@@ -316,27 +316,29 @@ M2 截图包（图例/色带/悬停态/点击态/下钻前后/事件联动表格
 ### Task 8: 视觉质感项（M3）
 
 **Files:**
-- Modify: `src/core/components/mapLibreScene.ts`（边界近似/标注覆盖层/视图偏移）
+- Modify: `src/core/components/mapScene.ts`（共享语义：视图偏移换算/比例尺刻度/精确国界外环重建）
+- Modify: `src/core/components/mapLibreScene.ts`（分级边界/标注覆盖层/视图偏移）
 - Modify: `src/workbench/components/MapSceneWidget.vue`（比例尺控件自绘、悬停动画、标注覆盖层 move 重投影）
 - Modify: `src/core/export/runtime.ts`（同构：比例尺/标注/偏移）
+- Modify: `src/core/export/assets.ts`、`src/core/export/model.ts`（离线 payload 内嵌 `geo.chinaOutline`）
 - Modify: `src/workbench/components/MapSceneInspector.vue`（视图偏移/比例尺开关等新控件）
-- Modify: `e2e/map-scene-visual.spec.ts`（视觉项断言与截图）
+- Modify: `tests/map-libre-scene.spec.ts`、`e2e/map-scene-visual.spec.ts`、`e2e/map-scene-style-parity.spec.ts`（断言与截图）
 
 **Interfaces:**
 - Produces:
-  - 分级边界近似：`border` props → 省界 `fill-outline-color`（线型/粗细/色）+ 外轮廓强化层（`line` 层用中国 union 外环近似——**实现取舍**：china.json 无独立国界几何，M3 交付「省界可配 + 外轮廓 glow」并在验收记录注明近似边界）
+  - 分级边界：`border` props → 省界 `fill-outline-color`（线型/粗细/色）+ 外轮廓强化层（`line` 层用中国 union 外环——**实现**：china.json 无独立国界几何，外环由省级几何做精确平面并集分析重建：边在交点/T 型接点切分 → 沿线内外侧采样判定并集边界 → 左面遍历成环 → 只取外环（大陆含海南 + 台湾），甘肃—宁夏与广东—香港等行政区缝隙不产生独立外环）
   - 视图偏移：`view.offset?: {x,y}`（新增可选 props，归一 clamp ±100%）→ 构建期换算 camera 中心偏移（或 container padding 等价实现）
   - 比例尺控件：`scaleBar?: {show, position}` props → 按 `map.unproject` 两端点算米数、格式化 m/km 自绘 DOM
   - 省名标注：HTML 覆盖层完整版（`map.on("move")` 重投影、`showLabels` 开关、缩放阈值）
 - 新增 props 均入 `normalizeMapSceneProps` 白名单（v2 增量字段，向后兼容）
 
-- [ ] **Step 1: RED** — 新单测（offset/scaleBar/边界近似 style 字段/标注覆盖层数据）+ visual spec 断言
-- [ ] **Step 2: GREEN** — 双端实现
-- [ ] **Step 3: 全量门 + 提交**
+- [x] **Step 1: RED** — 新单测（offset/scaleBar/边界 style 字段/标注覆盖层数据）+ visual spec 断言
+- [x] **Step 2: GREEN** — 双端实现
+- [x] **Step 3: 全量门 + 提交**
 
 ```bash
-git add src/core/components/mapLibreScene.ts src/core/components/mapScene.ts src/workbench/components/MapSceneWidget.vue src/workbench/components/MapSceneInspector.vue src/core/export/runtime.ts tests/map-libre-scene.spec.ts e2e/map-scene-visual.spec.ts
-git commit -m "feat: map visual polish (border approximation view offset scale bar labels)"
+git add src/core/components/mapLibreScene.ts src/core/components/mapScene.ts src/workbench/components/MapSceneWidget.vue src/workbench/components/MapSceneInspector.vue src/core/export/runtime.ts src/core/export/assets.ts src/core/export/model.ts tests/map-libre-scene.spec.ts e2e/map-scene-visual.spec.ts e2e/map-scene-style-parity.spec.ts e2e/t8-m3-shots.spec.ts .gitignore
+git commit -m "feat: map visual polish (exact national outline view offset scale bar labels)"
 ```
 
 - [ ] **Step 4: GATE M3 截图验收（D6 停止点）**

@@ -112,7 +112,7 @@ export interface PackagePayload {
   /** Selected-screen referenced normalized row snapshots, with no source configuration. */
   datasets: PackageDataset[];
   /** 仅当旧地图图表或地图场景存在时携带，避免白白多 54 KB */
-  geo?: { china: unknown };
+  geo?: { china: unknown; chinaOutline?: unknown };
   /** 导出过程中的取舍记录（被丢掉的非法 URL、被剔除的令牌等），同时写进 manifest */
   warnings: string[];
 }

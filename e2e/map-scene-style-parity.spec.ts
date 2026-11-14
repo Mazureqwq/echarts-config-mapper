@@ -5,6 +5,10 @@ const SCREEN_ID = "map-style-parity-screen";
 const ITEM_ID = "map-style-parity-scene";
 const DATASET_ID = "map-style-parity-dataset";
 
+const T8_SCREEN_ID = "map-style-parity-t8-screen";
+const T8_ITEM_ID = "map-style-parity-t8-scene";
+const T8_DATASET_ID = "map-style-parity-t8-dataset";
+
 const LEGEND_SCREEN_ID = "map-legend-parity-screen";
 const LEGEND_ITEM_ID = "map-legend-parity-scene";
 const LEGEND_DATASET_ID = "map-legend-parity-dataset";
@@ -422,6 +426,176 @@ test("图例 / tooltip / 悬停与点击态双端一致（T7）", async ({ page,
   await offlinePage.close();
 });
 
-test.fixme("图层样式（散点/飞线）双端一致（T8 恢复）", async () => {
-  // scatter/heat/flow 的 MapLibre 渲染排入 T8（台账裁决：T7 只收口图例/tooltip/交互态）
+/** T8 视觉质感双端夹具：外轮廓强化 + 比例尺 + 视图偏移 + 标注缩放阈值 */
+const t8Workspace = {
+  version: 2,
+  assets: [],
+  designAssets: [],
+  screens: [{
+    id: T8_SCREEN_ID,
+    name: "M3 视觉质感双端校验",
+    canvas: { width: 1280, height: 720, background: { kind: "color", color: "#12161d" } },
+    items: [{
+      id: T8_ITEM_ID,
+      name: "质感地图",
+      kind: "component",
+      componentId: "chartforge.map-scene-flat",
+      componentVersion: 1,
+      frame: { x: 60, y: 60, w: 760, h: 520, rotate: 0 },
+      dataBinding: { datasetId: T8_DATASET_ID, fields: { category: "province", value: "score" } },
+      props: {
+        presentation: "flat",
+        pitch: 0,
+        legend: { show: true, position: "top-right", mode: "continuous" },
+        scaleBar: { show: true, position: "bottom-left" },
+        label: { show: true, color: "#eaffff", size: 12, minZoom: 3 },
+        border: { color: "#8888ff", width: 2, type: "solid", outline: { show: true, color: "#ffd166", width: 3 } },
+        view: { center: [110, 30], zoom: 4, minZoom: 1, maxZoom: 8, dragEnabled: true, zoomEnabled: true, showLabels: true, backgroundColor: "#081622", offset: { x: 8, y: -6 } },
+        layers: [{
+          id: "fill",
+          type: "regionFill",
+          name: "热度",
+          visible: true,
+          style: { color: "#32d6ff", opacity: 0.85, size: 12, colorMode: "gradient", colors: { min: "#000010", mid: "#0080ff", max: "#66ffff", empty: "#0a0a14" } },
+        }],
+      },
+    }],
+    updatedAt: Date.now(),
+  }],
+  datasets: [{ id: T8_DATASET_ID, name: "省级热度", source: { kind: "static", data: rows }, pipeline: { filter: [] } }],
+  settings: { autosave: true },
+};
+
+test("M3 视觉质感（外轮廓/比例尺/视图偏移/标注）双端一致（T8）", async ({ page, context }) => {
+  await context.addInitScript(({ storageKey, workspace }) => {
+    if (localStorage.getItem(storageKey) === null) {
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+  }, { storageKey: STORAGE_KEY, workspace: t8Workspace });
+
+  await page.goto(`/#/workbench/${T8_SCREEN_ID}`);
+  await expect(page.locator(".workbench")).toBeVisible();
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await expect.poll(async () => (await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    return Boolean(vueInstance?.exposed?.getMap?.()?.getStyle?.());
+  }))).toBe(true);
+  await waitForMapReady(page);
+
+  const workbench = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const style: any = map.getStyle();
+    const layers = style?.layers ?? [];
+    const fill = layers.find((l: any) => l.id === "cf-fill");
+    const line = layers.find((l: any) => l.id === "cf-line");
+    const outline = layers.find((l: any) => l.id === "cf-outline");
+    const glow = layers.find((l: any) => l.id === "cf-outline-glow");
+    const outlineSource = (style?.sources as any)?.["china-outline"];
+    const center = map.getCenter();
+    const canvas = map.getCanvas();
+    const zoom = map.getZoom();
+    const worldSize = 512 * Math.pow(2, zoom);
+    const degPerPixelLng = 360 / worldSize;
+    return {
+      outlineColor: outline?.paint?.["line-color"] ?? null,
+      outlineWidth: outline?.paint?.["line-width"] ?? null,
+      outlineSourceType: outlineSource?.type ?? null,
+      outlineRingCount: (outlineSource?.data?.features?.[0]?.geometry?.coordinates ?? []).length,
+      outlineMainlandPoints: Math.max(
+        0,
+        ...(outlineSource?.data?.features?.[0]?.geometry?.coordinates ?? []).map((ring: any[]) => ring.length),
+      ),
+      glowWidth: glow?.paint?.["line-width"] ?? null,
+      containerWidth: canvas?.clientWidth ?? 0,
+      cameraLng: center?.lng ?? null,
+      cameraLat: center?.lat ?? null,
+      zoom,
+      lngShiftRatio: (110 - (center?.lng ?? 110)) / degPerPixelLng / (canvas?.clientWidth || 1),
+    };
+  });
+  expect(workbench).not.toBeNull();
+  // 构建期 style JSON 双端一致（含悬停过渡与外轮廓图层）
+  const workbenchStyle = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    return vueInstance?.exposed?.getStyle?.() ?? null;
+  });
+  expect(workbenchStyle).not.toBeNull();
+  const workbenchLayers = (workbenchStyle as any).layers as any[];
+  expect(workbenchLayers.find((layer) => layer.id === "cf-fill")?.["fill-color-transition"]).toEqual({ duration: 180, delay: 0 });
+  expect(workbenchLayers.find((layer) => layer.id === "cf-line")?.["line-color-transition"]).toEqual({ duration: 180, delay: 0 });
+  expect(workbenchLayers.find((layer) => layer.id === "cf-outline")?.paint?.["line-color"]).toBe("#ffd166");
+  expect(workbenchLayers.find((layer) => layer.id === "cf-outline-glow")?.paint?.["line-width"]).toBe(9);
+  expect(workbench!.outlineColor).toBe("#ffd166");
+  expect(workbench!.outlineWidth).toBe(3);
+  expect(workbench!.outlineSourceType).toBe("geojson");
+  // 精确外环：大陆（含海南）与台湾两条；行政区缝隙不产生独立外环
+  expect(workbench!.outlineRingCount).toBe(2);
+  expect(workbench!.outlineMainlandPoints).toBeGreaterThan(500);
+  // 视图偏移：内容右移 8%（相机西移），容器相对比例双端一致
+  expect(workbench!.lngShiftRatio).toBeCloseTo(0.08, 3);
+  const workbenchScale = (await page.locator(".map-scene__scalebar-text").innerText()).trim();
+  expect(workbenchScale).toMatch(/^\d+(\.\d+)? (m|km)$/);
+  expect(await page.locator(".map-scene__label").count()).toBeGreaterThan(0);
+
+  const offlinePage = await openOffline(page, context, T8_SCREEN_ID);
+  const offline = await offlinePage.evaluate(() => {
+    let host: any = null;
+    document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !host) host = el; });
+    if (!host) return null;
+    const map = host.__cfMap;
+    const style: any = map.getStyle();
+    const layers = style?.layers ?? [];
+    const fill = layers.find((l: any) => l.id === "cf-fill");
+    const line = layers.find((l: any) => l.id === "cf-line");
+    const outline = layers.find((l: any) => l.id === "cf-outline");
+    const glow = layers.find((l: any) => l.id === "cf-outline-glow");
+    const outlineSource = (style?.sources as any)?.["china-outline"];
+    const center = map.getCenter();
+    const canvas = map.getCanvas();
+    const zoom = map.getZoom();
+    const worldSize = 512 * Math.pow(2, zoom);
+    const degPerPixelLng = 360 / worldSize;
+    return {
+      outlineColor: outline?.paint?.["line-color"] ?? null,
+      outlineWidth: outline?.paint?.["line-width"] ?? null,
+      outlineSourceType: outlineSource?.type ?? null,
+      outlineRingCount: (outlineSource?.data?.features?.[0]?.geometry?.coordinates ?? []).length,
+      outlineMainlandPoints: Math.max(
+        0,
+        ...(outlineSource?.data?.features?.[0]?.geometry?.coordinates ?? []).map((ring: any[]) => ring.length),
+      ),
+      glowWidth: glow?.paint?.["line-width"] ?? null,
+      containerWidth: canvas?.clientWidth ?? 0,
+      cameraLng: center?.lng ?? null,
+      cameraLat: center?.lat ?? null,
+      zoom,
+      lngShiftRatio: (110 - (center?.lng ?? 110)) / degPerPixelLng / (canvas?.clientWidth || 1),
+    };
+  });
+  expect(offline).not.toBeNull();
+  const offlineStyle = await offlinePage.evaluate(() => {
+    let host: any = null;
+    document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfStyle && !host) host = el; });
+    return host ? host.__cfStyle : null;
+  });
+  expect(offlineStyle).not.toBeNull();
+  const offlineLayers = (offlineStyle as any).layers as any[];
+  expect(offlineLayers.find((layer) => layer.id === "cf-fill")?.["fill-color-transition"]).toEqual({ duration: 180, delay: 0 });
+  expect(offlineLayers.find((layer) => layer.id === "cf-line")?.["line-color-transition"]).toEqual({ duration: 180, delay: 0 });
+  expect(offlineLayers.find((layer) => layer.id === "cf-outline")?.paint?.["line-color"]).toBe("#ffd166");
+  expect(offlineLayers.find((layer) => layer.id === "cf-outline-glow")?.paint?.["line-width"]).toBe(9);
+  expect(offline!.outlineColor).toBe(workbench!.outlineColor);
+  expect(offline!.outlineWidth).toBe(workbench!.outlineWidth);
+  expect(offline!.outlineSourceType).toBe(workbench!.outlineSourceType);
+  expect(offline!.outlineRingCount).toBe(workbench!.outlineRingCount);
+  expect(offline!.outlineMainlandPoints).toBe(workbench!.outlineMainlandPoints);
+  expect(offline!.glowWidth).toBe(workbench!.glowWidth);
+  expect(offline!.lngShiftRatio).toBeCloseTo(workbench!.lngShiftRatio, 3);
+  const offlineScale = (await offlinePage.locator(".cf-map-scalebar-text").innerText()).trim();
+  expect(offlineScale).toBe(workbenchScale);
+  expect(await offlinePage.locator(".cf-map-label").count()).toBeGreaterThan(0);
+
+  await offlinePage.close();
 });

@@ -8,7 +8,14 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 setWorkerUrl(maplibreWorkerUrl);
 import type { ComponentRenderProps } from "@/core/components/types";
 import { buildMapLibreScene, type MapLibreSceneLabel } from "@/core/components/mapLibreScene";
-import { computeRegionCenter, formatMapValue, normalizeMapSceneProps } from "@/core/components/mapScene";
+import {
+  applyViewOffset,
+  computeRegionCenter,
+  formatMapValue,
+  haversineMeters,
+  normalizeMapSceneProps,
+  pickScaleBarDistance,
+} from "@/core/components/mapScene";
 import { filterRowsByBinding } from "@/core/components/dataWidgets";
 import type { DatasetSnapshot } from "@/core/model/types";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
@@ -107,7 +114,8 @@ const legendRows = computed<LegendRow[]>(() => {
 
 function projectLabels(): void {
   const instance = map.value;
-  if (!instance || !result.value.flags.showLabels) {
+  const threshold = result.value.labelMinZoom;
+  if (!instance || !result.value.flags.showLabels || (threshold !== null && instance.getZoom() < threshold)) {
     labelPositions.value = [];
     return;
   }
@@ -125,6 +133,64 @@ function projectLabels(): void {
 interface RegionPointerEvent {
   features?: Array<{ id?: unknown; properties?: Record<string, unknown> }>;
   point?: { x: number; y: number };
+}
+
+/* T8：比例尺控件（自绘 DOM，按 map.unproject 两端点测距，m/km 文本） */
+const scaleBar = ref<{ visible: boolean; text: string; pixels: number; position: string }>({
+  visible: false,
+  text: "",
+  pixels: 0,
+  position: "bottom-left",
+});
+
+function updateScaleBar(): void {
+  const instance = map.value;
+  const config = result.value.scaleBar;
+  if (!instance || !config.show) {
+    if (scaleBar.value.visible) scaleBar.value = { ...scaleBar.value, visible: false };
+    return;
+  }
+  const canvas = instance.getCanvas();
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (!width || !height) return;
+  const row = Math.max(1, Math.round(height / 2));
+  const from = instance.unproject([0, row]);
+  const to = instance.unproject([100, row]);
+  const metersPerPixel = haversineMeters([from.lng, from.lat], [to.lng, to.lat]) / 100;
+  const picked = pickScaleBarDistance(metersPerPixel, 110);
+  scaleBar.value = { visible: true, text: picked.text, pixels: picked.pixels, position: config.position };
+}
+
+/* T8：视图偏移（容器百分比 → 相机中心偏移，与离线运行时同源公式） */
+function applyViewOffsetToCamera(): void {
+  const instance = map.value;
+  const offset = scene.value.view.offset;
+  if (!instance || !offset || (!offset.x && !offset.y)) return;
+  const canvas = instance.getCanvas();
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (!width || !height) return;
+  const center = instance.getCenter();
+  const zoom = instance.getZoom();
+  const next = applyViewOffset([center.lng, center.lat], zoom, offset, { width, height });
+  instance.jumpTo({ center: next });
+}
+
+/** T8：相机复位 + 偏移叠加 + 覆盖层刷新（幂等：先复位基准相机，避免偏移累积） */
+function syncCamera(): void {
+  const instance = map.value;
+  if (!instance) return;
+  const built = result.value;
+  instance.jumpTo({
+    center: [...(built.style.center as [number, number])],
+    zoom: built.style.zoom as number,
+    pitch: built.style.pitch as number,
+  });
+  fitIfDefaultView();
+  applyViewOffsetToCamera();
+  projectLabels();
+  updateScaleBar();
 }
 
 function featureIdOf(feature: unknown): string | number | null {
@@ -264,13 +330,7 @@ function applyScene(): void {
   // minZoom/maxZoom are Map options, not style-root properties in MapLibre.
   instance.setMinZoom(built.style.minZoom as number);
   instance.setMaxZoom(built.style.maxZoom as number);
-  instance.jumpTo({
-    center: [...(built.style.center as [number, number])],
-    zoom: built.style.zoom as number,
-    pitch: built.style.pitch as number,
-  });
-  fitIfDefaultView();
-  projectLabels();
+  syncCamera();
 }
 
 watch(result, applyScene);
@@ -285,6 +345,7 @@ watch(
     if (flags.zoomEnabled) instance.scrollZoom.enable();
     else instance.scrollZoom.disable();
     projectLabels();
+    updateScaleBar();
   },
   { deep: true },
 );
@@ -307,17 +368,18 @@ onMounted(() => {
     instance.on("mouseout", "cf-fill", () => onFillMouseOut());
     // 双击语义让位给区域下钻（T6），关闭 maplibre 默认双击缩放
     instance.doubleClickZoom.disable();
-    instance.on("move", projectLabels);
-    instance.on("load", () => {
-      fitIfDefaultView();
+    instance.on("move", () => {
       projectLabels();
+      updateScaleBar();
+    });
+    instance.on("load", () => {
+      syncCamera();
     });
     map.value = instance;
-    fitIfDefaultView();
+    syncCamera();
     const flags = result.value.flags;
     if (!flags.dragEnabled) instance.dragPan.disable();
     if (!flags.zoomEnabled) instance.scrollZoom.disable();
-    projectLabels();
   } catch (cause) {
     mapError.value = cause instanceof Error ? cause.message : String(cause);
   }
@@ -325,6 +387,8 @@ onMounted(() => {
 
 defineExpose({
   getMap: () => map.value,
+  // T8：暴露构建期 style（parity 用：比较双端 style JSON，含悬停过渡与外轮廓图层）
+  getStyle: () => result.value.style,
   // readScene 保持既有契约（regionValues + errors），交互态数据走 readAppearance
   readScene: () => ({ regionValues: { ...result.value.regionValues }, errors: [...result.value.errors] }),
   readAppearance: () => ({
@@ -379,8 +443,23 @@ defineExpose({
           v-for="label in labelPositions"
           :key="label.name"
           class="map-scene__label"
-          :style="{ left: `${label.x}px`, top: `${label.y}px` }"
+          :style="{
+            left: `${label.x}px`,
+            top: `${label.y}px`,
+            color: scene.label?.color ?? '#e7fbff',
+            fontSize: `${scene.label?.size ?? 10}px`,
+          }"
         >{{ label.name }}</span>
+      </div>
+      <div
+        v-if="scaleBar.visible"
+        class="map-scene__scalebar"
+        :class="`map-scene__scalebar--${scaleBar.position}`"
+        role="img"
+        aria-label="比例尺"
+      >
+        <span class="map-scene__scalebar-bar" :style="{ width: `${scaleBar.pixels}px` }" />
+        <span class="map-scene__scalebar-text">{{ scaleBar.text }}</span>
       </div>
       <div v-if="result.errors.length" class="map-scene__status" role="status">{{ result.errors.join('；') }}</div>
       <div v-else-if="mapError" class="map-scene__status" role="status">{{ mapError }}</div>
@@ -404,6 +483,13 @@ defineExpose({
 .map-scene__layers { right: 10px; bottom: 10px; }
 .map-scene__labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
 .map-scene__label { position: absolute; transform: translate(-50%, -50%); font-size: 10px; color: #e7fbff; text-shadow: 0 0 3px #013a4a, 0 0 2px #013a4a; white-space: nowrap; }
+.map-scene__scalebar { position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 6px; border: 1px solid #54bad744; border-radius: 4px; background: #061622c9; font-size: 10px; color: #b9e9f5; pointer-events: none; }
+.map-scene__scalebar--top-left { top: 10px; left: 10px; }
+.map-scene__scalebar--top-right { top: 10px; right: 10px; }
+.map-scene__scalebar--bottom-left { left: 10px; bottom: 10px; }
+.map-scene__scalebar--bottom-right { right: 10px; bottom: 34px; }
+.map-scene__scalebar-bar { display: block; height: 5px; border: 1px solid #b9e9f5; border-top: none; }
+.map-scene__scalebar-text { white-space: nowrap; }
 .map-scene__status { position: absolute; z-index: 2; left: 50%; bottom: 10px; max-width: 75%; transform: translateX(-50%); padding: 5px 8px; border-radius: 4px; background: #07121dd9; color: #ffd17b; font-size: 10px; text-align: center; pointer-events: none; }
 .map-scene__legend { position: absolute; z-index: 3; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; border: 1px solid #54bad744; border-radius: 4px; background: #061622c9; font-size: 10px; pointer-events: none; }
 .map-scene__legend--top-right { top: 10px; right: 10px; }

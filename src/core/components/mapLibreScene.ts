@@ -1,7 +1,9 @@
 import type { DatasetBinding } from "../model/types";
 import {
   MAP_BORDER_DEFAULT,
+  MAP_SCALE_BAR_DEFAULT,
   MAP_TOOLTIP_DEFAULT,
+  buildChinaOutline,
   buildMapLegend,
   MAP_EMPHASIS_DEFAULT,
   MAP_FILL_DEFAULT_EMPTY,
@@ -15,6 +17,7 @@ import {
   regionRows,
   type MapFillColors,
   type MapLegendEntry,
+  type MapScaleBarConfig,
   type MapValueFormat,
 } from "./mapScene";
 
@@ -66,6 +69,10 @@ export interface MapLibreSceneResult {
   regionValues: Record<string, number>;
   /** 省名 + bbox 中心（HTML 标注覆盖层数据源） */
   labels: MapLibreSceneLabel[];
+  /** 比例尺控件配置（双端同源自绘 DOM） */
+  scaleBar: MapScaleBarConfig;
+  /** 标注最小缩放（null = 不设阈值） */
+  labelMinZoom: number | null;
   flags: MapLibreSceneFlags;
   errors: string[];
 }
@@ -170,6 +177,7 @@ export function buildMapLibreScene(
       type: "fill",
       source: "china",
       ...windowKeys,
+      "fill-color-transition": { duration: 180, delay: 0 },
       paint: {
         "fill-color": fillColor,
         "fill-opacity": fillOpacity,
@@ -181,6 +189,7 @@ export function buildMapLibreScene(
       type: "line",
       source: "china",
       ...windowKeys,
+      "line-color-transition": { duration: 180, delay: 0 },
       paint: {
         "line-color": [
           "case",
@@ -193,6 +202,41 @@ export function buildMapLibreScene(
       },
     },
   ];
+
+  // 外轮廓强化层：共享边分析重建的精确国界外环（省界 fill-outline-color 之上再叠一层）
+  const sources: Record<string, unknown> = {
+    china: { type: "geojson", data: geoJson ?? {}, promoteId: "name" },
+  };
+  const outline = scene.border?.outline;
+  if (outline?.show) {
+    const outlineData = buildChinaOutline(geoJson);
+    if (outlineData.features.length) {
+      sources["china-outline"] = { type: "geojson", data: outlineData };
+      layers.push(
+        {
+          id: "cf-outline-glow",
+          type: "line",
+          source: "china-outline",
+          paint: {
+            "line-color": outline.color,
+            "line-width": Math.max(outline.width, 1) * 3,
+            "line-opacity": 0.22,
+            "line-blur": 8,
+          },
+        },
+        {
+          id: "cf-outline",
+          type: "line",
+          source: "china-outline",
+          paint: {
+            "line-color": outline.color,
+            "line-width": outline.width,
+            "line-opacity": 0.95,
+          },
+        },
+      );
+    }
+  }
 
   const labels: MapLibreSceneLabel[] = [];
   const collection = geoJson as { features?: Array<{ properties?: { name?: string }; geometry?: unknown }> } | undefined;
@@ -228,9 +272,7 @@ export function buildMapLibreScene(
   const style: Record<string, unknown> = {
     version: 8,
     name: "chartforge-map-scene",
-    sources: {
-      china: { type: "geojson", data: geoJson ?? {}, promoteId: "name" },
-    },
+    sources,
     pitch: scene.pitch,
     center: [...scene.view.center],
     zoom: scene.view.zoom,
@@ -273,6 +315,11 @@ export function buildMapLibreScene(
     labels,
     legend,
     tooltip,
+    scaleBar: {
+      show: Boolean(scene.scaleBar?.show),
+      position: scene.scaleBar?.position ?? MAP_SCALE_BAR_DEFAULT.position,
+    },
+    labelMinZoom: typeof scene.label?.minZoom === "number" ? scene.label.minZoom : null,
     flags: {
       dragEnabled: scene.view.dragEnabled,
       zoomEnabled: scene.view.zoomEnabled,

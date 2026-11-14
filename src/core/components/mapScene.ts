@@ -4,6 +4,8 @@ export type MapLayerType = typeof MAP_LAYER_TYPES[number];
 export type MapPresentation = "flat" | "tilted";
 export const MAP_SCENE_MODEL_VERSION = 2 as const;
 
+/** 视图偏移（容器百分比）：正 x = 内容右移，正 y = 内容下移 */
+export interface MapSceneViewOffset { x: number; y: number }
 export interface MapSceneView {
   center: [number, number];
   zoom: number;
@@ -13,15 +15,21 @@ export interface MapSceneView {
   zoomEnabled: boolean;
   showLabels: boolean;
   backgroundColor: string;
+  /** v2 增量字段：视图偏移（仅在提供时存在，v1 形状保持不变） */
+  offset?: MapSceneViewOffset;
 }
 
 export interface MapValueFormat { decimals?: number; suffix?: string }
 export interface MapLegendConfig { show: boolean; position: "top-right" | "bottom-right" | "bottom-left"; mode: "continuous" | "segments" }
+/** 比例尺控件配置（自绘 DOM，双端同源） */
+export interface MapScaleBarConfig { show: boolean; position: "top-left" | "top-right" | "bottom-left" | "bottom-right" }
 export interface MapTooltipStyle { background: string; borderColor: string; color: string; fontSize: number }
 export interface MapEmphasisStyle { areaColor: string; borderColor: string; labelColor: string }
 export interface MapSelectedStyle { areaColor: string; borderColor: string }
-export interface MapLabelStyle { show: boolean; color: string; size: number; stroke?: string; strokeWidth?: number; shadow?: string; shadowBlur?: number }
-export interface MapBorderStyle { color: string; width: number; type: "solid" | "dashed" }
+export interface MapLabelStyle { show: boolean; color: string; size: number; stroke?: string; strokeWidth?: number; shadow?: string; shadowBlur?: number; /** 标注最小缩放：低于该缩放隐藏标注 */ minZoom?: number }
+/** 外轮廓强化层：由省级几何共享边分析重建的精确国界外环 */
+export interface MapBorderOutlineStyle { show: boolean; color: string; width: number }
+export interface MapBorderStyle { color: string; width: number; type: "solid" | "dashed"; outline?: MapBorderOutlineStyle }
 export interface MapUnderlayLayer { areaColor: string; borderColor: string; shadowColor: string }
 export interface MapFillColors { min: string; mid: string; max: string; empty: string }
 export interface MapLayerBorder { color: string; width: number; type: "solid" | "dashed" }
@@ -66,6 +74,7 @@ export interface MapSceneProps extends Record<string, unknown> {
   selected?: MapSelectedStyle;
   label?: MapLabelStyle;
   border?: MapBorderStyle;
+  scaleBar?: MapScaleBarConfig;
   underlay?: MapUnderlayLayer[];
   drill?: { enabled: boolean };
   appliedSkin?: string;
@@ -92,6 +101,10 @@ export const MAP_FILL_DEFAULT_EMPTY = "#0d1a26";
 export const MAP_LAYER_BORDER_DEFAULT: MapLayerBorder = { color: "#ffffff", width: 1, type: "solid" };
 export const MAP_LABEL_DEFAULT: MapLabelStyle = { show: true, color: "#e7fbff", size: 10 };
 export const MAP_BORDER_DEFAULT: MapBorderStyle = { color: "#c0f3fb", width: 1, type: "solid" };
+export const MAP_SCALE_BAR_DEFAULT: MapScaleBarConfig = { show: false, position: "bottom-left" };
+export const MAP_OUTLINE_DEFAULT_COLOR = "#bfe9ff";
+/** 视图偏移换算所用的参考视口（1280×720），保证双端换算一致 */
+export const MAP_SCENE_REFERENCE_VIEWPORT = { width: 1280, height: 720 };
 
 function normalizeHex(value: unknown, fallback: string): string {
   return typeof value === "string" && HEX_COLOR.test(value) ? value : fallback;
@@ -181,13 +194,30 @@ function normalizeV2Groups(input: Record<string, unknown>): Partial<MapSceneProp
     if (typeof input.label.strokeWidth === "number") label.strokeWidth = clamp(input.label.strokeWidth, 0, 6, 1);
     if (typeof input.label.shadow === "string" && HEX_COLOR.test(input.label.shadow)) label.shadow = input.label.shadow;
     if (typeof input.label.shadowBlur === "number") label.shadowBlur = clamp(input.label.shadowBlur, 0, 24, 0);
+    if (typeof input.label.minZoom === "number") label.minZoom = clamp(input.label.minZoom, 0.5, 20, 1);
     out.label = label;
   }
   if (isRecord(input.border)) {
-    out.border = {
+    const border: MapBorderStyle = {
       color: normalizeHex(input.border.color, MAP_BORDER_DEFAULT.color),
       width: clamp(input.border.width, 0, 8, MAP_BORDER_DEFAULT.width),
       type: input.border.type === "dashed" ? "dashed" : "solid",
+    };
+    if (isRecord(input.border.outline)) {
+      border.outline = {
+        show: typeof input.border.outline.show === "boolean" ? input.border.outline.show : true,
+        color: normalizeHex(input.border.outline.color, MAP_OUTLINE_DEFAULT_COLOR),
+        width: clamp(input.border.outline.width, 0, 12, 2),
+      };
+    }
+    out.border = border;
+  }
+  if (isRecord(input.scaleBar)) {
+    out.scaleBar = {
+      show: typeof input.scaleBar.show === "boolean" ? input.scaleBar.show : false,
+      position: input.scaleBar.position === "top-left" || input.scaleBar.position === "top-right" || input.scaleBar.position === "bottom-left" || input.scaleBar.position === "bottom-right"
+        ? input.scaleBar.position
+        : MAP_SCALE_BAR_DEFAULT.position,
     };
   }
   if (Array.isArray(input.underlay)) {
@@ -274,6 +304,488 @@ export function computeRegionCenter(geoJson: unknown, name: string): [number, nu
   const xs = points.map((point) => point[0]);
   const ys = points.map((point) => point[1]);
   return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+}
+
+/** 视图偏移换算：容器像素偏移 → 相机中心偏移（正 x = 内容右移 → 相机西移；正 y = 内容下移 → 相机北移）。 */
+export function applyViewOffset(
+  center: [number, number],
+  zoom: number,
+  offset: MapSceneViewOffset | undefined,
+  viewport: { width: number; height: number },
+): [number, number] {
+  if (!offset || (!offset.x && !offset.y)) return [center[0], center[1]];
+  const worldSize = 512 * 2 ** Math.max(0, zoom);
+  const degreesPerPixelLng = 360 / worldSize;
+  const metersPerPixel = 40075016.686 * Math.cos((center[1] * Math.PI) / 180) / worldSize;
+  const degreesPerPixelLat = metersPerPixel / 111319.49079327358;
+  const shiftX = (offset.x / 100) * viewport.width;
+  const shiftY = (offset.y / 100) * viewport.height;
+  return [
+    center[0] - shiftX * degreesPerPixelLng,
+    center[1] + shiftY * degreesPerPixelLat,
+  ];
+}
+
+/** 两点大圆距离（米）——比例尺测量用。 */
+export function haversineMeters(a: [number, number], b: [number, number]): number {
+  const radius = 6371008.8;
+  const toRad = (value: number): number => (value * Math.PI) / 180;
+  const dLat = toRad(b[1] - a[1]);
+  const dLng = toRad(b[0] - a[0]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2;
+  return 2 * radius * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+export interface MapScaleBarDistance { meters: number; pixels: number; text: string }
+
+/** 比例尺刻度：取不超过目标长度的 1/2/5×10ⁿ 整数档位。 */
+export function pickScaleBarDistance(metersPerPixel: number, maxPixels = 110): MapScaleBarDistance {
+  const limit = Number.isFinite(maxPixels) && maxPixels > 0 ? maxPixels : 110;
+  const perPixel = Number.isFinite(metersPerPixel) && metersPerPixel > 0 ? metersPerPixel : 1;
+  const target = Math.max(1, perPixel * limit);
+  const base = 10 ** Math.floor(Math.log10(target));
+  const candidates = [1, 2, 5].map((factor) => factor * base);
+  const usable = candidates.filter((value) => value <= target);
+  let meters = usable.length ? usable[usable.length - 1]! : base / 10;
+  if (!Number.isFinite(meters) || meters < 1) meters = 1;
+  return { meters, pixels: meters / perPixel, text: formatScaleDistance(meters) };
+}
+
+/** 比例尺文本：m / km。 */
+export function formatScaleDistance(meters: number): string {
+  if (!Number.isFinite(meters) || meters <= 0) return "0 m";
+  if (meters >= 1000) {
+    const km = meters / 1000;
+    return `${Number(km.toFixed(km >= 10 ? 0 : 1))} km`;
+  }
+  return `${Math.round(meters)} m`;
+}
+
+/** 国界外环几何（FeatureCollection + MultiLineString） */
+export interface MapOutlineCollection {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: { name: string };
+    geometry: { type: "MultiLineString"; coordinates: number[][][] };
+  }>;
+}
+
+/** 国界外环几何（FeatureCollection + MultiLineString） */
+export interface MapOutlineCollection {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: { name: string };
+    geometry: { type: "MultiLineString"; coordinates: number[][][] };
+  }>;
+}
+
+/** 参与并集分析的省级区域：一个 feature 的全部环 + 外包框。 */
+interface OutlineRegion {
+  rings: number[][][];
+  bbox: [number, number, number, number];
+}
+
+/** 省级环上的一条原始边。 */
+interface OutlineEdge {
+  a: readonly number[];
+  b: readonly number[];
+  region: number;
+  /** 切分点：t 为本边上的参数，point 为规范化后的坐标。 */
+  splits: Array<{ t: number; point: number[] }>;
+}
+
+/** 平面图节点（用于外环追踪）。 */
+interface OutlineNode {
+  x: number;
+  y: number;
+  /** 出射边终点，按出射角升序。 */
+  next: number[][];
+}
+
+/** 节点键精度：1e-9 度远小于数据最小顶点间距（0.033 度），可唯一标识节点。 */
+const OUTLINE_KEY_PRECISION = 1e9;
+/** 交点 / 共线判定容差。 */
+const OUTLINE_PARAM_EPS = 1e-9;
+/** 内外侧采样偏移（度，约 0.1 米）。 */
+const OUTLINE_SAMPLE_EPS = 1e-6;
+
+function outlineKey(x: number, y: number): string {
+  return `${Math.round(x * OUTLINE_KEY_PRECISION)},${Math.round(y * OUTLINE_KEY_PRECISION)}`;
+}
+
+function collectOutlineRings(geometry: unknown, out: number[][][]): void {
+  if (!geometry || typeof geometry !== "object") return;
+  const value = geometry as { type?: string; coordinates?: unknown; geometries?: unknown[] };
+  if (value.type === "GeometryCollection") {
+    for (const entry of value.geometries ?? []) collectOutlineRings(entry, out);
+    return;
+  }
+  const walk = (node: unknown): void => {
+    if (!Array.isArray(node)) return;
+    // 单点 [x, y]：忽略
+    if (typeof node[0] === "number" && typeof node[1] === "number") return;
+    // 环 [[x, y], ...]：收集为一个环
+    if (Array.isArray(node[0]) && typeof node[0][0] === "number") {
+      out.push(node as number[][]);
+      return;
+    }
+    for (const child of node) walk(child);
+  };
+  walk(value.coordinates);
+}
+
+/** 收集参与分析的省级区域（每个 feature 一组环）。 */
+function collectOutlineRegions(geoJson: unknown): OutlineRegion[] {
+  const regions: OutlineRegion[] = [];
+  const collection = geoJson as { features?: Array<{ geometry?: unknown }> } | undefined;
+  for (const feature of collection?.features ?? []) {
+    const rings: number[][][] = [];
+    collectOutlineRings(feature.geometry, rings);
+    if (!rings.length) continue;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const ring of rings) {
+      for (const point of ring) {
+        const x = point[0] ?? 0;
+        const y = point[1] ?? 0;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    regions.push({ rings, bbox: [minX, minY, maxX, maxY] });
+  }
+  return regions;
+}
+
+/** 射线法：点是否落在环集合内（跨环按奇偶规则，环即洞）。 */
+function pointInOutlineRings(rings: readonly number[][][], x: number, y: number): boolean {
+  let inside = false;
+  for (const ring of rings) {
+    const total = ring.length;
+    for (let index = 0; index < total; index += 1) {
+      const a = ring[index];
+      const b = ring[(index + 1) % total];
+      if (!a || !b) continue;
+      const ax = a[0] ?? 0;
+      const ay = a[1] ?? 0;
+      const bx = b[0] ?? 0;
+      const by = b[1] ?? 0;
+      if ((ay > y) !== (by > y)) {
+        const xi = ax + ((y - ay) * (bx - ax)) / (by - ay);
+        if (xi > x) inside = !inside;
+      }
+    }
+  }
+  return inside;
+}
+
+/** 点是否落在省级区域的并集内。 */
+function pointInOutlineUnion(regions: readonly OutlineRegion[], x: number, y: number): boolean {
+  for (const region of regions) {
+    const minX = region.bbox[0];
+    const minY = region.bbox[1];
+    const maxX = region.bbox[2];
+    const maxY = region.bbox[3];
+    if (x < minX || x > maxX || y < minY || y > maxY) continue;
+    if (pointInOutlineRings(region.rings, x, y)) return true;
+  }
+  return false;
+}
+
+/** 把省级环拆成原始边（相邻两个顶点构成一条边）。 */
+function buildOutlineEdges(regions: readonly OutlineRegion[]): OutlineEdge[] {
+  const edges: OutlineEdge[] = [];
+  regions.forEach((region, index) => {
+    for (const ring of region.rings) {
+      const total = ring.length;
+      for (let position = 0; position < total; position += 1) {
+        const a = ring[position];
+        const b = ring[(position + 1) % total];
+        if (!a || !b) continue;
+        if ((a[0] ?? 0) === (b[0] ?? 0) && (a[1] ?? 0) === (b[1] ?? 0)) continue;
+        edges.push({ a, b, region: index, splits: [] });
+      }
+    }
+  });
+  return edges;
+}
+
+function outlineLerp(a: readonly number[], b: readonly number[], t: number): number[] {
+  const ax = a[0] ?? 0;
+  const ay = a[1] ?? 0;
+  const bx = b[0] ?? 0;
+  const by = b[1] ?? 0;
+  return [ax + (bx - ax) * t, ay + (by - ay) * t];
+}
+
+/** 两线段是否真交叉（不含端点接触），返回两条线段上的参数。 */
+function outlineSegmentCross(
+  p1: readonly number[],
+  p2: readonly number[],
+  p3: readonly number[],
+  p4: readonly number[],
+): [number, number] | null {
+  const d1x = (p2[0] ?? 0) - (p1[0] ?? 0);
+  const d1y = (p2[1] ?? 0) - (p1[1] ?? 0);
+  const d2x = (p4[0] ?? 0) - (p3[0] ?? 0);
+  const d2y = (p4[1] ?? 0) - (p3[1] ?? 0);
+  const den = d1x * d2y - d1y * d2x;
+  if (Math.abs(den) < 1e-18) return null;
+  const ex = (p3[0] ?? 0) - (p1[0] ?? 0);
+  const ey = (p3[1] ?? 0) - (p1[1] ?? 0);
+  const t = (ex * d2y - ey * d2x) / den;
+  const u = (ex * d1y - ey * d1x) / den;
+  if (t > OUTLINE_PARAM_EPS && t < 1 - OUTLINE_PARAM_EPS && u > OUTLINE_PARAM_EPS && u < 1 - OUTLINE_PARAM_EPS) {
+    return [t, u];
+  }
+  return null;
+}
+
+/** 点是否落在线段内部，返回其参数。 */
+function outlinePointOnSegment(point: readonly number[], a: readonly number[], b: readonly number[]): number | null {
+  const dx = (b[0] ?? 0) - (a[0] ?? 0);
+  const dy = (b[1] ?? 0) - (a[1] ?? 0);
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq === 0) return null;
+  const t = (((point[0] ?? 0) - (a[0] ?? 0)) * dx + ((point[1] ?? 0) - (a[1] ?? 0)) * dy) / lengthSq;
+  if (t <= OUTLINE_PARAM_EPS || t >= 1 - OUTLINE_PARAM_EPS) return null;
+  const cx = (a[0] ?? 0) + t * dx;
+  const cy = (a[1] ?? 0) + t * dy;
+  if (Math.abs(cx - (point[0] ?? 0)) > OUTLINE_PARAM_EPS || Math.abs(cy - (point[1] ?? 0)) > OUTLINE_PARAM_EPS) return null;
+  return t;
+}
+
+/**
+ * 在所有交点与 T 型接点上切分原始边。
+ * 交叉点先规范化（两线段插值取中）再同时写入两条边，保证后续节点标识完全一致。
+ */
+function splitOutlineEdges(edges: OutlineEdge[]): void {
+  const order = edges.map((_, index) => index).sort((left, right) => {
+    const a = edges[left];
+    const b = edges[right];
+    if (!a || !b) return 0;
+    return Math.min(a.a[0] ?? 0, a.b[0] ?? 0) - Math.min(b.a[0] ?? 0, b.b[0] ?? 0);
+  });
+  const active: number[] = [];
+  for (const index of order) {
+    const edge = edges[index];
+    if (!edge) continue;
+    const minX = Math.min(edge.a[0] ?? 0, edge.b[0] ?? 0);
+    for (let position = active.length - 1; position >= 0; position -= 1) {
+      const other = edges[active[position] ?? -1];
+      if (!other) continue;
+      if (Math.max(other.a[0] ?? 0, other.b[0] ?? 0) < minX) active.splice(position, 1);
+    }
+    for (const otherIndex of active) {
+      const other = edges[otherIndex];
+      if (!other || edge.region === other.region) continue;
+      const minY = Math.min(edge.a[1] ?? 0, edge.b[1] ?? 0);
+      const maxY = Math.max(edge.a[1] ?? 0, edge.b[1] ?? 0);
+      const otherMinY = Math.min(other.a[1] ?? 0, other.b[1] ?? 0);
+      const otherMaxY = Math.max(other.a[1] ?? 0, other.b[1] ?? 0);
+      if (maxY < otherMinY || otherMaxY < minY) continue;
+      const hit = outlineSegmentCross(edge.a, edge.b, other.a, other.b);
+      if (hit) {
+        const [t, u] = hit;
+        const first = outlineLerp(edge.a, edge.b, t);
+        const second = outlineLerp(other.a, other.b, u);
+        const canonical = [((first[0] ?? 0) + (second[0] ?? 0)) / 2, ((first[1] ?? 0) + (second[1] ?? 0)) / 2];
+        edge.splits.push({ t, point: canonical });
+        other.splits.push({ t: u, point: canonical });
+        continue;
+      }
+      // T 型接点：一端的顶点落在另一条边的内部
+      const junctions: Array<{ point: readonly number[]; target: OutlineEdge }> = [
+        { point: other.a, target: edge },
+        { point: other.b, target: edge },
+        { point: edge.a, target: other },
+        { point: edge.b, target: other },
+      ];
+      for (const junction of junctions) {
+        const t = outlinePointOnSegment(junction.point, junction.target.a, junction.target.b);
+        if (t === null) continue;
+        junction.target.splits.push({ t, point: [junction.point[0] ?? 0, junction.point[1] ?? 0] });
+      }
+    }
+    active.push(index);
+  }
+}
+
+/** 切分后的子线段（相邻子段共享端点）。 */
+function buildOutlineSegments(edges: readonly OutlineEdge[]): Array<{ p: number[]; q: number[] }> {
+  const segments: Array<{ p: number[]; q: number[] }> = [];
+  for (const edge of edges) {
+    const sorted = [...edge.splits].sort((left, right) => left.t - right.t);
+    const seen = new Set<string>();
+    const chain: number[][] = [[edge.a[0] ?? 0, edge.a[1] ?? 0]];
+    for (const split of sorted) {
+      const key = outlineKey(split.point[0] ?? 0, split.point[1] ?? 0);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      chain.push(split.point);
+    }
+    chain.push([edge.b[0] ?? 0, edge.b[1] ?? 0]);
+    for (let index = 0; index + 1 < chain.length; index += 1) {
+      const p = chain[index];
+      const q = chain[index + 1];
+      if (!p || !q) continue;
+      if (outlineKey(p[0] ?? 0, p[1] ?? 0) === outlineKey(q[0] ?? 0, q[1] ?? 0)) continue;
+      segments.push({ p, q });
+    }
+  }
+  return segments;
+}
+
+/**
+ * 判定每条子线段是否落在省级并集的边界上：
+ * 沿线段两侧各取一个极近采样点，只有恰好一侧在并集内时才是边界，
+ * 并统一让并集内部位于左侧。
+ */
+function classifyOutlineSegments(
+  regions: readonly OutlineRegion[],
+  segments: readonly { p: number[]; q: number[] }[],
+): Array<{ u: number[]; v: number[] }> {
+  const boundary: Array<{ u: number[]; v: number[] }> = [];
+  for (const segment of segments) {
+    const p = segment.p;
+    const q = segment.q;
+    const mx = ((p[0] ?? 0) + (q[0] ?? 0)) / 2;
+    const my = ((p[1] ?? 0) + (q[1] ?? 0)) / 2;
+    const dx = (q[0] ?? 0) - (p[0] ?? 0);
+    const dy = (q[1] ?? 0) - (p[1] ?? 0);
+    const length = Math.hypot(dx, dy);
+    if (!length) continue;
+    const offset = Math.min(OUTLINE_SAMPLE_EPS, length / 8);
+    const nx = (-dy / length) * offset;
+    const ny = (dx / length) * offset;
+    const left = pointInOutlineUnion(regions, mx + nx, my + ny);
+    const right = pointInOutlineUnion(regions, mx - nx, my - ny);
+    if (left === right) continue;
+    boundary.push(left ? { u: p, v: q } : { u: q, v: p });
+  }
+  return boundary;
+}
+
+/** 平面图左面遍历：在出射边中取相对来向最“顺时针”的那条，保证走出外环而非洞。 */
+function nextOutlineEdge(node: OutlineNode, from: readonly number[]): number[] | null {
+  if (!node.next.length) return null;
+  const back = Math.atan2((from[1] ?? 0) - node.y, (from[0] ?? 0) - node.x);
+  let best: number[] | null = null;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const candidate of node.next) {
+    const outgoing = Math.atan2((candidate[1] ?? 0) - node.y, (candidate[0] ?? 0) - node.x);
+    let delta = (back - outgoing) % (Math.PI * 2);
+    if (delta < 0) delta += Math.PI * 2;
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/** 追踪全部边界环（外环 + 洞）。 */
+function traceOutlineLoops(boundary: readonly { u: number[]; v: number[] }[]): number[][][] {
+  const adjacency = new Map<string, OutlineNode>();
+  for (const edge of boundary) {
+    const key = outlineKey(edge.u[0] ?? 0, edge.u[1] ?? 0);
+    let node = adjacency.get(key);
+    if (!node) {
+      node = { x: edge.u[0] ?? 0, y: edge.u[1] ?? 0, next: [] };
+      adjacency.set(key, node);
+    }
+    node.next.push(edge.v);
+  }
+  for (const entry of adjacency.values()) {
+    const node = entry;
+    node.next.sort((left, right) => {
+      const a = Math.atan2((left[1] ?? 0) - node.y, (left[0] ?? 0) - node.x);
+      const b = Math.atan2((right[1] ?? 0) - node.y, (right[0] ?? 0) - node.x);
+      return a - b;
+    });
+  }
+
+  const visited = new Set<string>();
+  const loops: number[][][] = [];
+  for (const edge of boundary) {
+    const startKey = outlineKey(edge.u[0] ?? 0, edge.u[1] ?? 0);
+    const firstKey = outlineKey(edge.v[0] ?? 0, edge.v[1] ?? 0);
+    if (visited.has(`${startKey}|${firstKey}`)) continue;
+    const loop: number[][] = [[edge.u[0] ?? 0, edge.u[1] ?? 0]];
+    let current = edge.u;
+    let next = edge.v;
+    for (;;) {
+      visited.add(`${outlineKey(current[0] ?? 0, current[1] ?? 0)}|${outlineKey(next[0] ?? 0, next[1] ?? 0)}`);
+      loop.push([next[0] ?? 0, next[1] ?? 0]);
+      const node = adjacency.get(outlineKey(next[0] ?? 0, next[1] ?? 0));
+      if (!node) break;
+      const successor = nextOutlineEdge(node, current);
+      if (!successor) break;
+      if (visited.has(`${outlineKey(next[0] ?? 0, next[1] ?? 0)}|${outlineKey(successor[0] ?? 0, successor[1] ?? 0)}`)) break;
+      current = next;
+      next = successor;
+      if (loop.length > 100000) break;
+    }
+    loops.push(loop);
+  }
+  return loops;
+}
+
+/** 有符号面积（鞋带公式）：逆时针为正。 */
+function outlineSignedArea(loop: readonly number[][]): number {
+  let sum = 0;
+  for (let index = 0; index + 1 < loop.length; index += 1) {
+    const a = loop[index];
+    const b = loop[index + 1];
+    if (!a || !b) continue;
+    sum += (a[0] ?? 0) * (b[1] ?? 0) - (b[0] ?? 0) * (a[1] ?? 0);
+  }
+  return sum / 2;
+}
+
+/**
+ * 依据省级几何的精确平面分析重建国界外环：
+ * 先把省界拆成边并在交点 / T 型接点上切分，再按“并集内外两侧采样”判定哪些子边
+ * 真正落在省级并集边界上，最后用左面遍历串成闭合环。
+ * 只保留外环（逆时针），洞（如甘肃—宁夏、广东—香港之间的行政缝隙）会被排除。
+ */
+export function buildChinaOutline(geoJson: unknown): MapOutlineCollection {
+  const cacheKey = geoJson && typeof geoJson === "object" ? (geoJson as object) : null;
+  if (cacheKey) {
+    const cached = outlineCache.get(cacheKey);
+    if (cached) return cached;
+  }
+  const built = computeChinaOutline(geoJson);
+  if (cacheKey) outlineCache.set(cacheKey, built);
+  return built;
+}
+
+const outlineCache = new WeakMap<object, MapOutlineCollection>();
+
+function computeChinaOutline(geoJson: unknown): MapOutlineCollection {
+  const regions = collectOutlineRegions(geoJson);
+  if (!regions.length) return { type: "FeatureCollection", features: [] };
+  const edges = buildOutlineEdges(regions);
+  splitOutlineEdges(edges);
+  const segments = buildOutlineSegments(edges);
+  const boundary = classifyOutlineSegments(regions, segments);
+  const loops = traceOutlineLoops(boundary);
+  const outer = loops
+    .map((loop) => ({ loop, area: outlineSignedArea(loop) }))
+    .filter((entry) => entry.area > 0)
+    .sort((left, right) => right.area - left.area)
+    .map((entry) => entry.loop);
+  if (!outer.length) return { type: "FeatureCollection", features: [] };
+  return {
+    type: "FeatureCollection",
+    features: [{ type: "Feature", properties: { name: "国界外环" }, geometry: { type: "MultiLineString", coordinates: outer } }],
+  };
 }
 
 /** Linear camera interpolation for the drill tween; t is clamped to [0, 1]. */
@@ -375,6 +887,12 @@ function normalizeMapSceneView(raw: unknown): MapSceneView {
   const center = Array.isArray(input.center) ? input.center : [];
   const minZoom = clamp(input.minZoom, 0.5, 20, DEFAULT_MAP_VIEW.minZoom);
   const maxZoom = clamp(input.maxZoom, minZoom, 20, DEFAULT_MAP_VIEW.maxZoom);
+  const offset = isRecord(input.offset)
+    ? {
+        x: Math.round(clamp(input.offset.x, -100, 100, 0) * 10) / 10,
+        y: Math.round(clamp(input.offset.y, -100, 100, 0) * 10) / 10,
+      }
+    : undefined;
   return {
     center: [clamp(center[0], -180, 180, DEFAULT_MAP_VIEW.center[0]), clamp(center[1], -90, 90, DEFAULT_MAP_VIEW.center[1])],
     zoom: clamp(input.zoom, minZoom, maxZoom, DEFAULT_MAP_VIEW.zoom),
@@ -383,6 +901,7 @@ function normalizeMapSceneView(raw: unknown): MapSceneView {
     zoomEnabled: typeof input.zoomEnabled === "boolean" ? input.zoomEnabled : DEFAULT_MAP_VIEW.zoomEnabled,
     showLabels: typeof input.showLabels === "boolean" ? input.showLabels : DEFAULT_MAP_VIEW.showLabels,
     backgroundColor: typeof input.backgroundColor === "string" && HEX_COLOR.test(input.backgroundColor) ? input.backgroundColor : DEFAULT_MAP_VIEW.backgroundColor,
+    ...(offset ? { offset } : {}),
   };
 }
 
