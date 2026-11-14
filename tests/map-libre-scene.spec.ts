@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMapLibreScene } from "../src/core/components/mapLibreScene";
+import { buildMapLibreScene, formatMapTooltipText } from "../src/core/components/mapLibreScene";
 
 const chinaFixture = {
   type: "FeatureCollection",
@@ -109,5 +109,55 @@ describe("buildMapLibreScene", () => {
       [], {}, {}, chinaFixture,
     );
     expect(r.errors.join(" ")).toContain("区域填色需要配置区域名称与数值字段映射");
+  });
+
+  it("exposes legend entries and tooltip texts shared by workbench and offline runtime", () => {
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        valueFormat: { decimals: 0, suffix: " 分" },
+        legend: { show: true, position: "top-right", mode: "continuous" },
+        emphasis: { areaColor: "#ff0000", borderColor: "#00ff00", labelColor: "#ffffff" },
+        selected: { areaColor: "#00ffff", borderColor: "#ffffff" },
+        layers: [{ id: "r", type: "regionFill", name: "热度", visible: true, style: { color: "#32d6ff", opacity: 0.85, size: 12, colorMode: "gradient", colors: { min: "#000010", mid: "#0080ff", max: "#66ffff", empty: "#0a0a14" } } }],
+      },
+      [{ province: "广东省", score: 92 }, { province: "西藏自治区", score: 31 }],
+      { category: "province", value: "score" }, {}, chinaFixture,
+    );
+    expect(r.legend.show).toBe(true);
+    expect(r.legend.position).toBe("top-right");
+    expect(r.legend.mode).toBe("continuous");
+    expect(r.legend.entries).toEqual([{ from: "31 分", to: "92 分", stops: ["#000010", "#0080ff", "#66ffff"] }]);
+    expect(r.tooltip.show).toBe(true);
+    expect(r.tooltip.texts["广东省"]).toBe("广东省：92 分");
+    expect(r.tooltip.texts["西藏自治区"]).toBe("西藏自治区：31 分");
+    const line = (r.style.layers as any[]).find((l) => l.id === "cf-line");
+    const lineColor = JSON.stringify(line.paint["line-color"]);
+    expect(lineColor).toContain("cf_hover");
+    expect(lineColor).toContain("cf_selected");
+    expect(lineColor).toContain("#00ff00");
+    expect(lineColor).toContain("#ffffff");
+  });
+
+  it("switches legend mode to segments when the color ramp is segmented", () => {
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        valueFormat: { decimals: 0, suffix: " 分" },
+        legend: { show: true, position: "top-right", mode: "continuous" },
+        layers: [{ id: "r", type: "regionFill", name: "分段", visible: true, style: { color: "#32d6ff", opacity: 1, size: 12, colorMode: "segments", segments: 2, colors: { min: "#000000", mid: "#808080", max: "#ffffff" } } }],
+      },
+      [{ province: "广东省", score: 92 }, { province: "西藏自治区", score: 31 }],
+      { category: "province", value: "score" }, {}, chinaFixture,
+    );
+    expect(r.legend.mode).toBe("segments");
+    expect(r.legend.entries).toHaveLength(2);
+    expect((r.legend.entries[0] as any).color).toBe("#000000");
+    expect((r.legend.entries[1] as any).color).toBe("#ffffff");
+  });
+
+  it("formats region tooltip text in one shared way", () => {
+    expect(formatMapTooltipText("广东省", 92, { decimals: 0, suffix: " 分" })).toBe("广东省：92 分");
+    expect(formatMapTooltipText("西藏自治区", null)).toBe("西藏自治区：—");
   });
 });

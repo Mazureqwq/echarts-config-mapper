@@ -1,16 +1,21 @@
 import type { DatasetBinding } from "../model/types";
 import {
   MAP_BORDER_DEFAULT,
+  MAP_TOOLTIP_DEFAULT,
+  buildMapLegend,
   MAP_EMPHASIS_DEFAULT,
   MAP_FILL_DEFAULT_EMPTY,
   MAP_FILL_DEFAULT_MID,
   MAP_FILL_DEFAULT_MIN,
   MAP_SELECTED_DEFAULT,
   computeRegionCenter,
+  formatMapValue,
   normalizeMapSceneProps,
   rampColor,
   regionRows,
   type MapFillColors,
+  type MapLegendEntry,
+  type MapValueFormat,
 } from "./mapScene";
 
 export interface MapLibreSceneFlags {
@@ -25,9 +30,36 @@ export interface MapLibreSceneLabel {
   centroid: [number, number];
 }
 
+/** 统一的区域 tooltip 文案（工作台与离线同源，避免两端文案漂移） */
+export function formatMapTooltipText(name: string, value: number | null, fmt?: MapValueFormat): string {
+  return `${name}\uff1a${formatMapValue(value, fmt)}`;
+}
+
+/** 区域 tooltip：文案与配色双端同源 */
+export interface MapLibreSceneTooltip {
+  show: boolean;
+  background: string;
+  borderColor: string;
+  color: string;
+  fontSize: number;
+  /** 区域名 → tooltip 文案 */
+  texts: Record<string, string>;
+}
+
+export interface MapLibreSceneLegend {
+  show: boolean;
+  position: "top-right" | "bottom-right" | "bottom-left";
+  mode: "continuous" | "segments";
+  entries: MapLegendEntry[];
+}
+
 export interface MapLibreSceneResult {
   /** MapLibre style（v8）：camera/lights/fog/sources/layers 全量描述 */
   style: Record<string, unknown>;
+  /** 图例：条目与色带 match 表达式同源，双端渲染一致 */
+  legend: MapLibreSceneLegend;
+  /** tooltip：文案与配色双端同源 */
+  tooltip: MapLibreSceneTooltip;
   /** 中国范围 bounds [[minLng,minLat],[maxLng,maxLat]]（默认视角 fitBounds 用；无 geo 时为 null） */
   bounds: [[number, number], [number, number]] | null;
   /** 省全称 → 数值（区域事件 value 载荷与色带计算共用） */
@@ -130,6 +162,8 @@ export function buildMapLibreScene(
 
   const border = scene.border ?? MAP_BORDER_DEFAULT;
   const dashed = border.type === "dashed";
+  const emphasisBorderColor = scene.emphasis?.borderColor ?? MAP_EMPHASIS_DEFAULT.borderColor;
+  const selectedBorderColor = scene.selected?.borderColor ?? MAP_SELECTED_DEFAULT.borderColor;
   const layers: Array<Record<string, unknown>> = [
     {
       id: "cf-fill",
@@ -148,7 +182,12 @@ export function buildMapLibreScene(
       source: "china",
       ...windowKeys,
       paint: {
-        "line-color": border.color,
+        "line-color": [
+          "case",
+          ["boolean", ["feature-state", SELECTED_STATE], false], selectedBorderColor,
+          ["boolean", ["feature-state", HOVER_STATE], false], emphasisBorderColor,
+          border.color,
+        ],
         "line-width": border.width,
         ...(dashed ? { "line-dasharray": [2, 2] } : {}),
       },
@@ -202,11 +241,38 @@ export function buildMapLibreScene(
     layers,
   };
 
+  const legendEntries = buildMapLegend(props, rows, fields, rowsByLayerId);
+  // 图例模式与 buildMapLegend 保持一致：图例配置或色带分段任一为分段即走分段图例
+  const legendMode: "continuous" | "segments" =
+    scene.legend?.mode === "segments" || regionFill?.style.colorMode === "segments" ? "segments" : "continuous";
+  const legend: MapLibreSceneLegend = {
+    show: Boolean(scene.legend?.show) && legendEntries.length > 0,
+    position: scene.legend?.position ?? "top-right",
+    mode: legendMode,
+    entries: legendEntries,
+  };
+
+  const tooltipStyle = scene.tooltipStyle ?? MAP_TOOLTIP_DEFAULT;
+  const tooltipTexts: Record<string, string> = {};
+  for (const [name, value] of Object.entries(regionValues)) {
+    tooltipTexts[name] = formatMapTooltipText(name, value, scene.valueFormat);
+  }
+  const tooltip: MapLibreSceneTooltip = {
+    show: true,
+    background: tooltipStyle.background,
+    borderColor: tooltipStyle.borderColor,
+    color: tooltipStyle.color,
+    fontSize: tooltipStyle.fontSize,
+    texts: tooltipTexts,
+  };
+
   return {
     style,
     bounds,
     regionValues,
     labels,
+    legend,
+    tooltip,
     flags: {
       dragEnabled: scene.view.dragEnabled,
       zoomEnabled: scene.view.zoomEnabled,

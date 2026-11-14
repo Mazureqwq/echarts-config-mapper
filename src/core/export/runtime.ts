@@ -593,6 +593,8 @@ export const RUNTIME_CODE = String.raw`
     var valueFormat = props.valueFormat && typeof props.valueFormat === "object" ? props.valueFormat : null;
     var emphasisColor = emphasisGroup ? safeWidgetColor(emphasisGroup.areaColor, "#3a95fd") : "#3a95fd";
     var selectedColor = selectedGroup ? safeWidgetColor(selectedGroup.areaColor, "#58d6ff") : "#58d6ff";
+    var emphasisBorderColor = emphasisGroup ? safeWidgetColor(emphasisGroup.borderColor, "#ffffff") : "#ffffff";
+    var selectedBorderColor = selectedGroup ? safeWidgetColor(selectedGroup.borderColor, "#ffffff") : "#ffffff";
 
     var rawLayers = Array.isArray(props.layers) ? props.layers.slice(0, 50) : [];
     var layers = [];
@@ -788,6 +790,43 @@ export const RUNTIME_CODE = String.raw`
       if (!Object.keys(regionValues).length && !errors.length) fillColor = regionFillLayer.color;
     }
 
+    // T7：图例条目 / tooltip 文案（与工作台 buildMapLegend + formatMapTooltipText 同源）
+    var legendSource = null;
+    if (regionFillLayer && names && names.length) {
+      legendSource = { min: minimum, max: maximum, colors: colors, mode: mode, segments: regionFillLayer.segments || 5 };
+    }
+    var legendMode = (props.legend && props.legend.mode === "segments") || (regionFillLayer && regionFillLayer.colorMode === "segments") ? "segments" : "continuous";
+    var legendEntries = [];
+    if (props.legend && props.legend.show && legendSource) {
+      if (legendMode === "segments") {
+        var segCount = legendSource.segments || 5;
+        var segSpan = legendSource.max - legendSource.min;
+        for (var seg = 0; seg < segCount; seg++) {
+          var segLo = legendSource.min + segSpan * seg / segCount;
+          var segHi = legendSource.min + segSpan * (seg + 1) / segCount;
+          legendEntries.push({
+            label: cfFormatMapValue(segLo, valueFormat) + " ~ " + cfFormatMapValue(segHi, valueFormat),
+            color: seg === 0 ? legendSource.colors.min : seg === segCount - 1 ? legendSource.colors.max : cfRampColor(legendSource.colors, seg / (segCount - 1))
+          });
+        }
+      } else {
+        legendEntries.push({
+          from: cfFormatMapValue(legendSource.min, valueFormat),
+          to: cfFormatMapValue(legendSource.max, valueFormat),
+          stops: [legendSource.colors.min, legendSource.colors.mid, legendSource.colors.max]
+        });
+      }
+    }
+    var legendPosition = props.legend && (props.legend.position === "bottom-right" || props.legend.position === "bottom-left") ? props.legend.position : "top-right";
+    var tooltipTexts = {};
+    for (var tooltipName in regionValues) {
+      if (Object.prototype.hasOwnProperty.call(regionValues, tooltipName)) {
+        tooltipTexts[tooltipName] = tooltipName + "：" + cfFormatMapValue(regionValues[tooltipName], valueFormat);
+      }
+    }
+    var tooltipStyle = props.tooltipStyle && typeof props.tooltipStyle === "object"
+      ? { background: safeWidgetColor(props.tooltipStyle.background, "#07121d"), borderColor: safeWidgetColor(props.tooltipStyle.borderColor, "#1f2a3a"), color: safeWidgetColor(props.tooltipStyle.color, "#e7fbff"), fontSize: boundedWidgetNumber(props.tooltipStyle.fontSize, 12, 8, 32) }
+      : { background: "#07121d", borderColor: "#1f2a3a", color: "#e7fbff", fontSize: 12 };
     var dashed = borderType === "dashed";
     var styleLayers = [
       Object.assign({
@@ -798,7 +837,13 @@ export const RUNTIME_CODE = String.raw`
       Object.assign({
         id: "cf-line", type: "line", source: "china"
       }, fillWindow, {
-        paint: Object.assign({ "line-color": borderColor, "line-width": borderWidth }, dashed ? { "line-dasharray": [2, 2] } : {})
+        paint: Object.assign({
+          "line-color": ["case",
+            ["boolean", ["feature-state", "cf_selected"], false], selectedBorderColor,
+            ["boolean", ["feature-state", "cf_hover"], false], emphasisBorderColor,
+            borderColor],
+          "line-width": borderWidth
+        }, dashed ? { "line-dasharray": [2, 2] } : {})
       })
     ];
 
@@ -848,6 +893,52 @@ export const RUNTIME_CODE = String.raw`
       layers: styleLayers
     };
 
+    // T7：图例 DOM（与工作台 .map-scene__legend 同构）
+    if (legendEntries.length) {
+      var legendEl = doc.createElement("div");
+      legendEl.className = "cf-map-legend";
+      legendEl.setAttribute("role", "list");
+      legendEl.setAttribute("aria-label", "地图图例");
+      legendEl.style.position = "absolute"; legendEl.style.zIndex = "3";
+      legendEl.style.display = "flex"; legendEl.style.flexDirection = "column"; legendEl.style.gap = "3px";
+      legendEl.style.padding = "5px 8px"; legendEl.style.border = "1px solid #54bad744"; legendEl.style.borderRadius = "4px";
+      legendEl.style.background = "#061622c9"; legendEl.style.fontSize = "10px"; legendEl.style.pointerEvents = "none";
+      if (legendPosition === "top-right") { legendEl.style.top = "10px"; legendEl.style.right = "10px"; }
+      else if (legendPosition === "bottom-right") { legendEl.style.right = "10px"; legendEl.style.bottom = "34px"; }
+      else { legendEl.style.left = "10px"; legendEl.style.bottom = "10px"; }
+      legendEntries.forEach(function (entry) {
+        var row = doc.createElement("span");
+        row.className = "cf-map-legend-item";
+        row.setAttribute("role", "listitem");
+        var mark = doc.createElement("i");
+        if (legendMode === "segments") {
+          mark.className = "cf-map-legend-swatch";
+          mark.style.width = "9px"; mark.style.height = "9px"; mark.style.borderRadius = "2px";
+          mark.style.background = entry.color;
+        } else {
+          mark.className = "cf-map-legend-bar";
+          mark.style.display = "inline-block"; mark.style.width = "96px"; mark.style.height = "8px";
+          mark.style.borderRadius = "3px"; mark.style.border = "1px solid #54bad744";
+          mark.style.background = "linear-gradient(90deg, " + entry.stops.join(", ") + ")";
+        }
+        row.appendChild(mark);
+        var legendLabel = doc.createElement("span");
+        legendLabel.className = "cf-map-legend-label";
+        legendLabel.textContent = legendMode === "segments" ? entry.label : entry.from + " – " + entry.to;
+        row.appendChild(legendLabel);
+        legendEl.appendChild(row);
+      });
+      rootEl.appendChild(legendEl);
+    }
+    // T7：tooltip DOM（与工作台 .map-scene__tooltip 同构）
+    var tooltipEl = doc.createElement("div");
+    tooltipEl.className = "cf-map-tooltip";
+    tooltipEl.style.position = "absolute"; tooltipEl.style.zIndex = "4";
+    tooltipEl.style.padding = "4px 8px"; tooltipEl.style.border = "1px solid " + tooltipStyle.borderColor; tooltipEl.style.borderRadius = "4px";
+    tooltipEl.style.background = tooltipStyle.background; tooltipEl.style.color = tooltipStyle.color; tooltipEl.style.fontSize = tooltipStyle.fontSize + "px";
+    tooltipEl.style.pointerEvents = "none"; tooltipEl.style.whiteSpace = "nowrap"; tooltipEl.style.display = "none";
+    rootEl.appendChild(tooltipEl);
+
     if (errors.length) { showStatus(errors.join("；")); }
     else if (!layers.length) { showStatus("本地离线底图 · 可从图层面板添加区域填色、散点、热力或飞线"); }
 
@@ -879,6 +970,17 @@ export const RUNTIME_CODE = String.raw`
     }
 
     canvas.__cfRegionValues = regionValues;
+    canvas.__cfScene = {
+      legend: { show: legendEntries.length > 0, position: legendPosition, mode: legendMode, entries: legendEntries },
+      tooltip: {
+        show: true,
+        background: tooltipStyle.background,
+        borderColor: tooltipStyle.borderColor,
+        color: tooltipStyle.color,
+        fontSize: tooltipStyle.fontSize,
+        texts: tooltipTexts
+      }
+    };
     maplibrePromise.then(function (mod) {
       if (!mod) { if (!statusEl) showStatus("地图运行时缺失：离线包未注入 MapLibre 源"); return; }
       try {
@@ -906,6 +1008,47 @@ export const RUNTIME_CODE = String.raw`
           });
         }
         map.on("click", "cf-fill", function (ev) { cfEmitMapEvent("regionClick", ev); });
+        // T7：hover / selected feature-state + tooltip（与工作台同构）
+        var hoveredName = null; var hoveredId = null; var selectedName = null; var selectedId = null;
+        function cfFeatureId(feature) {
+          if (!feature) return null;
+          if (typeof feature.id === "number" || typeof feature.id === "string") return feature.id;
+          var nm = feature.properties ? feature.properties.name : null;
+          return typeof nm === "string" && nm ? nm : null;
+        }
+        function cfSetState(id, key, on) {
+          if (id === null || id === undefined) return;
+          try { var state = {}; state[key] = on; map.setFeatureState({ source: "china", id: id }, state); } catch (e) { /* 样式尚未就绪 */ }
+        }
+        function cfClearHover() {
+          if (hoveredId !== null) cfSetState(hoveredId, "cf_hover", false);
+          hoveredId = null; hoveredName = null;
+        }
+        map.on("mousemove", "cf-fill", function (ev) {
+          var feature = ev && ev.features && ev.features[0];
+          var nm = feature && feature.properties ? feature.properties.name : null;
+          if (typeof nm !== "string" || !nm) { cfClearHover(); tooltipEl.style.display = "none"; return; }
+          if (nm !== hoveredName) {
+            if (hoveredId !== null) cfSetState(hoveredId, "cf_hover", false);
+            hoveredId = cfFeatureId(feature); hoveredName = nm;
+            cfSetState(hoveredId, "cf_hover", true);
+          }
+          var text = tooltipTexts[nm] || nm;
+          var point = ev && ev.point ? ev.point : { x: 0, y: 0 };
+          tooltipEl.textContent = text;
+          tooltipEl.style.display = "block";
+          tooltipEl.style.left = (point.x + 12) + "px";
+          tooltipEl.style.top = (point.y + 12) + "px";
+        });
+        map.on("mouseout", "cf-fill", function () { cfClearHover(); tooltipEl.style.display = "none"; });
+        map.on("click", "cf-fill", function (ev) {
+          var feature = ev && ev.features && ev.features[0];
+          var nm = feature && feature.properties ? feature.properties.name : null;
+          if (typeof nm !== "string" || !nm) return;
+          if (selectedId !== null) cfSetState(selectedId, "cf_selected", false);
+          selectedId = cfFeatureId(feature); selectedName = nm;
+          cfSetState(selectedId, "cf_selected", true);
+        });
         map.on("dblclick", "cf-fill", function (ev) {
           cfEmitMapEvent("regionDblclick", ev);
           var df = ev && ev.features && ev.features[0];
