@@ -298,16 +298,16 @@ git commit -m "feat: migrate lens drill-down to maplibre flyTo"
 - Consumes: 既有 `buildMapLegend`、`MapLegendEntry`、外观 props（T2 style 已含 paint，本任务补交互态与 DOM）
 - Produces: 图例/tooltip/`emphasis/selected` hover 点击态双端生效；色带 match 表达式与图例文本一致。
 
-- [ ] **Step 1: parity spec 追加外观断言**（fill hover 表达式/tooltip 配置/图例文本双端一致）→ FAIL → 实现 → PASS
-- [ ] **Step 2: 全量门（vitest+e2e+build+typecheck+diff --check）**
-- [ ] **Step 3: 提交**
+- [x] **Step 1: parity spec 追加外观断言**（fill hover 表达式/tooltip 配置/图例文本双端一致）→ FAIL → 实现 → PASS
+- [x] **Step 2: 全量门（vitest+e2e+build+typecheck+diff --check）**
+- [x] **Step 3: 提交**
 
 ```bash
 git add src/core/components/mapLibreScene.ts src/workbench/components/MapSceneWidget.vue src/core/export/runtime.ts e2e/map-scene-style-parity.spec.ts
 git commit -m "feat: map legend tooltip and hover selected states on maplibre"
 ```
 
-- [ ] **Step 4: GATE M2 截图验收（D6 停止点）**
+- [x] **Step 4: GATE M2 截图验收（D6 停止点）**
 
 M2 截图包（图例/色带/悬停态/点击态/下钻前后/事件联动表格变化）→ 同步本地 → `present_file` → **停止等待「继续/停/改」**。
 
