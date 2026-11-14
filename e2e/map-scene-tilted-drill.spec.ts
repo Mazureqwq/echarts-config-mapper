@@ -40,11 +40,12 @@ test("2.5D 立体地图双击区域进入镜头下钻", async ({ page, context }
   await expect(page.locator(".map-scene__chart")).toBeVisible();
   await page.waitForTimeout(800);
 
-  // 探针：区域系列像素点（选无散点遮挡的浙江省界内点）
   const pixel = await page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const chart = vueInstance?.exposed?.getChart?.();
-    return chart?.convertToPixel?.({ seriesIndex: 0 }, [120.1551, 30.2741]) ?? null;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const p = map.project([120.1551, 30.2741]);
+    return [p.x, p.y];
   });
   expect(pixel).not.toBeNull();
   const box = await page.locator(".map-scene__chart canvas").boundingBox();
@@ -57,21 +58,18 @@ test("2.5D 立体地图双击区域进入镜头下钻", async ({ page, context }
   await expect(breadcrumb).toContainText("浙江省");
   await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geo = Array.isArray(option?.geo) ? option.geo[option.geo.length - 1] : option?.geo;
-    return typeof geo?.zoom === "number" ? geo.zoom : 0;
+    const map = vueInstance?.exposed?.getMap?.();
+    return map ? map.getZoom() : 0;
   })).toBeGreaterThan(3);
 
-  // Esc 上钻：面包屑消失、相机回原位（四层叠片保持对齐）
+  // Esc 上钻：面包屑消失、相机回原位（单地图，无叠片对齐概念）
   await page.keyboard.press("Escape");
   await expect(breadcrumb).toHaveCount(0);
   await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const geos = Array.isArray(option?.geo) ? option.geo : [option?.geo];
-    const top = geos[geos.length - 1];
-    if (!Array.isArray(top?.center) || typeof top?.zoom !== "number") return false;
-    const aligned = geos.every((g: any) => JSON.stringify(g.center) === JSON.stringify(top.center) && g.zoom === top.zoom);
-    return aligned && Math.abs(top.zoom - 1.05) < 0.01;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return false;
+    const c = map.getCenter();
+    return Math.abs(c.lng - 104.114129) < 0.01 && Math.abs(c.lat - 35.550339) < 0.01 && Math.abs(map.getZoom() - 1.05) < 0.01;
   })).toBe(true);
 });

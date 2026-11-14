@@ -122,7 +122,30 @@ test("区域单击与双击驱动蓝图变量联动表格过滤", async ({ page,
   await expect(table.filter({ hasText: "深圳" })).toBeVisible();
   await expect(table.filter({ hasText: "杭州" })).toHaveCount(0);
 
-  // 下钻/面包屑断言由 T6 恢复（drill 移植至 MapLibre flyTo）
+
+  // 下钻：面包屑出现且相机推进（flyTo）
+  const breadcrumb = page.locator(".map-scene__breadcrumb");
+  await expect(breadcrumb).toBeVisible();
+  await expect(breadcrumb).toContainText("全国");
+  await expect(breadcrumb).toContainText("浙江省");
+  await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const map = vueInstance?.exposed?.getMap?.();
+    return map ? map.getZoom() : 0;
+  })).toBeGreaterThan(3);
+
+  // Esc 上钻：面包屑消失、相机回原位、regionUpdrill 把变量置回浙江
+  await page.keyboard.press("Escape");
+  await expect(breadcrumb).toHaveCount(0);
+  await expect.poll(async () => page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return false;
+    const c = map.getCenter();
+    return Math.abs(c.lng - 104.114129) < 0.01 && Math.abs(c.lat - 35.550339) < 0.01 && Math.abs(map.getZoom() - 1.05) < 0.01;
+  })).toBe(true);
+  await expect(table.filter({ hasText: "杭州" })).toBeVisible();
+  await expect(table.filter({ hasText: "深圳" })).toHaveCount(0);
 });
 
 test("区域点击触发 setProps 动作并深合并保留视角其余字段", async ({ page, context }) => {

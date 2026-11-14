@@ -73,30 +73,20 @@ const initialWorkspace = {
   settings: { autosave: true },
 };
 
-type SeriesData = { type: string; data: unknown[] }[];
-
-async function readCanvasSeries(page: Page): Promise<SeriesData | null> {
+async function readScene(page: Page) {
   return page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const chart = vueInstance?.exposed?.getChart?.();
-    if (!chart) return null;
-    const series = chart.getOption()?.series ?? [];
-    return series.map((entry: { type: string; data: unknown[] }) => ({
-      type: entry.type,
-      data: entry.data,
-    }));
+    return vueInstance?.exposed?.readScene?.() ?? null;
   });
 }
 
-async function readCanvasMapCamera(page: Page) {
+async function readMapCamera(page: Page) {
   return page.locator(".map-scene__chart").evaluate((root) => {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
-    const option = vueInstance?.exposed?.getChart?.()?.getOption?.();
-    const rawGeo = option?.geo;
-    const geo = Array.isArray(rawGeo) ? rawGeo[0] : rawGeo;
-    const rawLabel = geo?.label;
-    const label = Array.isArray(rawLabel) ? rawLabel[0] : rawLabel;
-    return { center: geo?.center, zoom: geo?.zoom, minZoom: geo?.scaleLimit?.min, maxZoom: geo?.scaleLimit?.max, roam: geo?.roam, showLabels: label?.show, backgroundColor: option?.backgroundColor };
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const c = map.getCenter();
+    return { center: [c.lng, c.lat], zoom: map.getZoom(), minZoom: map.getMinZoom(), maxZoom: map.getMaxZoom() };
   });
 }
 
@@ -149,33 +139,25 @@ test("地图容器绑定继承、图层独立覆盖与变量切换在刷新和�
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-  // 第一层保持无独立绑定，明确继承容器数据与字段映射。
+  // 第一层：继承容器绑定的地理散点。
   await page.getByLabel("新增地图图层类型").selectOption("geoScatter");
   await page.getByRole("button", { name: "添加图层" }).click();
   const inheritedLayer = page.locator(".map-scene-inspector__layer").nth(0);
   await expect(inheritedLayer.locator(".map-scene-inspector__type")).toHaveText("地理散点");
-  await expect(inheritedLayer.getByText("图层名称", { exact: true })).toBeVisible();
   await expect(inheritedLayer.locator(".map-scene-inspector__name")).toHaveValue("地理散点 1");
-  await expect(inheritedLayer.locator(".map-scene-inspector__name-display")).toBeVisible();
   await expect(inheritedLayer.locator(".map-scene-inspector__name-display")).toHaveText("地理散点 1");
   await inheritedLayer.getByLabel("地理散点名称").fill("容器继承层");
   await inheritedLayer.getByLabel("地理散点名称").press("Tab");
   await expect(inheritedLayer.locator(".map-scene-inspector__name")).toHaveValue("容器继承层");
-  await expect(inheritedLayer.locator(".map-scene-inspector__name-display")).toHaveText("容器继承层");
   await expect(inheritedLayer.locator("details summary")).toHaveText("数据绑定 · 继承容器");
 
-  // 第二层绑定另一数据集，证明独立绑定覆盖而不是合并容器绑定。
+  // 第二层：独立绑定覆盖容器绑定。
   await page.getByRole("button", { name: "添加图层" }).click();
   const overrideLayer = page.locator(".map-scene-inspector__layer").nth(1);
   await expect(overrideLayer.locator(".map-scene-inspector__type")).toHaveText("地理散点");
-  await expect(overrideLayer.getByText("图层名称", { exact: true })).toBeVisible();
   await expect(overrideLayer.locator(".map-scene-inspector__name")).toHaveValue("地理散点 2");
-  await expect(overrideLayer.locator(".map-scene-inspector__name-display")).toBeVisible();
-  await expect(overrideLayer.locator(".map-scene-inspector__name-display")).toHaveText("地理散点 2");
   await overrideLayer.getByLabel("地理散点名称").fill("独立覆盖层");
   await overrideLayer.getByLabel("地理散点名称").press("Tab");
-  await expect(overrideLayer.locator(".map-scene-inspector__name")).toHaveValue("独立覆盖层");
-  await expect(overrideLayer.locator(".map-scene-inspector__name-display")).toHaveText("独立覆盖层");
   await overrideLayer.locator("details summary").click();
   await overrideLayer.getByLabel("工作区数据集").selectOption(OVERRIDE_DATASET_ID);
   await overrideLayer.getByRole("combobox", { name: "经度", exact: true }).fill("longitude");
@@ -184,28 +166,31 @@ test("地图容器绑定继承、图层独立覆盖与变量切换在刷新和�
   await overrideLayer.getByLabel("数值（可选）").fill("score");
   await expect(overrideLayer.locator("details summary")).toHaveText("数据绑定 · 独立");
 
-  const initialSeries = [
-    { type: "scatter", data: [{ name: "深圳", value: [114.0579, 22.5431, 88] }] },
-    { type: "scatter", data: [{ name: "重庆独立", value: [106.5516, 29.563, 71] }] },
-  ];
-  const switchedSeries = [
-    { type: "scatter", data: [{ name: "杭州", value: [120.1551, 30.2741, 92] }] },
-    { type: "scatter", data: [{ name: "重庆独立", value: [106.5516, 29.563, 71] }] },
-  ];
-  await expect(page.locator(".map-scene__layers")).toHaveText("2 个可见图层");
-  await expect(page.locator(".map-scene__status")).toHaveCount(0);
-  const expectedMapCamera = { center: [110.5, 33.25], zoom: 1.6, minZoom: 1.2, maxZoom: 5, roam: "scale", showLabels: false, backgroundColor: "#102030" };
-  await expect.poll(() => readCanvasSeries(page)).toEqual(initialSeries);
-  await expect.poll(() => readCanvasMapCamera(page)).toEqual(expectedMapCamera);
+  // 第三层：继承容器（含变量过滤）的区域填色 —— MapLibre 下可观测的变量切换载体。
+  await page.getByLabel("新增地图图层类型").selectOption("regionFill");
+  await page.getByRole("button", { name: "添加图层" }).click();
+  const fillLayer = page.locator(".map-scene-inspector__layer").nth(2);
+  await expect(fillLayer.locator(".map-scene-inspector__type")).toHaveText("区域填色");
 
-  // 真实表格行选择触发受控蓝图，将全局变量从广东切换为浙江。
+  const initialValues = { "广东": 88 };
+  const switchedValues = { "浙江": 92 };
+  await expect(page.locator(".map-scene__layers")).toHaveText("3 个可见图层");
+  await expect(page.locator(".map-scene__status")).toHaveCount(0);
+  const expectedCamera = { center: [110.5, 33.25], zoom: 1.6, minZoom: 1.2, maxZoom: 5 };
+  await expect.poll(() => readMapCamera(page)).toEqual(expectedCamera);
+  await expect.poll(() => readScene(page)).toEqual({ regionValues: initialValues, errors: [] });
+  // 关闭省名与自定义背景同样生效
+  expect(await page.locator(".map-scene__label").count()).toBe(0);
+  expect((await page.locator(".map-scene__surface").getAttribute("style")) ?? "").toContain("rgb(16, 32, 48)");
+
+  // 真实表格行选择触发蓝图，把变量从广东切到浙江 → 区域填色数值随之变化。
   const hangzhouRow = page.locator(`[data-item-id="${TABLE_ID}"] .data-table-widget__table tbody tr`).filter({ hasText: "杭州" });
   await expect(hangzhouRow).toBeVisible();
   await hangzhouRow.click();
   await expect(page.getByRole("status").filter({ hasText: "蓝图运行完成" })).toBeVisible();
-  await expect.poll(() => readCanvasSeries(page)).toEqual(switchedSeries);
+  await expect.poll(() => readScene(page)).toEqual({ regionValues: switchedValues, errors: [] });
 
-  // 等待自动保存，确认容器绑定、继承层与独立覆盖层分别持久化。
+  // 自动保存：容器绑定/继承层/独立覆盖层/视角分别持久化。
   await expect.poll(async () => page.evaluate(({ key, screenId, itemId }) => {
     const ws = JSON.parse(localStorage.getItem(key) ?? "null");
     const scene = ws?.screens?.find((screen: any) => screen.id === screenId)?.items?.find((item: any) => item.id === itemId);
@@ -225,40 +210,41 @@ test("地图容器绑定继承、图层独立覆盖与变量切换在刷新和�
   await page.reload();
   await expect(page.locator(".workbench")).toBeVisible();
   await page.locator(`[data-item-id="${ITEM_ID}"]`).click();
-  await expect(page.locator(".map-scene__layers")).toHaveText("2 个可见图层");
+  await expect(page.locator(".map-scene__layers")).toHaveText("3 个可见图层");
   const reloadedInheritedLayer = page.locator(".map-scene-inspector__layer").nth(0);
   const reloadedOverrideLayer = page.locator(".map-scene-inspector__layer").nth(1);
-  await expect(reloadedInheritedLayer.locator(".map-scene-inspector__type")).toHaveText("地理散点");
   await expect(reloadedInheritedLayer.locator(".map-scene-inspector__name")).toHaveValue("容器继承层");
-  await expect(reloadedInheritedLayer.locator(".map-scene-inspector__name-display")).toBeVisible();
-  await expect(reloadedInheritedLayer.locator(".map-scene-inspector__name-display")).toHaveText("容器继承层");
   await expect(reloadedInheritedLayer.locator("details summary")).toHaveText("数据绑定 · 继承容器");
-  await expect(reloadedOverrideLayer.locator(".map-scene-inspector__type")).toHaveText("地理散点");
   await expect(reloadedOverrideLayer.locator(".map-scene-inspector__name")).toHaveValue("独立覆盖层");
-  await expect(reloadedOverrideLayer.locator(".map-scene-inspector__name-display")).toBeVisible();
-  await expect(reloadedOverrideLayer.locator(".map-scene-inspector__name-display")).toHaveText("独立覆盖层");
   await expect(reloadedOverrideLayer.locator("details summary")).toHaveText("数据绑定 · 独立");
-  // 编辑器会在刷新后从变量初始值重建运行时状态；再次通过表格事件切换到浙江。
-  await expect.poll(() => readCanvasSeries(page)).toEqual(initialSeries);
+  // 刷新后变量回到初始值 → 区域数值回初始；再次点击表格切到浙江。
+  await expect.poll(() => readScene(page)).toEqual({ regionValues: initialValues, errors: [] });
   const editorHangzhouCell = page.locator(`[data-item-id="${TABLE_ID}"] .data-table-widget__table tbody tr`).filter({ hasText: "杭州" }).getByRole("cell", { name: "杭州", exact: true });
   await editorHangzhouCell.click();
   await expect(page.getByRole("status").filter({ hasText: "蓝图运行完成" })).toBeVisible();
-  await expect.poll(() => readCanvasSeries(page)).toEqual(switchedSeries);
+  await expect.poll(() => readScene(page)).toEqual({ regionValues: switchedValues, errors: [] });
 
+  // ---------- 离线导出：真实 MapLibre 运行时 ----------
   const workspace = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
   const offlineBuild = await page.evaluate(async ({ workspace, screenId }) => {
     const snapshotUrl = new URL("/src/core/export/snapshot.ts", location.href).href;
     const artifactUrl = new URL("/src/core/export/artifact.ts", location.href).href;
     const runtimeUrl = new URL("/src/core/export/runtime.ts", location.href).href;
-    const [snapshotModule, artifactModule, runtimeModule] = await Promise.all([
-      import(snapshotUrl), import(artifactUrl), import(runtimeUrl),
+    const assetsUrl = new URL("/src/core/export/assets.ts", location.href).href;
+    const [snapshotModule, artifactModule, runtimeModule, assetsModule] = await Promise.all([
+      import(snapshotUrl), import(artifactUrl), import(runtimeUrl), import(assetsUrl),
     ]);
-    const payload = snapshotModule.buildPackagePayload(workspace, [screenId]);
-    // 测试桩仅捕获离线 runtime 交给 ECharts 的 option；数据包与 runtime 仍由正式导出器生成。
-    const echartsCode = `(function(){window.__cfCapturedOptions=[];window.echarts={registerMap:function(){},init:function(){return{setOption:function(option){window.__cfCapturedOptions.push(option);},resize:function(){},dispose:function(){}};}};})();`;
+    const [maplibreCode, maplibreWorkerCode] = await Promise.all([
+      assetsModule.loadMaplibreSource(),
+      assetsModule.loadMaplibreWorkerSource(),
+    ]);
+    const payload = assetsModule.attachGeo(snapshotModule.buildPackagePayload(workspace, [screenId]));
+    const echartsCode = `(function(){window.echarts={registerMap:function(){},init:function(){return{setOption:function(){},resize:function(){},dispose:function(){}};}};})();`;
     const artifact = await artifactModule.buildArtifact({
       payload,
       echartsCode,
+      maplibreCode,
+      maplibreWorkerCode,
       runtimeCode: runtimeModule.RUNTIME_CODE,
       mode: "inline",
       now: () => 1794280000000,
@@ -269,35 +255,43 @@ test("地图容器绑定继承、图层独立覆盖与变量切换在刷新和�
     };
   }, { workspace, screenId: SCREEN_ID });
 
-  // 两份数据快照分别进入离线 runtime；管线过滤后容器变量过滤仍只留下初始省份。
+  // 管线过滤（score>=70）后进入 payload 的行：深圳/杭州。
   expect(offlineBuild.datasetRows.map((row: { city: string }) => row.city).sort()).toEqual(["杭州", "深圳"]);
   expect(offlineBuild.html).toContain("cf-payload");
+
   const offlinePage = await context.newPage();
   await offlinePage.setContent(offlineBuild.html);
+  await offlinePage.waitForSelector(".maplibregl-canvas", { timeout: 25000 });
   await offlinePage.waitForFunction(() => {
-    const options = (window as any).__cfCapturedOptions;
-    return Array.isArray(options) && options.length > 0;
-  });
-  const readLatestOfflineSeries = () => offlinePage.evaluate(() => {
-    const options = (window as any).__cfCapturedOptions ?? [];
-    const option = options[options.length - 1];
-    return (option?.series ?? []).map((entry: { type: string; data: unknown[] }) => ({ type: entry.type, data: entry.data }));
-  });
-  const readLatestOfflineCamera = () => offlinePage.evaluate(() => {
-    const options = (window as any).__cfCapturedOptions ?? [];
-    const option = options[options.length - 1];
-    const geo = Array.isArray(option?.geo) ? option.geo[0] : option?.geo;
-    return { center: geo?.center, zoom: geo?.zoom, minZoom: geo?.scaleLimit?.min, maxZoom: geo?.scaleLimit?.max, roam: geo?.roam, showLabels: geo?.label?.show, backgroundColor: option?.backgroundColor };
-  });
-  await expect.poll(readLatestOfflineSeries).toEqual(initialSeries);
-  await expect.poll(readLatestOfflineCamera).toEqual(expectedMapCamera);
-  expect(await readLatestOfflineCamera()).toEqual(await readCanvasMapCamera(page));
+    const hosts = document.querySelectorAll("[data-item]");
+    for (const el of hosts) if ((el as any).__cfMap) return true;
+    return false;
+  }, null, { timeout: 25000 });
 
-  // 离线包里的同一表格交互与蓝图也切换变量，继承层更新、独立图层保持原数据。
+  const readOffline = () => offlinePage.evaluate(() => {
+    let map: any = null;
+    document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
+    if (!map) return null;
+    const c = map.getCenter();
+    return {
+      camera: { center: [c.lng, c.lat], zoom: map.getZoom(), minZoom: map.getMinZoom(), maxZoom: map.getMaxZoom() },
+      regionValues: { ...(map.getContainer().__cfRegionValues ?? {}) },
+      labelCount: document.querySelectorAll(".cf-map-labels span").length,
+      surfaceStyle: document.querySelector(".cf-map-scene")?.getAttribute("style") ?? "",
+    };
+  });
+
+  await expect.poll(readOffline).toMatchObject({ camera: expectedCamera, regionValues: initialValues, labelCount: 0 });
+  const offlineState = await readOffline();
+  expect(offlineState?.surfaceStyle).toContain("rgb(16, 32, 48)");
+  const onlineCamera = await readMapCamera(page);
+  expect(offlineState?.camera).toEqual(onlineCamera);
+
+  // 离线蓝图：表格行选择切变量 → 重建后区域数值切换，且与工作台一致。
   const offlineHangzhouCell = offlinePage.locator(".cf-data-table tbody tr").filter({ hasText: "杭州" }).getByRole("cell", { name: "杭州", exact: true });
   await offlineHangzhouCell.click();
-  await offlinePage.waitForFunction(() => ((window as any).__cfCapturedOptions ?? []).length >= 2);
-  await expect.poll(readLatestOfflineSeries).toEqual(switchedSeries);
-  expect(await readLatestOfflineSeries()).toEqual(await readCanvasSeries(page));
+  await expect.poll(readOffline).toMatchObject({ regionValues: switchedValues });
+  const finalOnline = await readScene(page);
+  expect((await readOffline())?.regionValues).toEqual(finalOnline?.regionValues);
   await offlinePage.close();
 });

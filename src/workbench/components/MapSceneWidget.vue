@@ -8,7 +8,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 setWorkerUrl(maplibreWorkerUrl);
 import type { ComponentRenderProps } from "@/core/components/types";
 import { buildMapLibreScene, type MapLibreSceneLabel } from "@/core/components/mapLibreScene";
-import { formatMapValue, normalizeMapSceneProps } from "@/core/components/mapScene";
+import { computeRegionCenter, formatMapValue, normalizeMapSceneProps } from "@/core/components/mapScene";
 import { filterRowsByBinding } from "@/core/components/dataWidgets";
 import type { DatasetSnapshot } from "@/core/model/types";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
@@ -106,8 +106,49 @@ function emitRegionEvent(type: "click" | "dblclick", ev: { features?: Array<{ pr
     valueText: formatMapValue(value, scene.value.valueFormat),
     presentation: scene.value.presentation,
   });
-  // T6：双击下钻（startDrill）在此接入
+  if (type === "dblclick") startDrill(name);
 }
+
+interface DrillEntry { center: [number, number]; zoom: number; regionName: string }
+const drillStack = ref<DrillEntry[]>([]);
+
+function currentCamera(): { center: [number, number]; zoom: number } {
+  const instance = map.value;
+  if (!instance) {
+    return { center: [...scene.value.view.center] as [number, number], zoom: scene.value.view.zoom };
+  }
+  const c = instance.getCenter();
+  return { center: [c.lng, c.lat], zoom: instance.getZoom() };
+}
+
+function startDrill(regionName: string): void {
+  if (!(scene.value.drill?.enabled ?? true)) return;
+  const center = computeRegionCenter(chinaGeo, regionName);
+  if (!center) return;
+  const cam = currentCamera();
+  const targetZoom = Math.min(scene.value.view.maxZoom, Math.max(4.5, cam.zoom));
+  drillStack.value = [...drillStack.value, { center, zoom: targetZoom, regionName }];
+  map.value?.flyTo({ center, zoom: targetZoom, duration: 350, essential: true });
+}
+
+function drillToLevel(index: number): void {
+  if (!drillStack.value.length && index >= 0) return;
+  const target = index >= 0 ? drillStack.value[index] ?? null : null;
+  drillStack.value = target ? drillStack.value.slice(0, index + 1) : [];
+  const to = target
+    ? { center: [...target.center] as [number, number], zoom: target.zoom }
+    : { center: [...scene.value.view.center] as [number, number], zoom: scene.value.view.zoom };
+  map.value?.flyTo({ center: to.center, zoom: to.zoom, duration: 350, essential: true });
+  props.emitEvent("regionUpdrill", { name: target ? target.regionName : "全国", presentation: scene.value.presentation });
+}
+
+function onDocKeydown(ev: KeyboardEvent): void {
+  if (ev.key !== "Escape" || !drillStack.value.length) return;
+  ev.stopImmediatePropagation();
+  ev.preventDefault();
+  drillToLevel(drillStack.value.length - 2);
+}
+onMounted(() => window.addEventListener("keydown", onDocKeydown, true));
 
 function onMapError(ev: unknown): void {
   const err = ev as { error?: { message?: string }; message?: string };
@@ -133,7 +174,9 @@ function applyScene(): void {
   if (!instance) return;
   const built = result.value;
   instance.setStyle(built.style as Exclude<Parameters<MapLibreMap["setStyle"]>[0], null>, { diff: true });
-  // minZoom/maxZoom 由 setStyle 应用 style 根字段完成（v6 jumpTo 不接受该对参数）
+  // minZoom/maxZoom are Map options, not style-root properties in MapLibre.
+  instance.setMinZoom(built.style.minZoom as number);
+  instance.setMaxZoom(built.style.maxZoom as number);
   instance.jumpTo({
     center: [...(built.style.center as [number, number])],
     zoom: built.style.zoom as number,
@@ -165,6 +208,8 @@ onMounted(() => {
     const instance = new MapLibreMap({
       container: hostEl.value,
       style: result.value.style as Exclude<Parameters<MapLibreMap["setStyle"]>[0], null>,
+      minZoom: result.value.style.minZoom as number,
+      maxZoom: result.value.style.maxZoom as number,
       attributionControl: false,
       interactive: true,
     });
@@ -191,6 +236,7 @@ onMounted(() => {
 
 defineExpose({
   getMap: () => map.value,
+  readScene: () => ({ regionValues: { ...result.value.regionValues }, errors: [...result.value.errors] }),
 });
 </script>
 
@@ -199,6 +245,13 @@ defineExpose({
     <div class="map-scene__surface" :style="{ backgroundColor: scene.view.backgroundColor }">
       <div ref="hostEl" class="map-scene__chart" />
       <div class="map-scene__caption">{{ scene.presentation === 'tilted' ? '立体地图 · 2.5D' : '平面地图 · 2D' }}</div>
+      <div v-if="drillStack.length" class="map-scene__breadcrumb" role="navigation" aria-label="地图下钻面包屑">
+        <button type="button" class="map-scene__crumb" @click="drillToLevel(-1)">全国</button>
+        <template v-for="(entry, index) in drillStack" :key="`${entry.regionName}-${index}`">
+          <span class="map-scene__crumb-sep">›</span>
+          <button type="button" class="map-scene__crumb" @click="drillToLevel(index)">{{ entry.regionName }}</button>
+        </template>
+      </div>
       <div class="map-scene__layers">{{ visibleLayers }} 个可见图层</div>
       <div class="map-scene__labels" aria-hidden="true">
         <span
@@ -223,6 +276,10 @@ defineExpose({
 
 .map-scene__caption, .map-scene__layers { position: absolute; z-index: 2; padding: 5px 8px; border: 1px solid #54bad744; border-radius: 4px; background: #061622c9; font-size: 11px; pointer-events: none; }
 .map-scene__caption { top: 10px; left: 10px; }
+.map-scene__breadcrumb { position: absolute; z-index: 2; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid #54bad744; border-radius: 4px; background: #061622c9; font-size: 11px; pointer-events: auto; }
+.map-scene__crumb { border: none; background: transparent; color: #b9e9f5; cursor: pointer; padding: 0; font-size: 11px; }
+.map-scene__crumb:hover { color: #32d6ff; }
+.map-scene__crumb-sep { color: #54bad7; }
 .map-scene__layers { right: 10px; bottom: 10px; }
 .map-scene__labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
 .map-scene__label { position: absolute; transform: translate(-50%, -50%); font-size: 10px; color: #e7fbff; text-shadow: 0 0 3px #013a4a, 0 0 2px #013a4a; white-space: nowrap; }

@@ -878,10 +878,14 @@ export const RUNTIME_CODE = String.raw`
       mapInstance.fitBounds([[minX, minY], [maxX, maxY]], { padding: 28, duration: 0 });
     }
 
+    canvas.__cfRegionValues = regionValues;
     maplibrePromise.then(function (mod) {
       if (!mod) { if (!statusEl) showStatus("地图运行时缺失：离线包未注入 MapLibre 源"); return; }
       try {
-        var map = new mod.Map({ container: canvas, style: style, attributionControl: false, interactive: true });
+        var map = new mod.Map({
+          container: canvas, style: style, minZoom: view.minZoom, maxZoom: view.maxZoom,
+          attributionControl: false, interactive: true
+        });
         canvas.__cfMap = map; // 测试钩子：e2e 读取离线 style
         if (!view.dragEnabled) map.dragPan.disable();
         if (!view.zoomEnabled) map.scrollZoom.disable();
@@ -902,7 +906,97 @@ export const RUNTIME_CODE = String.raw`
           });
         }
         map.on("click", "cf-fill", function (ev) { cfEmitMapEvent("regionClick", ev); });
-        map.on("dblclick", "cf-fill", function (ev) { cfEmitMapEvent("regionDblclick", ev); });
+        map.on("dblclick", "cf-fill", function (ev) {
+          cfEmitMapEvent("regionDblclick", ev);
+          var df = ev && ev.features && ev.features[0];
+          var dn = df && df.properties ? df.properties.name : null;
+          if (typeof dn === "string" && dn) cfStartDrill(dn);
+        });
+        var drillStack = [];
+        var drillEl = null;
+        function cfCurrentCam() {
+          var c = map.getCenter();
+          return { center: [c.lng, c.lat], zoom: map.getZoom() };
+        }
+        function cfRegionCenterLocal(name) {
+          if (!geoSource || !Array.isArray(geoSource.features)) return null;
+          var feature = null;
+          for (var i = 0; i < geoSource.features.length; i++) {
+            var f = geoSource.features[i];
+            if (f && f.properties && f.properties.name === name) { feature = f; break; }
+          }
+          if (!feature || !feature.geometry) return null;
+          var pts = [];
+          function walkPts(v) {
+            if (!Array.isArray(v)) return;
+            if (typeof v[0] === "number" && typeof v[1] === "number") { pts.push([v[0], v[1]]); return; }
+            for (var w = 0; w < v.length; w++) walkPts(v[w]);
+          }
+          var geom = feature.geometry;
+          if (geom.type === "GeometryCollection" && geom.geometries) {
+            for (var gi = 0; gi < geom.geometries.length; gi++) if (geom.geometries[gi]) walkPts(geom.geometries[gi].coordinates);
+          } else walkPts(geom.coordinates);
+          if (!pts.length) return null;
+          var xs = pts.map(function (pt) { return pt[0]; });
+          var ys = pts.map(function (pt) { return pt[1]; });
+          return [(Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2, (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2];
+        }
+        function cfCrumbBtn(label, index) {
+          var b = doc.createElement("button");
+          b.type = "button";
+          b.className = "cf-map-crumb";
+          b.textContent = label;
+          b.addEventListener("click", function () { cfDrillToLevel(index); });
+          return b;
+        }
+        function cfUpdateBreadcrumb() {
+          if (!drillEl) return;
+          while (drillEl.firstChild) drillEl.removeChild(drillEl.firstChild);
+          if (!drillStack.length) { drillEl.style.display = "none"; return; }
+          drillEl.style.display = "flex";
+          drillEl.appendChild(cfCrumbBtn("\u5168\u56fd", -1));
+          for (var i = 0; i < drillStack.length; i++) {
+            var sep = doc.createElement("span");
+            sep.className = "cf-map-crumb-sep";
+            sep.textContent = " \u203a ";
+            drillEl.appendChild(sep);
+            drillEl.appendChild(cfCrumbBtn(drillStack[i].regionName, i));
+          }
+        }
+        function cfDrillToLevel(index) {
+          if (!drillStack.length && index >= 0) return;
+          var target = index >= 0 ? (drillStack[index] || null) : null;
+          drillStack = target ? drillStack.slice(0, index + 1) : [];
+          var to = target ? { center: target.center.slice(), zoom: target.zoom } : { center: view.center.slice(), zoom: view.zoom };
+          map.flyTo({ center: to.center, zoom: to.zoom, duration: 350, essential: true });
+          runBlueprint(item, screen, "regionUpdrill", { name: target ? target.regionName : "\u5168\u56fd", presentation: presentation });
+          cfUpdateBreadcrumb();
+        }
+        function cfStartDrill(name) {
+          if (props.drill && props.drill.enabled === false) return;
+          var center = cfRegionCenterLocal(name);
+          if (!center) return;
+          var cam = cfCurrentCam();
+          var targetZoom = Math.min(view.maxZoom, Math.max(4.5, cam.zoom));
+          drillStack = drillStack.concat([{ center: center, zoom: targetZoom, regionName: name }]);
+          map.flyTo({ center: center, zoom: targetZoom, duration: 350, essential: true });
+          cfUpdateBreadcrumb();
+        }
+        function cfEscHandler(ev) {
+          if (!ev || ev.key !== "Escape" || !drillStack.length) return;
+          ev.stopImmediatePropagation();
+          if (ev.preventDefault) ev.preventDefault();
+          cfDrillToLevel(drillStack.length - 2);
+        }
+        doc.addEventListener("keydown", cfEscHandler, true);
+        drillEl = doc.createElement("div");
+        drillEl.className = "cf-map-breadcrumb";
+        drillEl.style.position = "absolute"; drillEl.style.zIndex = "3";
+        drillEl.style.top = "10px"; drillEl.style.left = "50%"; drillEl.style.transform = "translateX(-50%)";
+        drillEl.style.display = "none"; drillEl.style.alignItems = "center"; drillEl.style.gap = "4px";
+        drillEl.style.padding = "4px 8px"; drillEl.style.border = "1px solid #54bad744"; drillEl.style.borderRadius = "4px";
+        drillEl.style.background = "#061622c9"; drillEl.style.fontSize = "11px";
+        rootEl.appendChild(drillEl);
         function projectLabels() {
           if (!labels.length) return;
           var rect = canvas.getBoundingClientRect();

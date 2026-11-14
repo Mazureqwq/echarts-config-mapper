@@ -278,6 +278,37 @@ test("2.5D 地图场景结构、相机同步与视觉抽查截图", async ({ pag
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
+test("下钻视角与面包屑截图（flat 分段屏）", async ({ page, context }) => {
+  await context.addInitScript(({ storageKey, workspace }) => {
+    if (localStorage.getItem(storageKey) === null) {
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
+
+  await page.goto("/?nav=drill#/workbench/map-visual-segments-screen");
+  await expect(page.locator(".workbench")).toBeVisible();
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await page.waitForTimeout(700);
+
+  const pixel = await page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const p = map.project([120.1551, 30.2741]);
+    return [p.x, p.y];
+  });
+  expect(pixel).not.toBeNull();
+  const box = await page.locator(".map-scene__chart canvas").boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.dblclick(box!.x + (pixel as number[])[0], box!.y + (pixel as number[])[1]);
+  await expect(page.locator(".map-scene__breadcrumb")).toBeVisible();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: "test-results/visual/09-drill.jpg", type: "jpeg", quality: 62 });
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".map-scene__breadcrumb")).toHaveCount(0);
+});
+
+
 test.fixme("分段色带与图例、皮肤切换、下钻视角截图及 v1 兼容回归（T7/T8/T9 恢复）", async ({ page, context }) => {
   await context.addInitScript(({ storageKey, workspace }) => {
     if (localStorage.getItem(storageKey) === null) {
