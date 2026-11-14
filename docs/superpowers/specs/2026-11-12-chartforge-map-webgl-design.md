@@ -90,6 +90,53 @@
 3. **M3 门**：视觉逐项截图对照（分级边界精确外环/视图偏移/比例尺/悬停），人工验收。
 4. **M4 门**：旧 tilted 屏降级验证截图、废弃项 grep 清零（`MAP_SKINS/applyMapSkin` 等）、全量 `typecheck/vitest/build/e2e` 绿、`git diff --check` 0、无 eval/外链、离线包体积 ≤5MB 实测、整分支评审（Critical/Important 当轮修复，Minor 记 deferred）。
 
+### 6.1 验收记录（2026-11-14 收口）
+
+分支 `feature/chartforge-datav-lite`（`main` 未动）；基线 `15da3c2` → 头 `a744f9c` + Task 10 评审修复提交。
+
+| 门 | 结论 | 证据 |
+|---|---|---|
+| M1 WebGL 渲染基线 | ✅ 通过 | `e2e/webgl-probe.spec.ts`（WebKit WebGL 可用）、`e2e/file-offline.spec.ts`（`file://` 单 HTML 实跑：pitch 28、34 个省名标注、单一 MapLibre 画布） |
+| M2 交互迁移 | ✅ 通过 | `e2e/map-scene-interaction.spec.ts`（单击/双击/`regionUpdrill` 载荷）、`e2e/map-scene-tilted-drill.spec.ts`（`flyTo` 下钻 + 面包屑 + Esc）、`e2e/map-scene-style-parity.spec.ts`（图例/tooltip/悬停/点击态双端 parity） |
+| M3 视觉质感 | ✅ 通过 | `e2e/t8-m3-shots.spec.ts` + `e2e/map-scene-visual.spec.ts`：精确国界外环（大陆含海南 + 台湾两条外环，行政区缝隙不产生独立外环）、500 km 比例尺、视图偏移、标注覆盖层、悬停态 |
+| M4 兼容与收口 | ✅ 通过 | 见下方 6.2 |
+
+**M4 实测门（Task 10 Step 1，全部在 `a744f9c` + 评审修复后复跑）**
+
+| 门禁 | 实测 |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run tests` | 58 文件 / **496** 测试全绿（Task 10 新增 2 条） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | **19/19** 通过（Task 10 新增 1 条地理散点/热力/飞线双端 parity） |
+| `git diff --check` | exit 0 |
+| grep `eval(`/`new Function`/`innerHTML`（`src/core/export/`） | 仅 1 处策略注释，无可执行调用 |
+| grep `MAP_SKINS|applyMapSkin|buildMapSceneOption`（代码域 `src`/`tests`/`e2e`） | **0 命中**（仅历史 plan/spec 文本保留为废弃记录） |
+| 离线单 HTML 体积 | **1,916,394 字节 ≈ 1.828 MiB** ≤ 5 MB 预算 |
+| 旧 tilted 屏降级 | `e2e/map-legacy-compat.spec.ts` 2/2：v1 旧 props 渲染非空白且 `pitch === 28`；历史皮肤写入的具体色值仍生效；废弃字段 `underlay`/`appliedSkin` 被忽略 |
+
+### 6.2 D1–D9 逐条核对（整分支评审，`15da3c2..HEAD` 33 文件 +4,162/−1,446）
+
+| # | 结论 | 证据 |
+|---|---|---|
+| D1 | ✅ | `chartforge.map-scene-flat/tilted` 渲染器换为 MapLibre，组件 ID 与版本号不变 |
+| D2 | ✅ | 无瓦片底图 / 无 DEM / 无联网：`src` 内无 `tile://`、`raster-dem`、`terrain`，地图相关源文件零 `http(s)` 外链 |
+| D3 | ✅ | 全仓未调用 `addProtocol`（`grep addProtocol src/` = 0） |
+| D4 | ✅ | 皮肤体系（`MAP_SKINS/applyMapSkin/underlay/appliedSkin`）与 ECharts 2.5D 叠片挤出已清零；色带/图例/外观控件/区域事件/镜头下钻全部迁移保留 |
+| D5 | ✅ | 组件 ID 不变；旧 tilted 屏降级为 `pitch 28` 且不空白不崩溃；`e2e/map-legacy-compat.spec.ts` 覆盖 |
+| D6 | ✅ | M1/M2/M3/M4 四门均以截图包 + 人工「继续」推进；M4 停止点见交付说明 |
+| D7 | ✅ | 未纳入本 spec，无子组件注册制改动 |
+| D8 | ✅ | M1 为第一里程碑，已验收 |
+| D9 | ✅ | 安全网 `0b21622..a3685f1` 已推送 origin；本分支 13 笔提交均落在 `feature/chartforge-datav-lite` |
+
+**评审发现与处置**
+
+- **Important（当轮修复）**：`geoScatter`/`geoHeatmap`/`geoFlow` 三类图层在 MapLibre 迁移后被静默丢弃——图层模型与检查器仍可新增这三类图层（旧 ECharts `buildMapSceneOption` 渲染 `scatter`/`heatmap`/`lines`），但 MapLibre 侧只产出 fill/line/outline 图层，导致绑定数据无声消失。修复：共享构建器 `buildMapLibreScene` 与离线 `RUNTIME_CODE` 同源补齐 `circle`/`heatmap`/`line` 图层 + 独立 geojson 源，转换失败显式报错（不再静默），散点标注进 HTML 覆盖层；新增单测 2 条 + 双端 parity e2e 1 条。
+- **Minor（当轮修复）**：工作台未应用 `props.label.show`（仅用 `view.showLabels`），与离线端 `label.show` 判定不一致（双端标注开关漂移）；现已在工作台补齐同一判定。
+- **Minor（deferred）**：旧 ECharts 飞线 `animated` 的流动拖尾降级为静态虚线——MapLibre 的 `line-dasharray` 无过渡属性，逐帧 `setPaintProperty` 会让 style 常驻 dirty（`map.loaded()`/`idle` 永不触发、看板持续重绘烧 CPU）。如需恢复流动效果需另立 spec（如 WebGL custom layer 或纹理流动）。
+- **Minor（deferred）**：`geoHeatmap` 在 MapLibre 侧以 `heatmap-density` 色带表达，旧 ECharts 为单色 radial 渐变，密度分布观感略有差异（能力不缺）。
+
+
 ## 7. 风险与开放问题
 
 | 风险 | 缓解 |

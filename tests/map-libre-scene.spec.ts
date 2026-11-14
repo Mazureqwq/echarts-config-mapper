@@ -120,6 +120,89 @@ describe("buildMapLibreScene", () => {
     expect(r.errors.join(" ")).toContain("区域填色需要配置区域名称与数值字段映射");
   });
 
+  it("renders geoScatter / geoHeatmap / geoFlow layers as maplibre circle / heatmap / line layers", () => {
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [
+          {
+            id: "pts", type: "geoScatter", name: "网点", visible: true,
+            style: { color: "#ffcc66", opacity: 1, size: 12, label: { show: true, color: "#ffffff", size: 12, stroke: "#000000" } },
+            dataBinding: { datasetId: "pts", fields: { geo: { longitude: "lng", latitude: "lat", name: "city" } } },
+          },
+          {
+            id: "heat", type: "geoHeatmap", name: "热力", visible: true,
+            style: { color: "#ff6b6b", opacity: 0.9, size: 12 },
+            dataBinding: { datasetId: "pts", fields: { geo: { longitude: "lng", latitude: "lat", value: "score" } } },
+          },
+          {
+            id: "flow", type: "geoFlow", name: "飞线", visible: true,
+            style: { color: "#32d6ff", opacity: 1, size: 8, animated: true },
+            dataBinding: { datasetId: "pts", fields: { geo: { originLongitude: "lng", originLatitude: "lat", destinationLongitude: "lng2", destinationLatitude: "lat2" } } },
+          },
+        ],
+      },
+      [{ province: "广东省", score: 92 }],
+      { category: "province", value: "score" },
+      { pts: [{ city: "广州", lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31, score: 7 }], heat: [{ lng: 113.26, lat: 23.13, score: 7 }], flow: [{ lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31 }] },
+      chinaFixture,
+    );
+    expect(r.errors).toEqual([]);
+    const layers = r.style.layers as any[];
+    const circle = layers.find((l) => l.type === "circle");
+    expect(circle).toBeTruthy();
+    expect(circle.id).toBe("cf-scatter-pts");
+    expect(circle.paint["circle-color"]).toBe("#ffcc66");
+    expect(circle.paint["circle-opacity"]).toBe(1);
+    expect(circle.paint["circle-radius"]).toBe(6);
+    const scatterSource = (r.style.sources as any)["cf-scatter-pts"];
+    expect(scatterSource.type).toBe("geojson");
+    expect(scatterSource.data.features).toHaveLength(1);
+    expect(scatterSource.data.features[0].geometry).toEqual({ type: "Point", coordinates: [113.26, 23.13] });
+    const heat = layers.find((l) => l.type === "heatmap");
+    expect(heat).toBeTruthy();
+    expect(heat.id).toBe("cf-heat-heat");
+    expect(JSON.stringify(heat.paint["heatmap-color"])).toContain("#ff6b6b");
+    expect(heat.paint["heatmap-opacity"]).toBe(0.9);
+    const flow = layers.find((l) => l.type === "line" && l.id.startsWith("cf-flow-"));
+    expect(flow).toBeTruthy();
+    expect(flow.id).toBe("cf-flow-flow");
+    expect(flow.paint["line-color"]).toBe("#32d6ff");
+    expect(flow.paint["line-width"]).toBe(2);
+    expect(flow.paint["line-dasharray"]).toBeDefined();
+    const flowSource = (r.style.sources as any)["cf-flow-flow"];
+    expect(flowSource.data.features[0].geometry.type).toBe("LineString");
+    expect(flowSource.data.features[0].geometry.coordinates).toEqual([[113.26, 23.13], [114.17, 22.31]]);
+    // 散点标注进 HTML 覆盖层模型（与工作台/离线同源）
+    const pointLabel = r.labels.find((l) => l.name === "广州");
+    expect(pointLabel).toBeTruthy();
+    expect(pointLabel?.centroid).toEqual([113.26, 23.13]);
+    expect(pointLabel?.color).toBe("#ffffff");
+    expect(flow.paint["line-dasharray"]).toEqual([3, 9]);
+  });
+
+  it("skips hidden geo layers and reports geo binding errors instead of dropping them silently", () => {
+    const hidden = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [{ id: "pts", type: "geoScatter", name: "网点", visible: false, style: { color: "#ffcc66", opacity: 1, size: 12 } }],
+      },
+      [], undefined, {}, chinaFixture,
+    );
+    expect(hidden.errors).toEqual([]);
+    expect((hidden.style.layers as any[]).find((l) => l.type === "circle")).toBeUndefined();
+
+    const missing = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [{ id: "pts", type: "geoScatter", name: "网点", visible: true, style: { color: "#ffcc66", opacity: 1, size: 12 } }],
+      },
+      [], undefined, {}, chinaFixture,
+    );
+    expect(missing.errors.join(" ")).toContain("缺少必需的地理字段映射");
+    expect((missing.style.layers as any[]).find((l) => l.type === "circle")).toBeUndefined();
+  });
+
   it("exposes legend entries and tooltip texts shared by workbench and offline runtime", () => {
     const r = buildMapLibreScene(
       {

@@ -72,6 +72,14 @@ const initialWorkspace = {
           visible: true,
           style: { color: "#32d6ff", opacity: 1, size: 8, animated: true },
           dataBinding: { datasetId: "pts", fields: { geo: { originLongitude: "lng", originLatitude: "lat", destinationLongitude: "lng2", destinationLatitude: "lat2" } } },
+        },
+        {
+          id: "heat",
+          type: "geoHeatmap",
+          name: "热力",
+          visible: true,
+          style: { color: "#ff6b6b", opacity: 0.9, size: 12 },
+          dataBinding: { datasetId: "pts", fields: { geo: { longitude: "lng", latitude: "lat", value: "score" } } },
         }],
       },
     }],
@@ -79,7 +87,7 @@ const initialWorkspace = {
   }],
   datasets: [
     { id: DATASET_ID, name: "省级热度", source: { kind: "static", data: rows }, pipeline: { filter: [] } },
-    { id: "pts", name: "点线数据", source: { kind: "static", data: [{ city: "广州", lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31 }] }, pipeline: { filter: [] } },
+    { id: "pts", name: "点线数据", source: { kind: "static", data: [{ city: "广州", lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31, score: 42 }] }, pipeline: { filter: [] } },
   ],
   settings: { autosave: true },
 };
@@ -597,5 +605,111 @@ test("M3 视觉质感（外轮廓/比例尺/视图偏移/标注）双端一致�
   expect(offlineScale).toBe(workbenchScale);
   expect(await offlinePage.locator(".cf-map-label").count()).toBeGreaterThan(0);
 
+  await offlinePage.close();
+});
+
+/** T10 评审修复：地理散点 / 点热力 / OD 飞线在 MapLibre 上双端一致（旧 ECharts 能力不得静默丢失） */
+async function readGeoLayerSnapshot(page: Page) {
+  return page.locator(".map-scene__chart").evaluate((root) => {
+    const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
+    const map = vueInstance?.exposed?.getMap?.();
+    if (!map) return null;
+    const style: any = map.getStyle();
+    const layers = (style?.layers ?? []).filter((l: any) =>
+      l.id.startsWith("cf-scatter-") || l.id.startsWith("cf-heat-") || l.id.startsWith("cf-flow-"));
+    return layers.map((l: any) => {
+      const source = (style?.sources ?? {})[l.source];
+      const features = source?.data?.features ?? [];
+      return {
+        id: l.id,
+        type: l.type,
+        source: l.source,
+        sourceType: source?.type ?? null,
+        color: l.paint["circle-color"] ?? l.paint["line-color"] ?? null,
+        opacity: l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null,
+        radius: l.paint["circle-radius"] ?? null,
+        width: l.paint["line-width"] ?? null,
+        // 流动拖尾的 dash 相位逐帧变化，双端只断言「有虚线」
+        dashed: Array.isArray(l.paint["line-dasharray"]) ? "dashed" : null,
+        featureCount: features.length,
+        geometryType: features[0]?.geometry?.type ?? null,
+        coordinates: features[0]?.geometry?.coordinates ?? null,
+      };
+    }).sort((a: any, b: any) => a.id.localeCompare(b.id));
+  });
+}
+
+async function readOfflineGeoLayerSnapshot(page: Page) {
+  return page.evaluate(() => {
+    let map: any = null;
+    document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
+    if (!map) return null;
+    const style: any = map.getStyle();
+    const layers = (style?.layers ?? []).filter((l: any) =>
+      l.id.startsWith("cf-scatter-") || l.id.startsWith("cf-heat-") || l.id.startsWith("cf-flow-"));
+    return layers.map((l: any) => {
+      const source = (style?.sources ?? {})[l.source];
+      const features = source?.data?.features ?? [];
+      return {
+        id: l.id,
+        type: l.type,
+        source: l.source,
+        sourceType: source?.type ?? null,
+        color: l.paint["circle-color"] ?? l.paint["line-color"] ?? null,
+        opacity: l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null,
+        radius: l.paint["circle-radius"] ?? null,
+        width: l.paint["line-width"] ?? null,
+        dashed: Array.isArray(l.paint["line-dasharray"]) ? "dashed" : null,
+        featureCount: features.length,
+        geometryType: features[0]?.geometry?.type ?? null,
+        coordinates: features[0]?.geometry?.coordinates ?? null,
+      };
+    }).sort((a: any, b: any) => a.id.localeCompare(b.id));
+  });
+}
+
+test("地理散点 / 点热力 / OD 飞线双端一致（T10 评审修复）", async ({ page, context }) => {
+  await context.addInitScript(({ storageKey, workspace }) => {
+    if (localStorage.getItem(storageKey) === null) {
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
+
+  await page.goto(`/#/workbench/${SCREEN_ID}`);
+  await expect(page.locator(".workbench")).toBeVisible();
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await waitForMapReady(page);
+  // 数据绑定错误必须显式提示，不能静默丢层
+  await expect(page.locator(".map-scene__status")).toHaveCount(0);
+
+  const workbench = await readGeoLayerSnapshot(page);
+  expect(workbench).not.toBeNull();
+  expect(workbench!.map((l: any) => l.id)).toEqual(["cf-flow-flow", "cf-heat-heat", "cf-scatter-pts-scatter"]);
+  const scatter = workbench!.find((l: any) => l.id === "cf-scatter-pts-scatter")!;
+  expect(scatter.type).toBe("circle");
+  expect(scatter.sourceType).toBe("geojson");
+  expect(scatter.color).toBe("#ffcc66");
+  expect(scatter.opacity).toBe(1);
+  expect(scatter.radius).toBe(6);
+  expect(scatter.featureCount).toBe(1);
+  expect(scatter.geometryType).toBe("Point");
+  expect(scatter.coordinates).toEqual([113.26, 23.13]);
+  const heat = workbench!.find((l: any) => l.id === "cf-heat-heat")!;
+  expect(heat.type).toBe("heatmap");
+  expect(heat.featureCount).toBe(1);
+  const flow = workbench!.find((l: any) => l.id === "cf-flow-flow")!;
+  expect(flow.type).toBe("line");
+  expect(flow.color).toBe("#32d6ff");
+  expect(flow.width).toBe(2);
+  expect(flow.dashed).toBe("dashed");
+  expect(flow.geometryType).toBe("LineString");
+  expect(flow.coordinates).toEqual([[113.26, 23.13], [114.17, 22.31]]);
+  // 散点标注进 HTML 覆盖层
+  await expect(page.locator(".map-scene__label", { hasText: "广州" })).toBeVisible();
+
+  const offlinePage = await openOffline(page, context, SCREEN_ID);
+  const offline = await readOfflineGeoLayerSnapshot(offlinePage);
+  expect(offline).toEqual(workbench);
+  await expect(offlinePage.locator(".cf-map-label", { hasText: "广州" })).toBeVisible();
   await offlinePage.close();
 });

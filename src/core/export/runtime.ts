@@ -548,6 +548,90 @@ export const RUNTIME_CODE = String.raw`
     var text = value.toFixed(decimals);
     return fmt && typeof fmt.suffix === "string" && fmt.suffix ? text + fmt.suffix : text;
   }
+  // 地理散点 / 点热力 / OD 飞线：与工作台 buildGeoChartDataFromRows 同源的字段校验与行转换
+  var CF_GEO_FIELD_LABELS = {
+    longitude: "\u7ecf\u5ea6", latitude: "\u7eac\u5ea6", name: "\u540d\u79f0", value: "\u6570\u503c",
+    originLongitude: "\u8d77\u70b9\u7ecf\u5ea6", originLatitude: "\u8d77\u70b9\u7eac\u5ea6",
+    destinationLongitude: "\u7ec8\u70b9\u7ecf\u5ea6", destinationLatitude: "\u7ec8\u70b9\u7eac\u5ea6"
+  };
+  function cfGeoField(mapping, key) {
+    var value = mapping && typeof mapping === "object" ? mapping[key] : "";
+    return typeof value === "string" ? value.trim() : "";
+  }
+  function cfGeoNumeric(value) {
+    if (typeof value === "number") return isFinite(value) ? value : null;
+    if (typeof value === "string" && value.trim() !== "") { var parsed = Number(value); return isFinite(parsed) ? parsed : null; }
+    return null;
+  }
+  function cfGeoName(row, key) {
+    if (!key) return "";
+    var value = row[key];
+    if (typeof value !== "string" && typeof value !== "number") return "";
+    return String(value).trim();
+  }
+  function cfGeoRows(rows, mapping, type) {
+    var required = type === "geoFlow"
+      ? ["originLongitude", "originLatitude", "destinationLongitude", "destinationLatitude"]
+      : (type === "geoHeatmap" ? ["longitude", "latitude", "value"] : ["longitude", "latitude"]);
+    var missing = required.filter(function (key) { return !cfGeoField(mapping, key); });
+    if (missing.length) {
+      return { ok: false, message: "\u7f3a\u5c11\u5fc5\u9700\u7684\u5730\u7406\u5b57\u6bb5\u6620\u5c04\uff1a" + missing.map(function (key) { return CF_GEO_FIELD_LABELS[key]; }).join("\u3001"), rows: [] };
+    }
+    var result = [];
+    if (rows.length > 0) {
+      var mappedColumns = [];
+      for (var mk in mapping) {
+        if (!Object.prototype.hasOwnProperty.call(mapping, mk)) continue;
+        var mapped = mapping[mk];
+        if (typeof mapped === "string" && mapped.trim()) mappedColumns.push(mapped.trim());
+      }
+      var absent = mappedColumns.filter(function (column) {
+        for (var r = 0; r < rows.length; r++) {
+          if (rows[r] && Object.prototype.hasOwnProperty.call(rows[r], column)) return false;
+        }
+        return true;
+      });
+      if (absent.length) {
+        return { ok: false, message: "\u52a0\u5de5\u540e\u7f3a\u5c11\u5df2\u6620\u5c04\u7684\u5730\u7406\u5b57\u6bb5\u5217\uff1a" + absent.join("\u3001"), rows: [] };
+      }
+    }
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i] || {};
+      if (type === "geoFlow") {
+        var fromLng = cfGeoNumeric(row[cfGeoField(mapping, "originLongitude")]);
+        var fromLat = cfGeoNumeric(row[cfGeoField(mapping, "originLatitude")]);
+        var toLng = cfGeoNumeric(row[cfGeoField(mapping, "destinationLongitude")]);
+        var toLat = cfGeoNumeric(row[cfGeoField(mapping, "destinationLatitude")]);
+        if (fromLng === null || fromLat === null || toLng === null || toLat === null) continue;
+        if (fromLng < -180 || fromLng > 180 || toLng < -180 || toLng > 180) continue;
+        if (fromLat < -90 || fromLat > 90 || toLat < -90 || toLat > 90) continue;
+        result.push({ from: [fromLng, fromLat], to: [toLng, toLat], name: cfGeoName(row, cfGeoField(mapping, "name")) });
+        continue;
+      }
+      var lng = cfGeoNumeric(row[cfGeoField(mapping, "longitude")]);
+      var lat = cfGeoNumeric(row[cfGeoField(mapping, "latitude")]);
+      if (lng === null || lat === null || lng < -180 || lng > 180 || lat < -90 || lat > 90) continue;
+      var valueKey = cfGeoField(mapping, "value");
+      var pointValue = valueKey ? cfGeoNumeric(row[valueKey]) : null;
+      if (valueKey && pointValue === null) continue;
+      if (type === "geoHeatmap") {
+        if (pointValue === null) continue;
+        result.push({ longitude: lng, latitude: lat, value: pointValue });
+      } else {
+        result.push({ longitude: lng, latitude: lat, name: cfGeoName(row, cfGeoField(mapping, "name")), value: pointValue === null ? undefined : pointValue });
+      }
+    }
+    if (rows.length > 0 && !result.length) {
+      return { ok: false, message: "\u6ca1\u6709\u53ef\u7528\u7684\u5730\u7406\u6570\u636e\u884c\uff0c\u8bf7\u68c0\u67e5\u7ecf\u5ea6\u5ea6\u4e0e\u6570\u503c\u5b57\u6bb5", rows: [] };
+    }
+    return { ok: true, message: "", rows: result };
+  }
+  function cfHexToRgba(hex, alpha) {
+    var matched = /^#([0-9a-fA-F]{6})$/.exec(hex || "");
+    if (!matched) return "rgba(255, 255, 255, " + alpha + ")";
+    var value = parseInt(matched[1], 16);
+    return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
+  }
   var CF_CHINA_REGIONS = ["新疆维吾尔自治区", "西藏自治区", "内蒙古自治区", "青海省", "四川省", "黑龙江省", "甘肃省", "云南省", "广西壮族自治区", "湖南省", "陕西省", "广东省", "吉林省", "河北省", "湖北省", "贵州省", "山东省", "江西省", "河南省", "辽宁省", "山西省", "安徽省", "福建省", "浙江省", "江苏省", "重庆市", "宁夏回族自治区", "海南省", "台湾省", "北京市", "天津市", "上海市", "香港特别行政区", "澳门特别行政区"];
   function safeMapSceneMaplibre(item, rootEl, rows, props, screen) {
     var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
@@ -620,6 +704,12 @@ export const RUNTIME_CODE = String.raw`
           type: style.border.type === "dashed" ? "dashed" : "solid"
         } : null,
         animated: style.animated === true,
+        label: style.label && typeof style.label === "object" ? {
+          show: style.label.show !== false,
+          color: safeWidgetColor(style.label.color, "#ffffff"),
+          size: boundedWidgetNumber(style.label.size, 12, 8, 40),
+          stroke: typeof style.label.stroke === "string" && /^#[0-9a-fA-F]{6}$/.test(style.label.stroke) ? style.label.stroke : ""
+        } : null,
         minZoom: typeof entry.minZoom === "number" && isFinite(entry.minZoom) ? entry.minZoom : null,
         maxZoom: typeof entry.maxZoom === "number" && isFinite(entry.maxZoom) ? entry.maxZoom : null,
         colorMode: style.colorMode === "gradient" || style.colorMode === "segments" ? style.colorMode : "",
@@ -923,6 +1013,106 @@ export const RUNTIME_CODE = String.raw`
       );
     }
 
+    // T10：地理散点 / 点热力 / OD 飞线（与工作台 buildMapLibreScene 同源语义：circle / heatmap / line + 独立 geojson 源）
+    for (var gi = 0; gi < layers.length; gi++) {
+      var gl = layers[gi];
+      if (!gl.visible || gl.type === "regionFill") continue;
+      var gRows = gl.dataBinding ? datasetRows(gl.dataBinding, screen) : rows;
+      var gFields = gl.dataBinding ? (gl.dataBinding.fields || {}) : containerFields;
+      var converted = cfGeoRows(gRows, gFields.geo, gl.type);
+      if (!converted.ok) { errors.push(gl.name + "\uff1a" + converted.message); continue; }
+      if (!converted.rows.length) continue;
+      var gWindow = {};
+      if (gl.minZoom !== null) gWindow.minzoom = gl.minZoom;
+      if (gl.maxZoom !== null) gWindow.maxzoom = gl.maxZoom;
+      if (gl.type === "geoScatter") {
+        var scatterId = "cf-scatter-" + gl.id;
+        styleSources[scatterId] = {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: converted.rows.map(function (point) {
+              return {
+                type: "Feature",
+                properties: { name: point.name || "", value: point.value === undefined ? null : point.value },
+                geometry: { type: "Point", coordinates: [point.longitude, point.latitude] }
+              };
+            })
+          }
+        };
+        styleLayers.push(Object.assign({ id: scatterId, type: "circle", source: scatterId }, gWindow, {
+          paint: { "circle-color": gl.color, "circle-opacity": gl.opacity, "circle-radius": Math.max(1, gl.size / 2) }
+        }));
+        if (gl.label && gl.label.show) {
+          converted.rows.forEach(function (point) {
+            if (!point.name) return;
+            labels.push({
+              name: point.name,
+              centroid: [point.longitude, point.latitude],
+              key: "point:" + gl.id + ":" + point.name,
+              color: gl.label.color,
+              size: gl.label.size,
+              stroke: gl.label.stroke,
+              el: null
+            });
+          });
+        }
+        continue;
+      }
+      if (gl.type === "geoHeatmap") {
+        var heatId = "cf-heat-" + gl.id;
+        var heatValues = converted.rows.map(function (point) { return point.value; });
+        var heatMin = Math.min.apply(null, heatValues);
+        var heatMax = Math.max.apply(null, heatValues);
+        styleSources[heatId] = {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: converted.rows.map(function (point) {
+              return {
+                type: "Feature",
+                properties: { name: "", value: point.value },
+                geometry: { type: "Point", coordinates: [point.longitude, point.latitude] }
+              };
+            })
+          }
+        };
+        styleLayers.push(Object.assign({ id: heatId, type: "heatmap", source: heatId }, gWindow, {
+          paint: {
+            "heatmap-weight": heatMin === heatMax ? 1 : ["interpolate", ["linear"], ["get", "value"], heatMin, 0, heatMax, 1],
+            "heatmap-intensity": 1,
+            "heatmap-radius": Math.max(gl.size, 12),
+            "heatmap-opacity": gl.opacity,
+            "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0, 0, 0, 0)", 0.5, cfHexToRgba(gl.color, 0.55), 1, gl.color]
+          }
+        }));
+        continue;
+      }
+      if (gl.type === "geoFlow") {
+        var flowId = "cf-flow-" + gl.id;
+        styleSources[flowId] = {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: converted.rows.map(function (line) {
+              return {
+                type: "Feature",
+                properties: { name: line.name || "", value: null },
+                geometry: { type: "LineString", coordinates: [line.from, line.to] }
+              };
+            })
+          }
+        };
+        styleLayers.push(Object.assign({ id: flowId, type: "line", source: flowId }, gWindow, {
+          paint: Object.assign({
+            "line-color": gl.color,
+            "line-width": Math.max(1, gl.size / 4),
+            "line-opacity": gl.opacity
+          }, gl.animated ? { "line-dasharray": [3, 9] } : {})
+        }));
+      }
+    }
+
     var style = {
       version: 8,
       name: "chartforge-map-scene",
@@ -1207,9 +1397,9 @@ export const RUNTIME_CODE = String.raw`
               span.style.position = "absolute";
               span.style.transform = "translate(-50%, -50%)";
               span.style.whiteSpace = "nowrap";
-              span.style.fontSize = labelSize + "px";
-              span.style.color = labelColor;
-              span.style.textShadow = labelShadow ? "0 0 3px " + labelShadow : "0 0 3px #013a4a";
+              span.style.fontSize = (label.size || labelSize) + "px";
+              span.style.color = label.color || labelColor;
+              span.style.textShadow = label.stroke ? "0 0 3px " + label.stroke : (labelShadow ? "0 0 3px " + labelShadow : "0 0 3px #013a4a");
               labelsBox.appendChild(span);
               label.el = span;
             }

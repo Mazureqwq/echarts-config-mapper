@@ -1,4 +1,5 @@
 import type { DatasetBinding } from "../model/types";
+import { buildGeoChartDataFromRows } from "../chart/geoData";
 import {
   MAP_BORDER_DEFAULT,
   MAP_SCALE_BAR_DEFAULT,
@@ -31,7 +32,19 @@ export interface MapLibreSceneFlags {
 export interface MapLibreSceneLabel {
   name: string;
   centroid: [number, number];
+  /** 覆盖层列表的稳定 key（省名与散点标注可重名） */
+  key?: string;
+  /** 散点标注的独立配色/字号（缺省时沿用场景级 label 样式） */
+  color?: string;
+  size?: number;
+  stroke?: string;
 }
+
+/**
+ * 飞线虚线节拍（MapLibre 的 line-dasharray 无过渡属性，无法逐帧推进；
+ * 旧 ECharts 的流动拖尾降级为静态虚线，见 Task 10 评审记录 minor(deferred)）
+ */
+export const FLOW_DASH_PATTERN = [3, 9] as const;
 
 /** 统一的区域 tooltip 文案（工作台与离线同源，避免两端文案漂移） */
 export function formatMapTooltipText(name: string, value: number | null, fmt?: MapValueFormat): string {
@@ -107,6 +120,14 @@ function colorForValue(value: number, min: number, max: number, colors: MapFillC
     return k === 0 ? colors.min : k === n - 1 ? colors.max : rampColor(colors, k / (n - 1));
   }
   return rampColor(colors, t);
+}
+
+/** #rrggbb → rgba(...)（热力密度色带用；非法色回退白色） */
+function hexToRgba(hex: string, alpha: number): string {
+  const matched = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!matched) return `rgba(255, 255, 255, ${alpha})`;
+  const value = parseInt(matched[1], 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
 /**
@@ -207,6 +228,132 @@ export function buildMapLibreScene(
   const sources: Record<string, unknown> = {
     china: { type: "geojson", data: geoJson ?? {}, promoteId: "name" },
   };
+
+  // 地理散点 / 点热力 / OD 飞线：MapLibre 原生图层（circle / heatmap / line）+ 独立 geojson 源
+  const geoLabels: MapLibreSceneLabel[] = [];
+  for (const layer of scene.layers) {
+    if (!layer.visible || layer.type === "regionFill") continue;
+    const layerRows = layer.dataBinding ? (rowsByLayerId[layer.id] ?? []) : rows;
+    const layerFields = layer.dataBinding ? layer.dataBinding.fields : fields;
+    const converted = buildGeoChartDataFromRows(layerRows, layerFields?.geo, layer.type);
+    if (!converted.ok) {
+      errors.push(`${layer.name}：${converted.message}`);
+      continue;
+    }
+    const window: Record<string, unknown> = {};
+    if (layer.minZoom !== undefined) window.minzoom = layer.minZoom;
+    if (layer.maxZoom !== undefined) window.maxzoom = layer.maxZoom;
+    if (layer.type === "geoScatter" && converted.data.kind === "geoScatter") {
+      const points = converted.data.rows;
+      if (!points.length) continue;
+      const sourceId = `cf-scatter-${layer.id}`;
+      sources[sourceId] = {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: points.map((point) => ({
+            type: "Feature",
+            properties: { name: point.name ?? "", value: point.value ?? null },
+            geometry: { type: "Point", coordinates: [point.longitude, point.latitude] },
+          })),
+        },
+      };
+      layers.push({
+        id: sourceId,
+        type: "circle",
+        source: sourceId,
+        ...window,
+        paint: {
+          "circle-color": layer.style.color,
+          "circle-opacity": layer.style.opacity,
+          "circle-radius": Math.max(1, layer.style.size / 2),
+        },
+      });
+      if (layer.style.label?.show) {
+        for (const point of points) {
+          if (!point.name) continue;
+          geoLabels.push({
+            name: point.name,
+            centroid: [point.longitude, point.latitude],
+            key: `point:${layer.id}:${point.name}`,
+            color: layer.style.label.color,
+            size: layer.style.label.size,
+            stroke: layer.style.label.stroke,
+          });
+        }
+      }
+      continue;
+    }
+    if (layer.type === "geoHeatmap" && converted.data.kind === "geoHeatmap") {
+      const points = converted.data.rows;
+      if (!points.length) continue;
+      const sourceId = `cf-heat-${layer.id}`;
+      const values = points.map((point) => point.value);
+      const minimum = Math.min(...values);
+      const maximum = Math.max(...values);
+      sources[sourceId] = {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: points.map((point) => ({
+            type: "Feature",
+            properties: { name: "", value: point.value },
+            geometry: { type: "Point", coordinates: [point.longitude, point.latitude] },
+          })),
+        },
+      };
+      layers.push({
+        id: sourceId,
+        type: "heatmap",
+        source: sourceId,
+        ...window,
+        paint: {
+          "heatmap-weight": minimum === maximum
+            ? 1
+            : ["interpolate", ["linear"], ["get", "value"], minimum, 0, maximum, 1],
+          "heatmap-intensity": 1,
+          "heatmap-radius": Math.max(layer.style.size, 12),
+          "heatmap-opacity": layer.style.opacity,
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0, "rgba(0, 0, 0, 0)",
+            0.5, hexToRgba(layer.style.color, 0.55),
+            1, layer.style.color,
+          ],
+        },
+      });
+      continue;
+    }
+    if (layer.type === "geoFlow" && converted.data.kind === "geoFlow") {
+      const lines = converted.data.rows;
+      if (!lines.length) continue;
+      const sourceId = `cf-flow-${layer.id}`;
+      sources[sourceId] = {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: lines.map((line) => ({
+            type: "Feature",
+            properties: { name: line.name ?? "", value: line.value ?? null },
+            geometry: { type: "LineString", coordinates: [line.from, line.to] },
+          })),
+        },
+      };
+      layers.push({
+        id: sourceId,
+        type: "line",
+        source: sourceId,
+        ...window,
+        paint: {
+          "line-color": layer.style.color,
+          "line-width": Math.max(1, layer.style.size / 4),
+          "line-opacity": layer.style.opacity,
+          ...(layer.style.animated ? { "line-dasharray": [...FLOW_DASH_PATTERN] } : {}),
+        },
+      });
+    }
+  }
+
   const outline = scene.border?.outline;
   if (outline?.show) {
     const outlineData = buildChinaOutline(geoJson);
@@ -264,8 +411,10 @@ export function buildMapLibreScene(
     }
     if (!name) continue;
     const centroid = computeRegionCenter(geoJson, name);
-    if (centroid) labels.push({ name, centroid });
+    if (centroid) labels.push({ name, centroid, key: `region:${name}` });
   }
+  // 散点标注与省名标注共用 HTML 覆盖层（散点自带配色/字号）
+  labels.push(...geoLabels);
   const bounds: [[number, number], [number, number]] | null =
     Number.isFinite(minLng) && Number.isFinite(minLat) ? [[minLng, minLat], [maxLng, maxLat]] : null;
 

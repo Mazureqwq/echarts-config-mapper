@@ -84,7 +84,7 @@ const visibleLayers = computed(() => scene.value.layers.filter((layer) => layer.
 const hostEl = ref<HTMLDivElement | null>(null);
 const map = shallowRef<MapLibreMap | null>(null);
 const mapError = ref("");
-const labelPositions = ref<Array<{ name: string; x: number; y: number }>>([]);
+const labelPositions = ref<Array<{ name: string; x: number; y: number; key?: string; color?: string; size?: number; stroke?: string }>>([]);
 
 /* T7：hover / selected feature-state 与 tooltip 数据（与离线运行时同源） */
 const hoveredName = ref<string | null>(null);
@@ -115,7 +115,8 @@ const legendRows = computed<LegendRow[]>(() => {
 function projectLabels(): void {
   const instance = map.value;
   const threshold = result.value.labelMinZoom;
-  if (!instance || !result.value.flags.showLabels || (threshold !== null && instance.getZoom() < threshold)) {
+  // 与离线运行时同源：view.showLabels 与 label.show 都是标注总开关
+  if (!instance || !result.value.flags.showLabels || scene.value.label?.show === false || (threshold !== null && instance.getZoom() < threshold)) {
     labelPositions.value = [];
     return;
   }
@@ -125,7 +126,15 @@ function projectLabels(): void {
   labelPositions.value = result.value.labels
     .map((label: MapLibreSceneLabel) => {
       const point = instance.project(label.centroid);
-      return { name: label.name, x: point.x, y: point.y };
+      return {
+        name: label.name,
+        x: point.x,
+        y: point.y,
+        key: label.key,
+        color: label.color,
+        size: label.size,
+        stroke: label.stroke,
+      };
     })
     .filter((point) => point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height);
 }
@@ -441,13 +450,13 @@ defineExpose({
       <div class="map-scene__labels" aria-hidden="true">
         <span
           v-for="label in labelPositions"
-          :key="label.name"
+          :key="label.key ?? label.name"
           class="map-scene__label"
           :style="{
             left: `${label.x}px`,
             top: `${label.y}px`,
-            color: scene.label?.color ?? '#e7fbff',
-            fontSize: `${scene.label?.size ?? 10}px`,
+            color: label.color ?? scene.label?.color ?? '#e7fbff',
+            fontSize: `${label.size ?? scene.label?.size ?? 10}px`,
           }"
         >{{ label.name }}</span>
       </div>

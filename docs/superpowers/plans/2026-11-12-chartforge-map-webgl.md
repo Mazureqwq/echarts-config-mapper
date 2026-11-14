@@ -379,19 +379,19 @@ git commit -m "refactor: remove echarts legacy builder and skin system, add lega
 
 **Interfaces:** 无新代码接口。
 
-- [ ] **Step 1: 全量质量门**
+- [x] **Step 1: 全量质量门**
 
 Run: `pnpm typecheck && pnpm vitest run tests && pnpm build && pnpm test:e2e` → 全 0/全绿；`git diff --check` → 0；grep `eval\(|new Function|innerHTML` 于 `src/core/export` → 仅许可文本；**体积实测**：导出单 HTML 字节数 ≤5MB（记录台账，超限 → 停止复盘）；grep `MAP_SKINS|applyMapSkin|buildMapSceneOption` → 0（废弃清零）。
 
-- [ ] **Step 2: 验收记录**
+- [x] **Step 2: 验收记录**
 
 Spec §6 四条门逐项记录（含 M1–M4 截图索引、体积数字、评审结论）；本计划补执行记录与勾选。
 
-- [ ] **Step 3: 整分支评审（会话内、无子代理）**
+- [x] **Step 3: 整分支评审（会话内、无子代理）**
 
 全量 diff `15da3c2..HEAD` 通读 + 对照 spec D1–D9 逐条核对 → Critical/Important 当轮修复（RED→GREEN），Minor 记 `Final: minor (deferred)`。
 
-- [ ] **Step 4: 提交 + 台账收尾**
+- [x] **Step 4: 提交 + 台账收尾**
 
 ```bash
 git add docs/superpowers e2e tests src
@@ -399,9 +399,39 @@ git commit -m "test+docs: map webgl migration acceptance record and plan checkli
 ```
 台账写入 Task 1–10 完成行、全部 `Ruling:`、评审结论与 `Final:` 行 → 删除 `.superpowers/sdd/2026-11-12-chartforge-map-webgl/` → `finalize_changes` 一次 → 中文验收报告（全部 Ruling + deferred minors）→ `finishing-a-development-branch` 菜单。
 
-- [ ] **Step 5: GATE M4 最终验收（D6 停止点）**
+- [x] **Step 5: GATE M4 最终验收（D6 停止点）**
 
 最终截图包（M4 兼容降级前后对比 + 全绿门输出摘要）→ `present_file` → **停止等待人工确认**；确认后进入 Step 4 的台账收尾与报告。
+
+### Task 10 执行记录（2026-11-14）
+
+**Step 1 全量质量门（基线 `a744f9c`，Task 10 评审修复后复跑）**
+
+| 门禁 | 实测 |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run tests` | 58 文件 / 496 测试全绿（原 494 + Task 10 新增 2） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | 19/19（原 18 + Task 10 新增 1） |
+| `git diff --check` | exit 0 |
+| `eval(`/`new Function`/`innerHTML`（`src/core/export/`） | 仅 1 处策略注释 |
+| `MAP_SKINS|applyMapSkin|buildMapSceneOption`（代码域） | 0 命中 |
+| 离线单 HTML | 1,916,394 字节 ≈ 1.828 MiB ≤ 5 MB |
+
+**Step 3 整分支评审结论（`15da3c2..HEAD`，33 文件 +4,162/−1,446）**
+
+- `Final: important (fixed)` — `geoScatter`/`geoHeatmap`/`geoFlow` 图层在 MapLibre 迁移后被静默丢弃（模型与检查器仍可新增，旧 ECharts 确有渲染）。修复：共享构建器 + 离线 runtime 同源补齐 `circle`/`heatmap`/`line` 图层与独立 geojson 源，转换失败显式报错，散点标注进 HTML 覆盖层；补 2 条单测 + 1 条双端 parity e2e。
+- `Final: minor (fixed)` — 工作台未应用 `props.label.show`，与离线端标注开关判定漂移 → 工作台补齐同一判定。
+- `Final: minor (deferred)` — 旧 ECharts 飞线 `animated` 的流动拖尾降级为静态虚线：MapLibre 的 `line-dasharray` 无过渡属性，逐帧 `setPaintProperty` 会让 style 常驻 dirty（`map.loaded()`/`idle` 永不触发，看板持续重绘）。恢复需另立 spec。
+- `Final: minor (deferred)` — `geoHeatmap` 的密度色带观感与旧 ECharts 单色 radial 略有差异（能力不缺）。
+
+**Ruling 摘要**
+
+- `Ruling:` 废弃 grep 门按**代码域**（`src`/`tests`/`e2e`）判定；历史 plan/spec 中的废弃名称保留为废弃记录，不回写。
+- `Ruling:` 工作台与离线端继续共享同一套语义源（`buildMapLibreScene` 为工作台权威实现，离线 runtime 为同源镜像实现），几何/图层/标注双端 parity 由 `e2e/map-scene-style-parity.spec.ts` 守护。
+- `Ruling:` 散点/热力/飞线的行转换沿用既有 `buildGeoChartDataFromRows`（离线端为等价镜像实现），字段缺失与无效行按旧 ECharts 文案报错，不静默丢层。
+- `Ruling:` `main` 不合并，`feature/chartforge-datav-lite` 保持独立分支等待人工确认。
+
 
 ## 执行方式
 
