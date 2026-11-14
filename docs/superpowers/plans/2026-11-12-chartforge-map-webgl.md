@@ -62,27 +62,27 @@
   - `ArtifactInput.maplibreCode: string`（必填；内联模板 `<script>…maplibre…</script>` 与 zip 模式 `assets/maplibre-gl.js`；`cspHash`/`sriHash` 同 echarts 处理）
   - `exportScreenPackage` 内部 `maplibreCode: await loadMaplibreSource()`
 
-- [ ] **Step 1: 安装依赖**
+- [x] **Step 1: 安装依赖**
 
 Run: `pnpm add maplibre-gl` → Expected: 新增依赖写入 package.json（版本以安装结果为准）
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 `tests/export-artifact.spec.ts` 追加：`buildArtifact({ payload, echartsCode: "/*e*/", maplibreCode: "/*m*/", runtimeCode: "/*r*/", mode: "inline" })` 的 `index.html` 内容 `toContain("/*m*/")`；zip 模式 `files` 含 `path === "assets/maplibre-gl.js"`。`tests/export-e2e.spec.ts` 现有调用补 `maplibreCode: "(function(){window.__cfMaplibreReady=true;})()"` 桩（先不消费，仅满足类型）。
 
-- [ ] **Step 3: 跑测试确认失败**
+- [x] **Step 3: 跑测试确认失败**
 
 Run: `pnpm vitest run tests/export-artifact.spec.ts` → Expected: FAIL（缺字段/缺注入）
 
-- [ ] **Step 4: 实现**
+- [x] **Step 4: 实现**
 
 `assets.ts` 增加 `import maplibreUrl from "maplibre-gl/dist/maplibre-gl.js?url"` + `loadMaplibreSource`（仿 `loadEchartsSource`）；`artifact.ts` `ArtifactInput` 加必填 `maplibreCode: string`，模板注入点仿 `echarts`（两处 inline 模板 + zip `files.push` + cspHash/sriHash 行）；`index.ts` 传 `maplibreCode: await loadMaplibreSource()`；全仓 `buildArtifact(` 调用点（含 e2e harness×3）补齐字段。
 
-- [ ] **Step 5: 跑测试确认通过**
+- [x] **Step 5: 跑测试确认通过**
 
 Run: `pnpm vitest run tests/export-artifact.spec.ts tests/export-e2e.spec.ts` → Expected: PASS
 
-- [ ] **Step 6: 全量门 + 提交**
+- [x] **Step 6: 全量门 + 提交**
 
 Run: `pnpm typecheck && pnpm vitest run tests && pnpm build` → 三者 exit 0
 
@@ -117,7 +117,7 @@ git commit -m "feat: maplibre source injection into export artifacts"
   - style 要点：`light`（ambient+directional 默认）、`fog`（range 默认）、`pitch`（tilted→`props.pitch||28`，flat→0）、`center/zoom/minZoom/maxZoom`、source `china`=GeoJSON 内联占位（工作台侧由 widget 注入实际数据，构建器接受 `geoJson` 参数：`buildMapLibreScene(props, rows, fields, rowsByLayerId, geoJson)`）、layers：`fill`（色带：gradient→`fill-color` 三停表达式；segments→`step` 分段表达式；空值省→`fill-color` 按 feature name 匹配 empty 色；`fill-outline-color` 来自 border）、`line`（轮廓）、`symbol` 省名（showLabels 开关；HTML 覆盖层的数据源也由 style 的 symbol 承担——**M1 定案：用 symbol + 本地无字体则禁用 text-field，省名走 HTML 覆盖层**——构建器输出 `labels: Array<{name, centroid}>` 供覆盖层用，`symbol` 层 M1 不启用 text-field）、hover/selected 用 `feature-state` 表达式（`fill-color` 含 `["feature-state",...]` 分支）。
 - `regionValues`：与 `regionRows` 同逻辑从容器/图层绑定行提取（首个可见 regionFill 层）。
 
-- [ ] **Step 1: 写失败测试（`tests/map-libre-scene.spec.ts`）**
+- [x] **Step 1: 写失败测试（`tests/map-libre-scene.spec.ts`）**
 
 关键断言（RED）：
 ```ts
@@ -143,15 +143,15 @@ it("honors drill disabled and view toggles", () => { … });
 ```
 （`chinaFixture` 为内嵌最小 FeatureCollection：广东省/浙江省两个 feature。）
 
-- [ ] **Step 2: 跑测试确认失败** — Run: `pnpm vitest run tests/map-libre-scene.spec.ts` → Expected: FAIL（模块不存在）
+- [x] **Step 2: 跑测试确认失败** — Run: `pnpm vitest run tests/map-libre-scene.spec.ts` → Expected: FAIL（模块不存在）
 
-- [ ] **Step 3: 实现 `mapLibreScene.ts`**
+- [x] **Step 3: 实现 `mapLibreScene.ts`**
 
 按 Interfaces 构建；色带表达式：gradient 用 `["interpolate", ["linear"], ["get", "__v"], min, c0, mid, c1, max, c2]` 需要每省数值——**实现要点**：`fill-color` 对「有数据省」用 match 列表（省全称→插值色由数据算出的分段色）简化为：构建期计算每省颜色（复用旧 ramp 逻辑的 `rampColor` 思路内联），产出 `["match", ["get","name"], 广东省, colorA, 西藏省, colorB, …, empty]`——离散 match 表达式，确定性强、双端一致。分段模式同理（每省按分段取色）。hover：`fill-color` 外层 `["case", ["feature-state","hover"], hoverColor, base]`；selected 同理（feature-state `selected`，由交互代码 setFeatureState）。
 
-- [ ] **Step 4: 跑测试确认通过** — Run: `pnpm vitest run tests/map-libre-scene.spec.ts` → PASS
+- [x] **Step 4: 跑测试确认通过** — Run: `pnpm vitest run tests/map-libre-scene.spec.ts` → PASS
 
-- [ ] **Step 5: 全量门 + 提交**
+- [x] **Step 5: 全量门 + 提交**
 
 Run: `pnpm typecheck && pnpm vitest run tests && pnpm build` → 0
 
@@ -174,25 +174,25 @@ git commit -m "feat: maplibre scene style builder (lights fog ramp feature-state
 - Produces: Widget 持 `maplibregl.Map` 实例；`defineExpose({ getMap: () => map })`（e2e 用）；事件/下钻本任务仅做**点击冒烟**（`map.on("click","fill-layer",…)` 打通 `emitEvent("regionClick",…)` 单测级冒烟），完整事件/下钻在 T5/T6。
 - 标注：M1 用 HTML 覆盖层（`labels` 数据 + `project()` 定位），`symbol` 不带 text-field。
 
-- [ ] **Step 1: WebGL 探针（风险先行）**
+- [x] **Step 1: WebGL 探针（风险先行）**
 
 新建 `e2e/webgl-probe.spec.ts`：空页 `page.goto("about:blank")` 后 `page.evaluate` 检测 `document.createElement("canvas").getContext("webgl2") || webgl` 非空，再创建 `new maplibregl.Map({container, style:{version:8,sources:{},layers:[]}})`（经 `/node_modules/maplibre-gl/dist/maplibre-gl.js` 或 dev server 路径引入）断言 `map.on("load")` 触发。
 Run: `pnpm test:e2e e2e/webgl-probe.spec.ts` → **若 FAIL**：按 Review Focus 补救记录调整 playwright 启动参数（`launchOptions.args: ["--use-gl=angle", ...]` 写入 `playwright.config.ts`）并复跑；仍失败 → **停止本计划**，报告环境不可用（计划缺陷类停机）。
 
-- [ ] **Step 2: Widget 切换实现**
+- [x] **Step 2: Widget 切换实现**
 
 `MapSceneWidget.vue`：移除 `EChartsView` 引用，`onMounted` 创建 `new maplibregl.Map({ container: refEl, style: buildMapLibreScene(...).style 含 geojson 源注入, pitch, interactive: dragEnabled||zoomEnabled, attributionControl:false })`；`dragEnabled/zoomEnabled` 关闭时 `map.dragPan.disable()/map.scrollZoom.disable()`；`backgroundColor`→容器 style；`labels` 覆盖层 DOM（`map.on("move")` 重投影）；`map.on("click","fill",…)` 冒烟：`emitEvent("regionClick", {name,value,valueText,presentation})`（载荷构造复用 `formatMapValue` 与 T2 `regionValues`）；`result/errors` 绑定沿用现有 computed 形态（错误→`.map-scene__status`）；`georoam` 相机同步逻辑（四层叠片）随 ECharts 移除（无叠片后单地图无需同步）——`liveCamera/actualCamera` 改由 `map.on("move")` 读 `getCenter/getZoom` 维护，供 T6 下钻用。
 
-- [ ] **Step 3: 同步改写受影响的既有 e2e（防套件变红）**
+- [x] **Step 3: 同步改写受影响的既有 e2e（防套件变红）**
 
 `e2e/map-scene-visual.spec.ts`：结构断言（4 叠片/geoIndex/colorStops/regions）全部改写为 MapLibre 断言（`style.pitch===28`、fill 层 `fill-color` 含省名 match、无 extrusion 字段）；截图 01–05 保留（内容自然变化）；「拖拽后四层对齐」断言改为「单地图 center/zoom 随拖拽变化」；`convertToPixel` 探针改 `map.project([lng,lat])`（经 `defineExpose().getMap()`）；v1 兼容断言改写（无 v2 键的旧 props → pitch0/默认 camera/无 legend DOM）。**分段/皮肤/下钻截图用例暂跳过标记（`test.fixme` 或移除），T7/T8/T9 恢复**——记录于台账。
 
-- [ ] **Step 4: 探针+视觉跑绿**
+- [x] **Step 4: 探针+视觉跑绿**
 
 Run: `pnpm test:e2e e2e/webgl-probe.spec.ts e2e/map-scene-visual.spec.ts` → PASS
 其余 e2e（editor/inspector/interaction/parity/tilted-drill）此阶段**必然红**（依赖 ECharts widget）——按切换进度在 T4–T6 逐一改写；**本任务绿的定义**：typecheck+vitest+build 绿 + 上述两个 e2e 绿（全量 e2e 在 T6 结束时恢复全绿）。此裁决记入台账 `Ruling:`。
 
-- [ ] **Step 5: 全量 vitest 门 + 提交**
+- [x] **Step 5: 全量 vitest 门 + 提交**
 
 Run: `pnpm typecheck && pnpm vitest run tests && pnpm build` → 0（vitest 不含 e2e ✓）
 
@@ -213,29 +213,29 @@ git commit -m "feat: switch workbench map widget to maplibre renderer"
 - Produces: 离线 `safeMapScene` 改为：`new maplibregl.Map({ container, style: <由 payload props+geo 构建，与工作台同一构建逻辑的 ES5 等价实现>, pitch, … })`；`window.maplibre` 来自产物注入的 `maplibreCode`（`ArtifactInput.maplibreCode` T1 已就位）；**构建逻辑同构**：runtime 内以 ES5 重写 `buildMapLibreScene` 等价物（沿用既有「双端各自实现+parity e2e」模式）。
 - parity 新形态：e2e 分别取工作台 `map.getStyle()` 与离线 `map.getStyle()` 的**规范化子集**（layers 数/类型/paint 关键字段/camera/light/fog）逐项 `toEqual`。
 
-- [ ] **Step 1: 写失败测试（改写 parity spec）**
+- [x] **Step 1: 写失败测试（改写 parity spec）**
 
 `map-scene-style-parity.spec.ts` 三个用例改写：种子不变；工作台读 `getStyle()`（经 `getMap().getStyle()`）；离线页引入**真实** `maplibreCode`（`loadMaplibreSource` 或 dev 路径）与真实 payload → `map.on("load")` 后读 style；断言子集：`pitch/camera/fill paint（match 表达式含空值色）/lights/fog/labels 覆盖层文本`。
 
-- [ ] **Step 2: 跑测试确认失败** — Run: `pnpm test:e2e e2e/map-scene-style-parity.spec.ts` → FAIL（离线仍是 ECharts）
+- [x] **Step 2: 跑测试确认失败** — Run: `pnpm test:e2e e2e/map-scene-style-parity.spec.ts` → FAIL（离线仍是 ECharts）
 
-- [ ] **Step 3: 实现 runtime 地图分支**
+- [x] **Step 3: 实现 runtime 地图分支**
 
 `RUNTIME_CODE` 内 `safeMapScene` 重写为 MapLibre（ES5、无 eval、`textContent` DOM、geojson 从 `payload.geo.china` 取）；删除该分支的 ECharts init/georoam 同步/叠片相关代码（其余图表分支不动）；点击/下钻接线随 T5/T6 补（本任务只渲染+style parity）。**体积记录**：构建后读单 HTML 字节数写入台账。
 
-- [ ] **Step 4: 跑 parity + 关键回归**
+- [x] **Step 4: 跑 parity + 关键回归**
 
 Run: `pnpm test:e2e e2e/map-scene-style-parity.spec.ts e2e/map-scene-visual.spec.ts e2e/webgl-probe.spec.ts` → PASS
 （editor/inspector/interaction/tilted-drill 仍红，T5–T6 恢复。）
 
-- [ ] **Step 5: 全量 vitest 门 + 提交**
+- [x] **Step 5: 全量 vitest 门 + 提交**
 
 ```bash
 git add src/core/export/runtime.ts e2e/map-scene-style-parity.spec.ts
 git commit -m "feat: switch offline runtime map branch to maplibre with style parity"
 ```
 
-- [ ] **Step 6: GATE M1 截图验收（D6 停止点）**
+- [x] **Step 6: GATE M1 截图验收（D6 停止点）**
 
 生成 M1 截图包：`map-scene-visual.spec.ts` 截图（省界 fill+轮廓、pitch 操作后、光照/雾化可见）+ 离线单 HTML 实测体积 + 探针结果 → 通过 b64 分块同步到本地工作区 → `present_file` 呈交 → **停止执行，等待人工「继续/停/改」**；若「改」→ 按意见返工 T3/T4 后重新过门。
 
@@ -251,8 +251,8 @@ git commit -m "feat: switch offline runtime map branch to maplibre with style pa
 **Interfaces:**
 - Produces: `regionClick/regionDblclick` 载荷 `{ name, value, valueText, presentation }`（value 从 T2 `regionValues[feature.properties.name]` 取；工作台 `emitEvent` 白名单链路与离线 `runBlueprint` 链路均复用既有管线）；dblclick 同时触发 T6 下钻（本任务先留 `// T6 接下钻` 桩，避免半接状态被 e2e 撞见——interaction 的 dblclick 用例 T6 恢复）。
 
-- [ ] **Step 1: 改写 interaction e2e 的点击部分**（`map.project` 探针 + 单击→变量→表格断言）→ Run FAIL（离线/工作台事件未接）→ 实现双端 click/dblclick → PASS
-- [ ] **Step 2: 全量 vitest 门 + 提交**
+- [x] **Step 1: 改写 interaction e2e 的点击部分**（`map.project` 探针 + 单击→变量→表格断言）→ Run FAIL（离线/工作台事件未接）→ 实现双端 click/dblclick → PASS
+- [x] **Step 2: 全量 vitest 门 + 提交**
 
 ```bash
 git add src/workbench/components/MapSceneWidget.vue src/core/export/runtime.ts e2e/map-scene-interaction.spec.ts
@@ -273,11 +273,11 @@ git commit -m "feat: migrate region blueprint events to maplibre"
 **Interfaces:**
 - Produces: `startDrill(name)` → `computeRegionCenter(payload.geo.china, name)` → `map.flyTo({ center, zoom: clamp(max(4.5,cur),…), duration: 350, essential: true })`；上钻 `map.easeTo({ center: configView, duration: 350 })`；面包屑/Esc/`regionUpdrill` 复用既有 DOM 与蓝图链路；`drill.enabled` 开关语义不变。
 
-- [ ] **Step 1: 改写 tilted-drill e2e**（断言：flyTo 后 `getZoom()>3`、面包屑文本、Esc 后 `getCenter/getZoom` 回配置值；**删除 4 层对齐断言**）→ Run FAIL
-- [ ] **Step 2: 实现双端下钻** → Run `pnpm test:e2e e2e/map-scene-tilted-drill.spec.ts e2e/map-scene-interaction.spec.ts` → PASS
-- [ ] **Step 3: 恢复视觉 spec 下钻截图用例**（`map.project` 探针 + 面包屑截图09）→ PASS
-- [ ] **Step 4: 全量 e2e 恢复** — Run: `pnpm test:e2e` → **11+ 全绿**（editor/inspector 此前已绿）；vitest/build/typecheck 门
-- [ ] **Step 5: 提交**
+- [x] **Step 1: 改写 tilted-drill e2e**（断言：flyTo 后 `getZoom()>3`、面包屑文本、Esc 后 `getCenter/getZoom` 回配置值；**删除 4 层对齐断言**）→ Run FAIL
+- [x] **Step 2: 实现双端下钻** → Run `pnpm test:e2e e2e/map-scene-tilted-drill.spec.ts e2e/map-scene-interaction.spec.ts` → PASS
+- [x] **Step 3: 恢复视觉 spec 下钻截图用例**（`map.project` 探针 + 面包屑截图09）→ PASS
+- [x] **Step 4: 全量 e2e 恢复** — Run: `pnpm test:e2e` → **11+ 全绿**（editor/inspector 此前已绿）；vitest/build/typecheck 门
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/workbench/components/MapSceneWidget.vue src/core/export/runtime.ts e2e/
