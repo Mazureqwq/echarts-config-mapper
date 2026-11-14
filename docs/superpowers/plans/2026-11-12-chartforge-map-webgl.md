@@ -341,7 +341,7 @@ git add src/core/components/mapLibreScene.ts src/core/components/mapScene.ts src
 git commit -m "feat: map visual polish (exact national outline view offset scale bar labels)"
 ```
 
-- [ ] **Step 4: GATE M3 截图验收（D6 停止点）**
+- [x] **Step 4: GATE M3 截图验收（D6 停止点）**
 
 M3 截图包（边界近似/比例尺/视图偏移/悬停动画/标注覆盖层）→ 同步 → `present_file` → **停止等待「继续/停/改」**。
 
