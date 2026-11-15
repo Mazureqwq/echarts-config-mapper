@@ -14,6 +14,7 @@ import ChartConfigPanel from "./panels/ChartConfigPanel.vue";
 import DataTablePanel from "./panels/DataTablePanel.vue";
 import LiveSourcePanel from "./panels/LiveSourcePanel.vue";
 import ComponentInspector from "./components/ComponentInspector.vue";
+import StyleClipboardBar from "./components/StyleClipboardBar.vue";
 import DatasetBindingEditor from "./components/DatasetBindingEditor.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import type { AlignMode } from "@/stores/documentStore";
@@ -296,7 +297,11 @@ function confirmSaveAsset(): void {
           </template>
           <span v-else class="inspector__source-missing">源图表已删除，当前是独立副本</span>
         </div>
-              <div class="inspector__section">
+              <div class="inspector__section" data-inspector-section="style-clipboard">
+          <div class="inspector__section-title">样式</div>
+          <StyleClipboardBar :item="single" />
+        </div>
+        <div class="inspector__section">
           <div class="inspector__section-title">位置尺寸</div>
           <FramePanel :frame="single.frame" @change="onFrameChange" />
         </div>

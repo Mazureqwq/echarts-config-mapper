@@ -30,6 +30,11 @@ import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
 import { BUILT_IN_BLOCKS, applyThemeToScreen, getThemeById, instantiateComponentBlock } from "@/core/design/library";
 import { createLayoutAssetItems, createLayoutBackgroundItems } from "@/core/design/layoutBackgrounds";
+import {
+  applyStyleToItem,
+  buildStyleClipboard,
+  type StyleClipboardPayload,
+} from "@/core/components/styleClipboard";
 
 // Pinia 响应式 Proxy 无法被 structuredClone 克隆，统一走 JSON 深克隆（数据均为纯 JSON）
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -117,6 +122,8 @@ export const useDocumentStore = defineStore("document", {
     currentScreenId: null as string | null,
     selectedIds: [] as string[],
     clipboard: [] as ScreenItem[],
+    /** T14：样式载荷剪贴板（只存外观，不存位置/尺寸/id/数据绑定） */
+    styleClipboard: null as StyleClipboardPayload | null,
     liveStatus: {} as Record<string, LiveStatus>,
     history: markRaw(new History<Workspace>({ limit: HISTORY_LIMIT, clone: (v) => deepClone(v) })),
   }),
@@ -576,6 +583,41 @@ export const useDocumentStore = defineStore("document", {
       screen.items.push(...clones);
       this.selectedIds = clones.map((it) => it.id);
       this.commit();
+    },
+    /**
+     * T14（P0-1）：复制选中元素的**样式**。
+     * 只取外观，不取位置/尺寸/id/名称/数据绑定；多选时取第一个可复制的元素。
+     * 返回可读结果，供 UI 给出反馈。
+     */
+    copyStyle(id?: string): { ok: boolean; message: string } {
+      const targetId = id ?? this.selectedIds[0];
+      if (!targetId) return { ok: false, message: "请先选中一个元素。" };
+      const item = this.items.find((entry) => entry.id === targetId);
+      if (!item) return { ok: false, message: "找不到该元素。" };
+      const result = buildStyleClipboard(item);
+      if (!result.ok) return { ok: false, message: result.reason };
+      this.styleClipboard = result.payload;
+      return { ok: true, message: `已复制「${result.payload.label}」的样式` };
+    },
+    /** T14（P0-1）：把样式剪贴板粘贴到选中元素。可撤销（进历史栈）。 */
+    pasteStyle(id?: string): { ok: boolean; message: string } {
+      const payload = this.styleClipboard;
+      if (!payload) return { ok: false, message: "样式剪贴板为空，请先复制样式。" };
+      const targetId = id ?? this.selectedIds[0];
+      if (!targetId) return { ok: false, message: "请先选中一个元素。" };
+      const screen = this.currentScreen;
+      if (!screen) return { ok: false, message: "请先打开一个大屏。" };
+      const index = screen.items.findIndex((entry) => entry.id === targetId);
+      if (index === -1) return { ok: false, message: "找不到该元素。" };
+      const applied = applyStyleToItem(screen.items[index]!, payload);
+      if (!applied.ok) return { ok: false, message: applied.reason };
+      screen.items.splice(index, 1, applied.item);
+      this.commit();
+      return { ok: true, message: "已粘贴样式" };
+    },
+    /** T14：清空样式剪贴板（切换工作区等场景）。 */
+    clearStyleClipboard(): void {
+      this.styleClipboard = null;
     },
     duplicate() {
       const items = this.items.filter((i) => this.selectedIds.includes(i.id));

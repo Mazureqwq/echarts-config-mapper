@@ -680,6 +680,95 @@ ECharts 以「实心圆 + shadowBlur」画笔绘制：实心核半径 = `pointSi
 
 **演示入口**：`http://localhost:5174/?demo=t10#/workbench/t10-geo-layers`。
 
+### Task 14: 设计库 P0（复制 / 粘贴样式）
+
+来源：`docs/superpowers/specs/2026-11-15-chartforge-design-library-gap-alignment.md`
+（DataV 7.0 设计库调研 → ChartForge 缺口分析）。
+用户批准「P0 开始做」后执行。
+
+#### Task 14-a：复制 / 粘贴样式（P0-1）
+
+**要解决的问题**：调研稿 §7 的核心结论是「仅有规范展示板不足以保证一致性，
+必须有让样式可跨组件复制的执行机制」。ChartForge 此前只有整元素 Ctrl+C/V，
+没有「只复制样式」的路径，因此即便补上规范展示板也无法落地。
+
+**新增模块** `src/core/components/styleClipboard.ts`（纯函数内核）：
+
+- `buildStyleClipboard(item)` → `{ signature, label, style }`
+- `applyStyleToItem(item, payload)` → 返回**新对象**，不修改入参
+- `canPasteStyle(item, payload)` → UI 按钮可用态（与 apply 共用同一套签名规则）
+- `describeStyleClipboardTarget(item)` → 「指标卡」「平面地图」等可读名
+
+**排除规则**（`STYLE_CLIPBOARD_EXCLUDED_KEYS`）——只复制外观，不复制数据语义：
+
+| 键 | 类别 | 不复制的原因 |
+|---|---|---|
+| `valueField` / `labelField` | 字段引用 | 指向数据集里的哪一列 |
+| `columns` / `rowKey` | 字段引用 | 表格列定义与行标识 |
+| `aggregation` | 数据口径 | first/sum/average 会改变显示数值 |
+| `maxValue` | 数据口径 | 进度条量纲随数据集走 |
+| `layers` | 内嵌绑定 | 地图图层内含 dataBinding |
+| `modelVersion` | schema | 不是外观 |
+
+文本排除 `text`（文案是内容），形状排除 `shape`（几何是元素身份），
+图表 `series[].data` 逐个剥离（数据点不是样式）。
+
+**永久不动的字段**：`id` / `name` / `frame`（位置尺寸旋转）/ `dataBinding`。
+
+**store 接入**：`documentStore` 新增 `styleClipboard` 状态与
+`copyStyle` / `pasteStyle` / `clearStyleClipboard` 三个 action，
+均返回 `{ ok, message }` 供 UI 直接展示；`pasteStyle` 走 `commit()` 因此**可撤销**。
+
+**UI**：`src/workbench/components/StyleClipboardBar.vue`，
+挂在 `InspectorPanel` 的「样式」区（位于「位置尺寸」之前，对所有元素类型通用）。
+按钮禁用态、成功/失败反馈、跨类型提示文案齐备。
+快捷键 `Ctrl/Cmd+Alt+C` 复制样式、`Ctrl/Cmd+Alt+V` 粘贴样式（与元素级 Ctrl+C/V 区分）。
+
+#### Task 14-b：地图快速样式的跨组件传递（P0-2）
+
+平面地图与 2.5D 地图是两个不同 `componentId`，但共享同一套 `quickStyle` 令牌
+与配置面板。引入**样式族**概念（`STYLE_FAMILIES`）：
+
+```ts
+"chartforge.map-scene-flat"   → "map-scene"
+"chartforge.map-scene-tilted" → "map-scene"
+```
+
+同族组件共用兼容性签名，因此可以互相粘贴样式。
+
+**身份字段保护**（`IDENTITY_KEYS_BY_FAMILY`）：同族粘贴时 `presentation` 与 `pitch`
+沿用**目标自身**的值。
+
+这一条是 e2e 抓出来的真实设计缺陷：最初只保护 `presentation`，
+结果把平面地图（`pitch: 0`）的样式贴到 2.5D 地图后，得到
+「`presentation: tilted` 但 `pitch: 0`」的自相矛盾状态——倾斜视角被压平。
+`pitch` 是 `presentation` 的直接后果，必须一起算作元素身份。
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| RED | 先写 `tests/style-clipboard.spec.ts`（18 条）→ 模块不存在，整文件失败；再补 P0-2 的跨变体用例 → 1 红（`applyStyleToItem` 拒绝同族跨变体） |
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run` | 63 文件 / **573** 测试全绿（原 544 + 29） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | **28/28** 通过（新增 `e2e/style-clipboard.spec.ts` 4 条，总 e2e 从 24 增至 28） |
+| `git diff --check` | 0 |
+
+**e2e 覆盖的四个真实场景**（纯函数单测覆盖不到的路径）：
+
+1. 复制 → 粘贴到同类元素：外观生效，**位置/名称/数据绑定不变**（读 localStorage 真实落盘值）
+2. 跨组件类型：粘贴按钮禁用 + 提示「类型不同」
+3. 平面 ↔ 2.5D：`quickStyle.id` 跟随来源，`presentation`/`pitch` 保持目标自身
+4. 粘贴后 `Ctrl+Z` 可撤销回原样式
+
+**证据**：`/home/user/t14-shots/01-copy.png`（复制反馈）、
+`02-paste-enabled.png`（粘贴按钮可用）、`03-pasted.png`（粘贴成功）、
+`04-rejected.png`（跨类型禁用 + 提示文案）。
+
+**演示入口**：`http://localhost:5174/#/workbench/style-clipboard-e2e-screen`
+（演示夹具见 `e2e/style-clipboard.spec.ts` 的 `initialWorkspace`）。
+
 ## 执行方式
 
 - `superpowers:executing-plans` 会话内连续执行（无子代理）；四道 D6 门（M1–M4 截图）为**计划内停止点**：停止 → 呈交截图 → 收到「继续/停/改」→ 恢复/返工。

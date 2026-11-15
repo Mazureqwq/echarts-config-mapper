@@ -679,6 +679,14 @@ function onKeyDown(ev: KeyboardEvent): void {
   } else if (ctrl && (ev.key.toLowerCase() === "y" || (ev.shiftKey && ev.key.toLowerCase() === "z"))) {
     ev.preventDefault();
     doc.redo();
+  } else if (ctrl && ev.altKey && ev.key.toLowerCase() === "c") {
+    // T14：复制样式（与 Ctrl+C 复制元素区分开）
+    ev.preventDefault();
+    doc.copyStyle();
+  } else if (ctrl && ev.altKey && ev.key.toLowerCase() === "v") {
+    // T14：粘贴样式
+    ev.preventDefault();
+    doc.pasteStyle();
   } else if (ctrl && ev.key.toLowerCase() === "c") {
     doc.copy();
   } else if (ctrl && ev.key.toLowerCase() === "v") {
