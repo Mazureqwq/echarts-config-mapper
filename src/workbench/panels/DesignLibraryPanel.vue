@@ -10,6 +10,7 @@ import type { DesignAsset } from "@/core/model/types";
 import type { LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
 import { insertLayoutBackgroundEntry } from "@/workbench/layoutBackgroundActions";
 import LayoutBackgroundCatalog from "@/workbench/components/LayoutBackgroundCatalog.vue";
+import { BUILT_IN_SUITES, suiteForScreen } from "@/core/design/suites";
 
 const doc = useDocumentStore();
 const ws = useWorkspaceStore();
@@ -19,6 +20,8 @@ const notice = ref("");
 const assets = computed(() => ws.designAssets);
 const usedMiB = computed(() => (getDesignAssetTotalBytes(assets.value) / 1024 / 1024).toFixed(1));
 const activeTheme = computed(() => doc.currentScreen?.themeId ?? "");
+// T15：当前套件（未设置时回退默认套件）
+const activeSuite = computed(() => (doc.currentScreen ? suiteForScreen(doc.currentScreen).id : ""));
 
 function requireScreen(): boolean {
   if (doc.currentScreen) return true;
@@ -55,6 +58,17 @@ function applyTheme(id: string): void {
   if (!requireScreen()) return;
   doc.applyTheme(id);
   notice.value = "主题已应用；现有元素位置与显式样式保持不变。";
+}
+
+/** T15：显式套用套件 —— 只改画布背景与 suiteId，已有元素原样保留。 */
+function applySuite(id: string): void {
+  error.value = "";
+  const result = doc.applySuite(id);
+  if (!result.ok) {
+    error.value = result.message;
+    return;
+  }
+  notice.value = result.message;
 }
 
 function startDrag(event: DragEvent, kind: "block" | "design-asset", id: string): void {
@@ -103,6 +117,28 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
 
 <template>
   <div class="design-library">
+    <section class="library-section" data-suite-section>
+      <header class="section-head">
+        <div><h3>可视化套件</h3><p>一次性统一画布、地图与新建组件的风格；已有元素保持不变</p></div>
+      </header>
+      <button
+        v-for="suite in BUILT_IN_SUITES"
+        :key="suite.id"
+        class="theme-card"
+        :class="{ 'theme-card--active': activeSuite === suite.id }"
+        type="button"
+        :aria-pressed="activeSuite === suite.id"
+        :data-suite-id="suite.id"
+        @click="applySuite(suite.id)"
+      >
+        <span class="theme-swatch" :style="{ background: suite.canvas, borderColor: suite.border }">
+          <i v-for="color in suite.palette.slice(0, 4)" :key="color" :style="{ background: color }" />
+        </span>
+        <span class="theme-copy"><strong>{{ suite.name }}</strong><small>{{ suite.description }}</small></span>
+        <span class="theme-check">{{ activeSuite === suite.id ? "已应用" : "应用" }}</span>
+      </button>
+    </section>
+
     <LayoutBackgroundCatalog @select="addLayoutBackground" @apply-background="applyBackgroundPreset" />
 
     <section class="library-section">

@@ -227,6 +227,11 @@ export interface Screen {
   blueprint?: BlueprintGraph;
   /** Built-in design theme selected for this screen. */
   themeId?: string;
+  /**
+   * T15：可视化套件（把主题 token + 地图快速样式 + 组件默认样式绑成一体）。
+   * 只影响新建元素与显式套用，不静默改写存量元素。
+   */
+  suiteId?: string;
   updatedAt: number;
   thumbnail?: string;
   category?: string;

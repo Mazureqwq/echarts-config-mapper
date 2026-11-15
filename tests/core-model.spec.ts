@@ -7,10 +7,50 @@ import {
   createChartAsset,
   normalizeWorkspace,
 } from "../src/core/model/schema";
-import type { ChartItem, ChartType } from "../src/core/model/types";
+import type { ChartItem, ChartType, ComponentItem } from "../src/core/model/types";
 import { validateChartData } from "../src/core/chart/chartData";
 
 const ALL_TYPES: ChartType[] = ["line", "bar", "pie", "map", "scatter", "radar", "geoScatter", "geoHeatmap", "geoFlow"];
+
+describe("颜色类组件 props 的归一化（T15 顺带修复）", () => {
+  const screen = (props: Record<string, unknown>) => ({
+    version: 2,
+    assets: [],
+    screens: [{
+      id: "s",
+      name: "s",
+      canvas: { width: 100, height: 100, background: { kind: "color", color: "#000000" } },
+      items: [{
+        id: "f",
+        name: "f",
+        kind: "component",
+        componentId: "chartforge.corner-frame",
+        componentVersion: 1,
+        frame: { x: 0, y: 0, w: 10, h: 10, rotate: 0 },
+        props,
+      }],
+      updatedAt: 1,
+    }],
+    datasets: [],
+  });
+
+  // 曾经的缺陷：normalizeComponentProps 的 switch 缺少 color 分支，
+  // 颜色类 props 在每次保存→重载后都被静默丢弃（用户设的边框色重开就没了）。
+  it("显式颜色在保存/重载后保留", () => {
+    const ws = normalizeWorkspace(screen({ color: "#ff8a3d" }) as never);
+    expect((ws.screens[0].items[0] as ComponentItem).props).toMatchObject({ color: "#ff8a3d" });
+  });
+
+  it("空串表示「跟随主题令牌」，不被误判为缺失", () => {
+    const ws = normalizeWorkspace(screen({ color: "" }) as never);
+    expect((ws.screens[0].items[0] as ComponentItem).props).toMatchObject({ color: "" });
+  });
+
+  it("非法颜色回退到组件默认值", () => {
+    const ws = normalizeWorkspace(screen({ color: "not-a-color" }) as never);
+    expect((ws.screens[0].items[0] as ComponentItem).props).toMatchObject({ color: "" });
+  });
+});
 
 describe("model/schema 工厂与规范化", () => {
   it("规范化保留 thumbnailVersion（旧数据没有该字段也不报错）", () => {

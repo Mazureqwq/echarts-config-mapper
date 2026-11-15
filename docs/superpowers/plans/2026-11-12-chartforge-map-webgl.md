@@ -769,6 +769,91 @@ ECharts 以「实心圆 + shadowBlur」画笔绘制：实心核半径 = `pointSi
 **演示入口**：`http://localhost:5174/#/workbench/style-clipboard-e2e-screen`
 （演示夹具见 `e2e/style-clipboard.spec.ts` 的 `initialWorkspace`）。
 
+### Task 15: 设计库 P1-3（可视化套件维度）
+
+来源：同一份缺口对齐清单的 **P1-3「套件维度」**。用户「继续」指令仅批准本项，
+P1 其余项（字号/色彩 token 化、布局可拖入画布、我的收藏）与 P2 仍未批准。
+
+**要解决的问题**：Task 14 解决了「单元素样式能不能复用」，但用户搭一块大屏时
+仍要逐个元素挑颜色。DataV 的设计库本质是**套件**——一套 id 同时决定画布、地图
+观感与新建组件的强调色。ChartForge 缺的正是这层「一次性统一」的入口。
+
+#### 设计决策：套件复用 `MAP_QUICK_STYLES`，不新造第二份色板
+
+`DesignSuite` 由已有的地图快速样式派生，不引入独立色板：
+
+| 派生字段 | 来源 |
+|---|---|
+| `canvas` | `tokens.background` |
+| `accent` | `tokens.accent` |
+| `text` | `tokens.label.color` |
+| `muted` | `mixHex(label.color, background, 0.4)` |
+| `panel` | `mixHex(background, label.color, 0.1)` |
+| `border` | `tokens.border.color` |
+| `palette` | `[accent, fill.max, fill.mid, fill.min, border.color]` 去重 |
+
+6 个套件即 `MAP_QUICK_STYLES` 的 6 个 id（`deep-sea` / `jade` / `sandstone` /
+`neon-purple` / `contour` / `parchment`），默认 `deep-sea`。
+代价是套件与地图样式绑定，`mapStyleId` 字段留作将来解耦。
+
+`palette` 必须显式带上 `fill.min`：多数预设里 `accent === fill.max`，
+只取 `[accent, fill.max, fill.mid, border]` 去重后只剩 3 色，缩略色板会不满 4 格。
+
+#### 边界：只改元数据，不动存量元素
+
+`applySuiteToScreen` **只写 `suiteId` 与画布背景**，已有元素一字节不动
+（与 `applyTheme` 的安全语义一致）；返回 `{ok:true,screen}` /
+`{ok:false,reason}`，不修改入参。`Screen` 新增 `suiteId?: string`，
+`schema.ts` 在其紧邻 `themeId` 处归一化。
+
+`applySuiteToComponentProps` 只填空缺：地图组件注入整套 `quickStyle`，
+其余按 `COMPONENT_COLOR_KEYS` 白名单补 `accent`。
+
+#### 两个真实缺陷（由本轮测试暴露并修复）
+
+1. **撤销丢元数据**：`restoreWorkspace` 逐字段复制屏幕，`themeId` 有处理、
+   新加的 `suiteId` 没有 → 撤销后 `suiteId` 仍停在 `"jade"`。
+   修法：与 `themeId` 同处一并还原（`existing.suiteId` / `delete`）。
+2. **`color` 类 props 保存即丢失**：`normalizeComponentProps` 的 `switch` 只有
+   `string` / `number` / `boolean` / `select` / `json`，**没有 `color` 分支**，
+   于是 progress-list / section-title / corner-frame 的颜色 props 在每次
+   保存→重载后被静默丢弃（用户设的边框色重开就没了，属既有缺陷）。
+   修法：新增 `color` 分支，直接复用渲染层的 `sanitizeHexColor`（只认 6 位十六进制），
+   空串视为「跟随主题令牌」而非缺失。
+
+顺带修正一处**假接线**：白名单原先把 `chartforge.kpi` 映射到 `color`，
+但 KPI 只声明了 `valueField/label/format/aggregation`，写入的键会被归一化丢掉。
+现改为只列真实声明过的键，并加守卫测试逐条比对组件注册表——任何一方改动而另一方
+未跟随时直接失败。
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| RED | 先写 `tests/design-suite.spec.ts`（13 条）→ 模块不存在整文件失败；`tests/design-suite-store.spec.ts`（10 条）→ 1 红（undo） |
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run` | 65 文件 / **602** 测试全绿（Task 14 的 573 + 29） |
+| `pnpm build` | exit 0 |
+| `pnpm exec playwright test e2e/design-suite.spec.ts` | **4/4** 通过 |
+| `git diff --check` | 0 |
+
+**e2e 覆盖的四个真实场景**：
+
+1. 设计库展示 6 个套件，未设置时默认套件标记「已应用」
+2. 套用套件：画布背景跟随、`suiteId` 落盘，**既有元素（含显式颜色）原样保留**
+3. 套用后可撤销回原状
+4. 换套件后新插入的组件自动继承套件强调色
+
+**证据**：`/home/user/t15-shots/01-suite-picker.png`（套件选择器置顶、6 张卡片）、
+`02-jade-applied.png`（套件换为山地绿洲，画布变深绿、存量元素不变）、
+`03-sandstone-preview.png`、`04-after-undo.png`（撤销回到上一步套件）。
+
+**演示入口**：`http://localhost:5174/#/workbench/design-suite-e2e-screen`
+（夹具见 `e2e/design-suite.spec.ts`）。
+
+**UI 位置**：`DesignLibraryPanel` 顶部新增「可视化套件」区（`[data-suite-section]`），
+置于「布局底板 / 画布背景」之前——它是全局开关，不应埋在面板底部。
+
 ## 执行方式
 
 - `superpowers:executing-plans` 会话内连续执行（无子代理）；四道 D6 门（M1–M4 截图）为**计划内停止点**：停止 → 呈交截图 → 收到「继续/停/改」→ 恢复/返工。

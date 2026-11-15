@@ -35,6 +35,14 @@ import {
   buildStyleClipboard,
   type StyleClipboardPayload,
 } from "@/core/components/styleClipboard";
+import {
+  DEFAULT_SUITE_ID,
+  applySuiteToComponentProps,
+  applySuiteToScreen,
+  getSuite,
+  isSuiteId,
+  suiteForScreen,
+} from "@/core/design/suites";
 
 // Pinia 响应式 Proxy 无法被 structuredClone 克隆，统一走 JSON 深克隆（数据均为纯 JSON）
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -109,6 +117,9 @@ function restoreWorkspace(target: Workspace, source: Workspace): void {
       existing.blueprint = src.blueprint;
       if (src.themeId !== undefined) existing.themeId = src.themeId;
       else delete existing.themeId;
+      // T15：套件同属屏幕级元数据，撤销/重做必须一并还原
+      if (src.suiteId !== undefined) existing.suiteId = src.suiteId;
+      else delete existing.suiteId;
       result.push(existing);
     } else {
       result.push(src);
@@ -180,6 +191,12 @@ export const useDocumentStore = defineStore("document", {
       const definition = componentRegistry.get(componentId, componentVersion);
       if (!screen || !definition || definition.renderer.kind !== "vue") return "";
       const item = createComponentItem(definition);
+      // T15：新建组件继承当前屏幕套件的默认样式（只填未显式配置的键）
+      item.props = applySuiteToComponentProps(
+        componentId,
+        item.props as Record<string, unknown>,
+        suiteForScreen(screen).id,
+      );
       const offset = (screen.items.length % 8) * 18;
       item.frame.x = position ? Math.round(position.x - item.frame.w / 2) : Math.round((screen.canvas.width - item.frame.w) / 2) + offset;
       item.frame.y = position ? Math.round(position.y - item.frame.h / 2) : Math.round((screen.canvas.height - item.frame.h) / 2) + offset;
@@ -192,6 +209,31 @@ export const useDocumentStore = defineStore("document", {
       if (!screen || !theme) return;
       applyThemeToScreen(screen, theme);
       this.commit();
+    },
+    /**
+     * T15：显式套用可视化套件。
+     *
+     * 只改 `suiteId` 与画布背景，**不动任何已有元素**（与 applyTheme 的安全语义一致）。
+     * 走 commit() 因此可撤销。
+     */
+    applySuite(suiteId: string): { ok: boolean; message: string } {
+      const screen = this.currentScreen;
+      if (!screen) return { ok: false, message: "请先打开一个大屏。" };
+      if (!isSuiteId(suiteId)) return { ok: false, message: `未知套件：${suiteId}` };
+      const result = applySuiteToScreen(screen, suiteId);
+      if (!result.ok) return { ok: false, message: result.reason };
+      const index = this.currentScreenId
+        ? useWorkspaceStore().workspace.screens.findIndex((entry) => entry.id === this.currentScreenId)
+        : -1;
+      if (index === -1) return { ok: false, message: "找不到当前大屏。" };
+      useWorkspaceStore().workspace.screens.splice(index, 1, result.screen);
+      this.commit();
+      return { ok: true, message: `已套用「${getSuite(suiteId)!.name}」套件；已有元素保持不变` };
+    },
+    /** T15：当前屏幕的套件 id（未设置时回退默认套件）。 */
+    currentSuiteId(): string {
+      const screen = this.currentScreen;
+      return screen ? suiteForScreen(screen).id : DEFAULT_SUITE_ID;
     },
     insertBlock(blockId: string, position?: { x: number; y: number }): string[] {
       const screen = this.currentScreen;

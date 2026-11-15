@@ -26,6 +26,7 @@ import type {
 import type { BlueprintGraph, BlueprintNode } from "../blueprint/types";
 import type { ComponentDefinition } from "../components/types";
 import { componentRegistry } from "../components/builtins";
+import { sanitizeHexColor } from "../components/props";
 import { normalizeMapSceneProps } from "../components/mapScene";
 import { initialChartData } from "../chart/chartData";
 import { normalizeDesignAssets } from "../design/assets";
@@ -398,6 +399,14 @@ export function normalizeComponentProps(definition: ComponentDefinition, raw: un
       case "select":
         output[prop.key] = typeof value === "string" && prop.options?.includes(value) ? value : fallback;
         break;
+      // 颜色类 props（progress-list / section-title / corner-frame 等）：
+      // 空串是合法值，表示「跟随主题令牌（themeToken）」，不是缺失。
+      case "color":
+        // 与渲染层共用同一个校验器（sanitizeHexColor 只认 6 位十六进制），
+        // 避免「存得进去但渲染不出来」或反之。
+        output[prop.key] =
+          value === "" || sanitizeHexColor(value) !== undefined ? (value as string) : fallback;
+        break;
       case "json":
         try {
           const cloned = JSON.parse(JSON.stringify(value)) as unknown;
@@ -570,6 +579,7 @@ function normalizeScreen(raw: unknown): Screen | null {
       .filter((it): it is ScreenItem => it !== null),
     blueprint: normalizeBlueprint(raw.blueprint),
     ...(typeof raw.themeId === "string" && raw.themeId.trim() ? { themeId: raw.themeId.trim() } : {}),
+    ...(typeof raw.suiteId === "string" && raw.suiteId.trim() ? { suiteId: raw.suiteId.trim() } : {}),
     updatedAt: num(raw.updatedAt, 0),
     ...(typeof raw.thumbnail === "string" ? { thumbnail: raw.thumbnail } : {}),
     ...(typeof raw.category === "string" ? { category: raw.category } : {}),
