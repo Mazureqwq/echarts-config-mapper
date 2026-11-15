@@ -263,3 +263,52 @@ test("快速样式：未选择预设时保持既有外观（不复活皮肤字�
   expect(stored).not.toHaveProperty("appliedSkin");
   expect(stored?.quickStyle).toBeUndefined();
 });
+
+test("快速样式：六张缩略图呈现各自独立的视觉观感（参考图的六种处理）", async ({ page }) => {
+  await page.addInitScript(({ storageKey, workspace }) => {
+    if (localStorage.getItem(storageKey) === null) {
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
+
+  await page.goto(`/#/workbench/${SCREEN_ID}`);
+  await expect(page.locator(".workbench")).toBeVisible();
+  await page.locator(`[data-item-id="${ITEM_ID}"]`).click();
+  await expect(page.locator(".map-scene-inspector")).toBeVisible();
+  await page.getByTestId("map-quick-style-trigger").click();
+  const panel = page.getByTestId("map-quick-style-panel");
+  await expect(panel).toBeVisible();
+
+  const ids = ["deep-sea", "jade", "sandstone", "nebula", "contour", "parchment"];
+  const shots = new Map<string, Buffer>();
+  for (const id of ids) {
+    const thumb = panel.locator(`[data-style-id="${id}"] .map-quick-style__thumb`);
+    await expect(thumb).toBeVisible();
+    // 每张缩略图的陆地图层仍是 34 省真实矢量
+    await expect(thumb.locator(".map-quick-style-thumb__land path")).toHaveCount(34);
+    shots.set(id, await thumb.screenshot());
+  }
+
+  // 六张缩略图必须两两不同——不能只是同一张图换配色
+  const digests = [...shots.values()].map((buffer) => buffer.toString("base64"));
+  expect(new Set(digests).size).toBe(6);
+
+  // 霓虹观感：内部近黑 + 国界辉光层（辉光层复刻同一份 34 省几何）
+  const nebula = panel.locator('[data-style-id="nebula"]');
+  await expect(nebula.locator(".map-quick-style-thumb__glow")).toHaveCount(1);
+  await expect(nebula.locator(".map-quick-style-thumb__glow path")).toHaveCount(34);
+
+  // 等高线观感：专属等高线纹理层
+  const contour = panel.locator('[data-style-id="contour"]');
+  await expect(contour.locator(".map-quick-style-thumb__contour")).toHaveCount(1);
+  await expect(contour.locator(".map-quick-style-thumb__contour path")).toHaveCount(34);
+
+  // 宣纸观感：浅色底；深海观感：深色底（读缩略图自身绘制的背景渐变，而非容器 CSS 兜底色）
+  const backgroundOf = async (id: string): Promise<string> =>
+    panel.locator(`#cf-thumb-bg-${id} stop`).first().getAttribute("stop-color") ?? "";
+  const backgrounds = await Promise.all(ids.map((id) => backgroundOf(id)));
+  expect(new Set(backgrounds).size).toBe(6);
+  const parchmentBg = await backgroundOf("parchment");
+  const deepSeaBg = await backgroundOf("deep-sea");
+  expect(parchmentBg).not.toBe(deepSeaBg);
+});

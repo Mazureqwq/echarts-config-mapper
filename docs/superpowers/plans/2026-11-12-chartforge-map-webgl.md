@@ -44,8 +44,10 @@
 - `tests/map-libre-scene.spec.ts` — **新增**构建器单测（旧 `map-scene-style/model` 的 option 断言在 T9 前保留）
 - `e2e/map-scene-*.spec.ts` — 各任务按切换进度改写（见各任务 Files）
 - `src/core/components/mapQuickStyles.ts` — **新增**（Task 11）六项快速样式预设注册表 + 令牌 + 归一化 + 非变异写回
-- `src/assets/geo/chinaPreview.ts` — **新增**（Task 11）34 省缩略图生成物（`scripts/build-china-preview.py` 产出）
+- `src/assets/geo/chinaPreview.ts` — **新增**（Task 11）34 省缩略图几何，由 `china.json` **运行时**派生（Task 12 改为运行时投影）
 - `src/workbench/components/MapQuickStylePicker.vue` / `MapQuickStyleThumbnail.vue` — **新增**（Task 11）3×2 快速样式选择器与真实国地图缩略图
+- `src/core/components/mapQuickStyleArtwork.ts` — **新增**（Task 12）缩略图美术计算（观感 → 填色 / 描边 / 装饰层 id）
+- `tests/map-quick-style-artwork.spec.ts` — **新增**（Task 12）缩略图观感与预览几何单测
 - `tests/map-quick-styles.spec.ts` / `e2e/map-quick-style.spec.ts` — **新增**（Task 11）预设单测与双端 parity e2e
 - `docs/superpowers/plans/2026-11-12-chartforge-map-webgl.md` — 本计划
 
@@ -442,8 +444,7 @@ git commit -m "test+docs: map webgl migration acceptance record and plan checkli
 
 **Files:**
 - Create: `src/core/components/mapQuickStyles.ts`（六预设注册表 + 令牌 + 归一化 + 非变异写回）
-- Create: `src/assets/geo/chinaPreview.ts`（生成物：34 省真实轮廓缩略图）
-- Create: `scripts/build-china-preview.py`（缩略图生成器，投影/简化/最小环回退/独立孔洞）
+- Create: `src/assets/geo/chinaPreview.ts`（34 省真实轮廓缩略图几何；Task 12 起改为运行时派生，不再需要生成脚本）
 - Create: `src/workbench/components/MapQuickStylePicker.vue`（下拉触发 + 3×2 网格 + 选中态）
 - Create: `src/workbench/components/MapQuickStyleThumbnail.vue`（真实 SVG 国地图缩略图）
 - Modify: `src/core/components/mapScene.ts`（持久化 `quickStyle: { id, tokens }`）
@@ -492,13 +493,75 @@ git commit -m "test+docs: map webgl migration acceptance record and plan checkli
 - `Ruling:` 预设**不复用**已废弃的旧 ECharts 皮肤体系（`mapSkins.ts` 及其调用一律不恢复）；新注册表只输出「氛围 + 色板」两组可落地的具体色值，不含 2.5D 叠片挤出几何。
 - `Ruling:` 预设落盘为 **具体色值**（`quickStyle: { id, tokens }`）而非隐藏状态引用，工作台与离线产物读到的 props 完全一致；归一化时按 id 从注册表**重新解析**令牌，手写/过期令牌一律作废，保证「预设 id → 具体色值」单一来源。
 - `Ruling:` 图层自带色带（`layer.style.colors`）**优先于**预设色带，避免用户逐项微调被预设覆盖；预设仅作兜底。
-- `Ruling:` 缩略图由 `src/assets/geo/china.json` 经 `scripts/build-china-preview.py` 离线生成，运行时零网络依赖（沿用 D2/D3 无外链约束）。
+- `Ruling:` 缩略图几何由 `src/assets/geo/china.json` 派生，运行时零网络依赖（沿用 D2/D3 无外链约束）；Task 12 进一步改为**运行时派生**，与生成物方案相比去掉了一份需要人工同步的文件（见 Task 12 执行记录）。
 - `Ruling:` `main` 不合并；`feature/chartforge-datav-lite` 保持独立分支等待人工确认。
 
 **演示入口**：`http://localhost:5174/?demo=t11#/workbench/t11-quick-style`（`vite.config.ts` 仅在 `?demo=t9|t10|t11` 时注入演示种子，不改业务源码）。
 
 **遗留（Minor，deferred）**：参考图为球面/栅格渲染质感，当前缩略图为等价 2D 真实国界投影；若后续需要三维球面缩略图可另立 spec。
 
+
+### Task 12: 缩略图观感升级（参考图六种处理）+ 预览几何运行时派生
+
+**来源**：Task 11 遗留的 Minor（deferred）——「参考图为栅格/等高线/霓虹等渲染质感，
+当前缩略图为等价 2D 真实国界投影」。用户选择先补这一条。
+
+**Files:**
+- Modify: `src/core/components/mapQuickStyles.ts`（新增 `artwork` 观感字段）
+- Create: `src/core/components/mapQuickStyleArtwork.ts`（美术计算纯函数）
+- Modify: `src/assets/geo/chinaPreview.ts`（改为运行时派生，删除生成物与生成脚本）
+- Modify: `src/workbench/components/MapQuickStyleThumbnail.vue`（按观感组图层）
+- Delete: `scripts/build-china-preview.py`
+- Create: `tests/map-quick-style-artwork.spec.ts`（12 条单测）
+- Modify: `e2e/map-quick-style.spec.ts`（+1 条观感独立用例）
+
+- [x] **Step 1: RED** — 观感字段 / 单省填色计算 / 装饰层 id / 预览几何 4 组单测；e2e 增加「六张缩略图两两不同 + 专属图层」用例。
+- [x] **Step 2: GREEN 实现** — `artwork` 语义 + 美术计算 + 五种图层的 SVG 组装。
+- [x] **Step 3: 预览几何运行时派生** — `china.json` 已在工作台包内，运行时派生零额外字节；删除生成物与 Python 生成脚本。
+- [x] **Step 4: 门禁 + 证据** — typecheck / vitest / build / e2e / diff / 体积对比。
+
+### Task 12 执行记录（2026-11-14）
+
+**问题定位（对参考图的逐格比对）**
+
+参考图六格**不是同一张矢量图换配色**，而是六种各自独立的处理：
+深海蓝＝分级设色＋东侧柔光；山地绿洲/暖沙金＝**同一种卫星地形渲染**（绿/金两套配色）；
+靛蓝等高线＝低饱和靛面＋**等高带纹理**；霓虹紫蓝＝近黑面＋**国界外轮廓辉光**；
+素雅宣纸＝浅色底图。Task 11 的实现只有「配色不同、渲染相同」，因此观感偏弱。
+
+**实现要点**
+
+- 观感成为预设的一部分（`artwork`），颜色仍一律从 `tokens` 派生——缩略图与真实地图同源，
+  差异只来自**映射方式**。
+- 卫星地形观感用「西高东低」构造 + 纬度修正近似相对高度（无 DEM、无外链），
+  分出雪顶 / 裸岩 / 过渡 / 低地四档色带。
+- 等高线观感用 `feTurbulence` → 平滑 → **离散档位量化** 得到等高带，
+  并以 `feComposite in="SourceAlpha"` 裁到陆地内，海面保持干净。
+- 霓虹观感用 `feMorphology(dilate)` → `feGaussianBlur` 让**相邻省份自然并成一条发光外轮廓**，
+  与参考图一致。
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run tests` | 60 文件 / **520** 测试全绿（原 508 + Task 12 新增 12） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | **23/23** 通过（原 22 + Task 12 新增 1） |
+| `git diff --check` | 0 |
+| 工作台 chunk 体积 | `WorkbenchView` **255.86 kB → 245.19 kB（−10.7 kB）**：删掉 20 kB 生成物，换成运行时派生代码，净减 |
+| 离线单 HTML | 1,917,811 字节（未变，缩略图属工作台侧） |
+
+**Ruling 摘要**
+
+- `Ruling:` 预览几何改为**运行时派生**而非提交生成物：`china.json` 本就随工作台打包，
+  运行时派生零额外字节，同时消除「生成物与数据源漂移」这一隐患；生成脚本随之删除。
+- `Ruling:` 「观感种类」为 5 而非 6——山地绿洲与暖沙金共用卫星地形渲染、仅配色不同，
+  这与参考图一致；六张缩略图**画面**仍两两不同（由配色 + 专属图层共同保证，e2e 断言像素两两不同）。
+- `Ruling:` 不引入 DEM、瓦片或任何外链资源（沿用 D2/D3），地形起伏为构造近似。
+- `Ruling:` `main` 不合并；`feature/chartforge-datav-lite` 保持独立分支等待人工确认。
+
+**证据**：`/home/user/t12-shots/picker-artwork.png`（3×2 六种观感对照）。
 
 ## 执行方式
 

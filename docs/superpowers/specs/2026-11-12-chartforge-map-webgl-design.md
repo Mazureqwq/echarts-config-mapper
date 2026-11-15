@@ -144,7 +144,7 @@
 |---|---|---|
 | T11-1 | ✅ | 六项预设注册于 `src/core/components/mapQuickStyles.ts`，id = `deep-sea` `jade` `sandstone` `nebula` `contour` `parchment`（深海蓝 / 山地绿洲 / 暖沙金 / 霓虹紫蓝 / 靛蓝等高线 / 素雅宣纸），顺序即 3×2 网格展示顺序 |
 | T11-2 | ✅ | 检查器「样式」页提供深色「快速样式」下拉 + 3×2 网格 + 选中态描边/底色（`MapQuickStylePicker.vue`）；选中态与参考图一致 |
-| T11-3 | ✅ | 每张缩略图为 `china.json` 派生的**真实 34 省 SVG 轮廓**（`MapQuickStyleThumbnail.vue` + 生成物 `src/assets/geo/chinaPreview.ts`），非占位色块；生成器 `scripts/build-china-preview.py` 离线运行，运行时零网络依赖 |
+| T11-3 | ✅ | 每张缩略图为 `china.json` 派生的**真实 34 省 SVG 轮廓**（`MapQuickStyleThumbnail.vue` + `src/assets/geo/chinaPreview.ts`），非占位色块；预览几何运行时派生，零网络依赖（见 §6.4） |
 | T11-4 | ✅ | 预设落盘为具体色值 `quickStyle: { id, tokens }`；归一化按 id 从注册表重新解析，手写/过期令牌作废（「预设 id → 具体色值」单一来源） |
 | T11-5 | ✅ | 工作台（`buildMapLibreScene`）与离线（`RUNTIME_CODE`）同源消费预设 fill 色带与 atmosphere（sky/horizon/fog）；实测大气三项与完整 fill 表达式逐字符一致 |
 | T11-6 | ✅ | 图层自带色带 `layer.style.colors` 优先于预设色带，预设仅兜底，用户逐项微调不被覆盖 |
@@ -156,6 +156,25 @@
 
 **遗留（Minor，deferred）**：参考图为球面/栅格渲染质感，当前缩略图为等价 2D 真实国界投影；如需三维球面缩略图另立 spec。
 
+
+### 6.4 缩略图观感升级（Task 12，2026-11-14）
+
+Task 11 遗留的 Minor（deferred）——「参考图为栅格/等高线/霓虹等渲染质感，
+当前缩略图为等价 2D 真实国界投影」——本轮补齐。
+
+| # | 结论 | 证据 |
+|---|---|---|
+| T12-1 | ✅ | 逐格比对参考图后确认：六格**不是同一张图换配色**，而是六种独立处理。实现引入 `artwork` 观感字段，`MAP_QUICK_STYLE_ARTWORKS` 覆盖 5 种处理（山地绿洲与暖沙金共用卫星地形渲染，仅配色不同，与参考图一致） |
+| T12-2 | ✅ | 卫星地形观感（`jade`/`sandstone`）：以「西高东低」构造 + 纬度修正近似相对高度，分出雪顶 / 裸岩 / 过渡 / 低地四档色带；无 DEM、无瓦片、无外链 |
+| T12-3 | ✅ | 等高线观感（`contour`）：`feTurbulence` → 平滑 → 离散档位量化得到等高带，并以 `feComposite in="SourceAlpha"` 裁到陆地内 |
+| T12-4 | ✅ | 霓虹观感（`nebula`）：`feMorphology(dilate)` → `feGaussianBlur` 使**相邻省份并成一条发光外轮廓**，与参考图一致；内部近黑、省界隐去 |
+| T12-5 | ✅ | 宣纸观感（`parchment`）：米白纸面 + 淡蓝海面 + 极淡省界；深海蓝观感（`deep-sea`）：分级设色 + 东侧柔光 |
+| T12-6 | ✅ | 预览几何改为**运行时派生**：`china.json` 本就随工作台打包，运行时投影零额外字节；删除生成物 `chinaPreview.ts` 的预生成形态与 Python 生成脚本，消除「生成物与数据源漂移」隐患 |
+| T12-7 | ✅ | 体积不增反降：`WorkbenchView` chunk 255.86 kB → **245.19 kB（−10.7 kB）**；离线单 HTML 1,917,811 字节不变（缩略图属工作台侧） |
+| T12-8 | ✅ | 门禁全绿：typecheck / vitest 60 文件 520 测试 / build / e2e **23/23** / `git diff --check` 0 |
+| T12-9 | ✅ | 旧皮肤体系仍未复活：`mapSkins.ts` 不存在，代码域 grep `MAP_SKINS|applyMapSkin|buildMapSceneOption` 与 `src/` 的 `underlay|appliedSkin` 均 0 命中 |
+
+**证据**：`/home/user/t12-shots/picker-artwork.png`（3×2 六种观感对照）。
 
 ## 7. 风险与开放问题
 

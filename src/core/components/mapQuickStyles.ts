@@ -44,12 +44,34 @@ export interface MapQuickStyleTokens {
   atmosphere: { sky: string; horizon: string; fog: string };
 }
 
+/**
+ * 缩略图的视觉观感（artwork）。
+ *
+ * 参考图里六张缩略图**不是同一张图换配色**，而是六种各自独立的处理：
+ * 蓝色分级辉光 / 卫星地形 / 金色地形 / 等高线 / 霓虹轮廓 / 浅色宣纸。
+ * 这里把「怎么画」声明成预设的一部分，缩略图据此组合图层，
+ * 真实地图渲染仍只认 tokens 里的具体色值。
+ */
+export type MapQuickStyleArtwork =
+  /** 深海蓝：分级设色 + 东侧柔光 */
+  | "glow-choropleth"
+  /** 山地绿洲 / 暖沙金：卫星地形观感（高地雪白、过渡褐黄、低地丰茂） */
+  | "terrain"
+  /** 靛蓝等高线：低饱和靛蓝面 + 等高线纹理 */
+  | "contour"
+  /** 霓虹紫蓝：近黑面 + 国界外轮廓辉光 */
+  | "neon"
+  /** 素雅宣纸：浅色宣纸底图 */
+  | "parchment";
+
 export interface MapQuickStyle {
   id: string;
   /** 中文名（检查器与图例展示） */
   name: string;
   /** 一句话说明（悬浮提示） */
   description: string;
+  /** 缩略图的视觉观感 */
+  artwork: MapQuickStyleArtwork;
   tokens: MapQuickStyleTokens;
 }
 
@@ -57,6 +79,7 @@ export interface MapQuickStyle {
 export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
   {
     id: "deep-sea",
+    artwork: "glow-choropleth",
     name: "深海蓝",
     description: "冷调深蓝底色与青蓝高值，适合科技风大屏。",
     tokens: {
@@ -73,6 +96,7 @@ export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
   },
   {
     id: "jade",
+    artwork: "terrain",
     name: "山地绿洲",
     description: "青绿渐层，模拟山地植被到高值亮绿的过渡。",
     tokens: {
@@ -89,6 +113,7 @@ export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
   },
   {
     id: "sandstone",
+    artwork: "terrain",
     name: "暖沙金",
     description: "沙金暖调，适合人文地理与文旅主题。",
     tokens: {
@@ -105,6 +130,7 @@ export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
   },
   {
     id: "nebula",
+    artwork: "neon",
     name: "霓虹紫蓝",
     description: "紫蓝霓虹渐层，适合夜间大屏与发布会视觉。",
     tokens: {
@@ -121,6 +147,7 @@ export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
   },
   {
     id: "contour",
+    artwork: "contour",
     name: "靛蓝等高线",
     description: "低饱和靛蓝配亮青描边，突出地理轮廓而非色带。",
     tokens: {
@@ -137,6 +164,7 @@ export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
   },
   {
     id: "parchment",
+    artwork: "parchment",
     name: "素雅宣纸",
     description: "浅色宣纸底与赭石色带，适合浅色主题与报表场景。",
     tokens: {
@@ -155,6 +183,11 @@ export const MAP_QUICK_STYLES: readonly MapQuickStyle[] = [
 
 /** 预设 id 列表（顺序与 MAP_QUICK_STYLES 一致）。 */
 export const MAP_QUICK_STYLE_IDS: readonly string[] = MAP_QUICK_STYLES.map((preset) => preset.id);
+
+/** 全部缩略图观感（供检查与测试断言用）。 */
+export const MAP_QUICK_STYLE_ARTWORKS: readonly MapQuickStyleArtwork[] = [
+  ...new Set(MAP_QUICK_STYLES.map((preset) => preset.artwork)),
+];
 
 const PRESET_BY_ID = new Map(MAP_QUICK_STYLES.map((preset) => [preset.id, preset]));
 
