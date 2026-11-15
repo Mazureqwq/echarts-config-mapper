@@ -848,8 +848,16 @@ P1 其余项（字号/色彩 token 化、布局可拖入画布、我的收藏）
 `02-jade-applied.png`（套件换为山地绿洲，画布变深绿、存量元素不变）、
 `03-sandstone-preview.png`、`04-after-undo.png`（撤销回到上一步套件）。
 
-**演示入口**：`http://localhost:5174/#/workbench/design-suite-e2e-screen`
-（夹具见 `e2e/design-suite.spec.ts`）。
+**演示入口**（推荐）：`http://localhost:5174/?demo=t15#/workbench/t15-suite-demo`
+
+`vite.config.ts` 的 `demoSeedPlugin` 在 `?demo=t15` 时把
+`examples/screens/demo-seed-t15.js` 注入 index.html（不改业务源码），
+种入一块 4 元素的演示大屏（标题栏 / 指标卡 / 进度条组 / 平面地图）。
+点击路径：左侧「设计库」→ 顶部「可视化套件」→ 点「山地绿洲」→ 顶栏撤销 →
+再换套件后从「组件」插入标题栏看强调色自动继承。
+
+e2e 夹具屏（无种子，需先跑一次 spec）：
+`http://localhost:5174/#/workbench/design-suite-e2e-screen`
 
 **UI 位置**：`DesignLibraryPanel` 顶部新增「可视化套件」区（`[data-suite-section]`），
 置于「布局底板 / 画布背景」之前——它是全局开关，不应埋在面板底部。
