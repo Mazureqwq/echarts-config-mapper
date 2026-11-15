@@ -98,6 +98,12 @@ export const MAP_TOOLTIP_DEFAULT: MapTooltipStyle = { background: "#07121d", bor
 export const MAP_EMPHASIS_DEFAULT: MapEmphasisStyle = { areaColor: "#3a95fd", borderColor: "#ffffff", labelColor: "#ffffff" };
 export const MAP_SELECTED_DEFAULT: MapSelectedStyle = { areaColor: "#58d6ff", borderColor: "#ffffff" };
 export const MAP_FILL_DEFAULT_MIN = "#102b3d";
+/** T13：点热力径向渐变团的最小外缘半径（对应旧 ECharts 的 blurSize = max(size, 12)）。 */
+export const HEAT_BLUR_MIN_RADIUS = 12;
+/** T13：热力模糊比例规整到 4 位小数，保证工作台与离线产物逐位一致。 */
+export function roundHeatBlur(blur: number): number {
+  return Math.round(blur * 10000) / 10000;
+}
 export const MAP_FILL_DEFAULT_MID = "#1c5f8f";
 export const MAP_FILL_DEFAULT_EMPTY = "#0d1a26";
 export const MAP_LAYER_BORDER_DEFAULT: MapLayerBorder = { color: "#ffffff", width: 1, type: "solid" };

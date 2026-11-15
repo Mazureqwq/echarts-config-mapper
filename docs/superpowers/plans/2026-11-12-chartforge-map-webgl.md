@@ -568,6 +568,52 @@ git commit -m "test+docs: map webgl migration acceptance record and plan checkli
 远端 amend 后 hash 变化但 tree 相同）；本地镜像 / origin / Harness 工作区 / GitHub
 四方 head 与 tree 完全一致。
 
+### Task 13: deferred Minor 补齐（b → a）
+
+用户指定顺序：**先 b（geoHeatmap 色带），再 a（OD 飞线流动拖尾）**；a 须另立 spec。
+
+#### Task 13-b：点热力径向渐变 + 按值色带（2026-11-15）
+
+**问题**：`geoHeatmap` 在 MapLibre 侧用 `heatmap-density` 图层，色带跟随**核密度**
+（`0 transparent → 0.5 rgba(color,.55) → 1 color`），孤立低值点几乎不可见，
+与旧 ECharts 的「每点径向渐变 + 按值色带」语义不符。
+
+**旧实现事实**（`a02dbdc`）：
+
+```js
+pointSize: layer.style.size,
+blurSize: Math.max(layer.style.size, 12),
+itemStyle: { color: layer.style.color, opacity: layer.style.opacity },
+```
+
+ECharts 以「实心圆 + shadowBlur」画笔绘制：实心核半径 = `pointSize`，
+外缘半径 = `pointSize + blurSize`；配色走 `visualMap.inRange.color = ["#102b3d", layerColor]`
+的**按值**色带（旧代码把 visualMap 只挂给 `regionFill`，故热力从未真正拿到这条色带）。
+
+**实现**（工作台 `buildMapLibreScene` 与离线 `RUNTIME_CODE` 同步）：
+
+- `circle-radius = pointSize + blurSize`（外缘半径）
+- `circle-blur = blurSize / (pointSize + blurSize)`，规整到 4 位小数
+  （MapLibre `circle.fragment.glsl`：实心核半径 = 半径 × (1 − blur) = `pointSize`）
+- `circle-color = interpolate(["get","value"], min → "#102b3d", max → layerColor)`；
+  全同值时退化为图层纯色
+- 不再产出任何 `heatmap` 类型图层
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| RED | 先改写既有热力断言 + 新增 2 条单测（`tests/map-libre-scene.spec.ts`）与 e2e 断言 → 实现前 **3 红**（`expected 'heatmap' to be 'circle'` 等） |
+| `pnpm typecheck` | exit 0（并删除仅服务密度色带的死代码 `hexToRgba` / `cfHexToRgba`） |
+| `pnpm vitest run` | 60 文件 / **522** 测试全绿（原 520 + 2） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | **23/23** 通过（geo parity 用例扩到「径向渐变 + 按值色带」双向断言） |
+| `git diff --check` | 0 |
+
+**证据**：`/home/user/t13-shots/02-t10-heat-element.png`（T10 演示新观感）。
+
+**演示入口**：`http://localhost:5174/?demo=t10#/workbench/t10-geo-layers`。
+
 ## 执行方式
 
 - `superpowers:executing-plans` 会话内连续执行（无子代理）；四道 D6 门（M1–M4 截图）为**计划内停止点**：停止 → 呈交截图 → 收到「继续/停/改」→ 恢复/返工。

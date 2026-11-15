@@ -1,6 +1,7 @@
 import type { DatasetBinding } from "../model/types";
 import { buildGeoChartDataFromRows } from "../chart/geoData";
 import {
+  HEAT_BLUR_MIN_RADIUS,
   MAP_BORDER_DEFAULT,
   MAP_SCALE_BAR_DEFAULT,
   MAP_TOOLTIP_DEFAULT,
@@ -12,6 +13,7 @@ import {
   MAP_FILL_DEFAULT_MIN,
   MAP_SELECTED_DEFAULT,
   computeRegionCenter,
+  roundHeatBlur,
   formatMapValue,
   normalizeMapSceneProps,
   rampColor,
@@ -120,14 +122,6 @@ function colorForValue(value: number, min: number, max: number, colors: MapFillC
     return k === 0 ? colors.min : k === n - 1 ? colors.max : rampColor(colors, k / (n - 1));
   }
   return rampColor(colors, t);
-}
-
-/** #rrggbb → rgba(...)（热力密度色带用；非法色回退白色） */
-function hexToRgba(hex: string, alpha: number): string {
-  const matched = /^#([0-9a-fA-F]{6})$/.exec(hex);
-  if (!matched) return `rgba(255, 255, 255, ${alpha})`;
-  const value = parseInt(matched[1], 16);
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
 /**
@@ -296,6 +290,15 @@ export function buildMapLibreScene(
       const values = points.map((point) => point.value);
       const minimum = Math.min(...values);
       const maximum = Math.max(...values);
+      // T13：点热力回到旧 ECharts 的「每点径向渐变团」语义。
+      // 旧配置：pointSize = size、blurSize = max(size, 12)、visualMap.inRange.color = ["#102b3d", layerColor]
+      // 旧 ECharts 用「实心圆 + shadowBlur」画笔：实心核半径 = pointSize，渐变外缘半径 = pointSize + blurSize。
+      // MapLibre 的 circle-blur 同样是径向衰减（外缘全透明），故：
+      //   circle-radius = pointSize + blurSize（渐变外缘半径）
+      //   circle-blur   = blurSize / 外缘半径 → 实心核半径 = 外缘半径 × (1 - blur) = pointSize
+      const pointSize = Math.max(1, layer.style.size);
+      const blurSize = Math.max(pointSize, HEAT_BLUR_MIN_RADIUS);
+      const outerRadius = pointSize + blurSize;
       sources[sourceId] = {
         type: "geojson",
         data: {
@@ -309,22 +312,22 @@ export function buildMapLibreScene(
       };
       layers.push({
         id: sourceId,
-        type: "heatmap",
+        type: "circle",
         source: sourceId,
         ...window,
         paint: {
-          "heatmap-weight": minimum === maximum
-            ? 1
-            : ["interpolate", ["linear"], ["get", "value"], minimum, 0, maximum, 1],
-          "heatmap-intensity": 1,
-          "heatmap-radius": Math.max(layer.style.size, 12),
-          "heatmap-opacity": layer.style.opacity,
-          "heatmap-color": [
-            "interpolate", ["linear"], ["heatmap-density"],
-            0, "rgba(0, 0, 0, 0)",
-            0.5, hexToRgba(layer.style.color, 0.55),
-            1, layer.style.color,
-          ],
+          // 颜色按**点值**走旧 visualMap 色带，而不是按核密度场
+          "circle-color": minimum === maximum
+            ? layer.style.color
+            : [
+              "interpolate", ["linear"], ["get", "value"],
+              minimum, MAP_FILL_DEFAULT_MIN,
+              maximum, layer.style.color,
+            ],
+          "circle-opacity": layer.style.opacity,
+          "circle-radius": outerRadius,
+          "circle-blur": roundHeatBlur(blurSize / outerRadius),
+          "circle-stroke-width": 0,
         },
       });
       continue;

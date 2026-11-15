@@ -159,11 +159,16 @@ describe("buildMapLibreScene", () => {
     expect(scatterSource.type).toBe("geojson");
     expect(scatterSource.data.features).toHaveLength(1);
     expect(scatterSource.data.features[0].geometry).toEqual({ type: "Point", coordinates: [113.26, 23.13] });
-    const heat = layers.find((l) => l.type === "heatmap");
+    // T13：点热力改为「每点径向渐变团」（旧 ECharts 的 pointSize/blurSize + visualMap 按值上色）
+    const heat = layers.find((l) => l.id === "cf-heat-heat");
     expect(heat).toBeTruthy();
-    expect(heat.id).toBe("cf-heat-heat");
-    expect(JSON.stringify(heat.paint["heatmap-color"])).toContain("#ff6b6b");
-    expect(heat.paint["heatmap-opacity"]).toBe(0.9);
+    expect(heat.type).toBe("circle");
+    expect(layers.find((l) => l.type === "heatmap")).toBeUndefined();
+    // size=12 → blurSize=max(12,12)=12 → 外缘半径 24，blur=12/24=0.5 → 实心核 12
+    expect(heat.paint["circle-radius"]).toBe(24);
+    expect(heat.paint["circle-blur"]).toBe(0.5);
+    expect(heat.paint["circle-opacity"]).toBe(0.9);
+    expect(JSON.stringify(heat.paint["circle-color"])).toContain("#ff6b6b");
     const flow = layers.find((l) => l.type === "line" && l.id.startsWith("cf-flow-"));
     expect(flow).toBeTruthy();
     expect(flow.id).toBe("cf-flow-flow");
@@ -179,6 +184,67 @@ describe("buildMapLibreScene", () => {
     expect(pointLabel?.centroid).toEqual([113.26, 23.13]);
     expect(pointLabel?.color).toBe("#ffffff");
     expect(flow.paint["line-dasharray"]).toEqual([3, 9]);
+  });
+
+  it("renders geoHeatmap as a per-point radial gradient whose colour follows the value ramp", () => {
+    // 旧 ECharts：pointSize=size、blurSize=max(size,12)、visualMap.inRange.color=["#102b3d", layerColor]
+    // 迁移到 MapLibre：circle-radius=blurSize、circle-blur=1-pointSize/blurSize、颜色按点值插值
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [{
+          id: "heat", type: "geoHeatmap", name: "热力", visible: true,
+          style: { color: "#ff6b6b", opacity: 0.9, size: 6 },
+          dataBinding: { datasetId: "heat", fields: { geo: { longitude: "lng", latitude: "lat", value: "score" } } },
+        }],
+      },
+      [{ province: "广东省", score: 92 }],
+      { category: "province", value: "score" },
+      { heat: [{ lng: 110, lat: 30, score: 10 }, { lng: 114, lat: 24, score: 90 }] },
+      chinaFixture,
+    );
+    expect(r.errors).toEqual([]);
+    const heat = (r.style.layers as any[]).find((l) => l.id === "cf-heat-heat");
+    expect(heat).toBeTruthy();
+    expect(heat.type).toBe("circle");
+    // size=6 → blurSize=max(6,12)=12 → 外缘半径 6+12=18，blur=12/18=0.6667 → 实心核 6
+    expect(heat.paint["circle-radius"]).toBe(18);
+    expect(heat.paint["circle-blur"]).toBe(0.6667);
+    expect(heat.paint["circle-opacity"]).toBe(0.9);
+    // 颜色按**点值**走 visualMap 色带（旧 ECharts 语义），而不是按核密度
+    expect(heat.paint["circle-color"]).toEqual([
+      "interpolate", ["linear"], ["get", "value"], 10, "#102b3d", 90, "#ff6b6b",
+    ]);
+    // 不得再产出核密度 heatmap 图层
+    expect((r.style.layers as any[]).some((l) => l.type === "heatmap")).toBe(false);
+    const source = (r.style.sources as any)["cf-heat-heat"];
+    expect(source.type).toBe("geojson");
+    expect(source.data.features).toHaveLength(2);
+    expect(source.data.features[0].geometry).toEqual({ type: "Point", coordinates: [110, 30] });
+    expect(source.data.features[1].properties.value).toBe(90);
+  });
+
+  it("falls back to the flat layer colour when every heat value is identical", () => {
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [{
+          id: "heat", type: "geoHeatmap", name: "热力", visible: true,
+          style: { color: "#ff6b6b", opacity: 0.8, size: 12 },
+          dataBinding: { datasetId: "heat", fields: { geo: { longitude: "lng", latitude: "lat", value: "score" } } },
+        }],
+      },
+      [{ province: "广东省", score: 92 }],
+      { category: "province", value: "score" },
+      { heat: [{ lng: 110, lat: 30, score: 50 }, { lng: 114, lat: 24, score: 50 }] },
+      chinaFixture,
+    );
+    expect(r.errors).toEqual([]);
+    const heat = (r.style.layers as any[]).find((l) => l.id === "cf-heat-heat");
+    // 全部同值时无法插值 → 退回图层自身颜色（与旧 ECharts visualMap 单值退化行为一致）
+    expect(heat.paint["circle-color"]).toBe("#ff6b6b");
+    expect(heat.paint["circle-radius"]).toBe(24);
+    expect(heat.paint["circle-blur"]).toBe(0.5);
   });
 
   it("skips hidden geo layers and reports geo binding errors instead of dropping them silently", () => {

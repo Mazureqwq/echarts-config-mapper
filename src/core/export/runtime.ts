@@ -626,12 +626,6 @@ export const RUNTIME_CODE = String.raw`
     }
     return { ok: true, message: "", rows: result };
   }
-  function cfHexToRgba(hex, alpha) {
-    var matched = /^#([0-9a-fA-F]{6})$/.exec(hex || "");
-    if (!matched) return "rgba(255, 255, 255, " + alpha + ")";
-    var value = parseInt(matched[1], 16);
-    return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
-  }
   var CF_CHINA_REGIONS = ["新疆维吾尔自治区", "西藏自治区", "内蒙古自治区", "青海省", "四川省", "黑龙江省", "甘肃省", "云南省", "广西壮族自治区", "湖南省", "陕西省", "广东省", "吉林省", "河北省", "湖北省", "贵州省", "山东省", "江西省", "河南省", "辽宁省", "山西省", "安徽省", "福建省", "浙江省", "江苏省", "重庆市", "宁夏回族自治区", "海南省", "台湾省", "北京市", "天津市", "上海市", "香港特别行政区", "澳门特别行政区"];
   function cfHex(value, fallback) {
     return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
@@ -1101,6 +1095,13 @@ export const RUNTIME_CODE = String.raw`
         var heatValues = converted.rows.map(function (point) { return point.value; });
         var heatMin = Math.min.apply(null, heatValues);
         var heatMax = Math.max.apply(null, heatValues);
+        // T13：与工作台同源 —— 旧 ECharts 的每点径向渐变团（pointSize=size、blurSize=max(size,12)、
+        // visualMap.inRange.color=["#102b3d", layerColor]）
+        // 旧画笔「实心核 pointSize + 光晕 blurSize」→ MapLibre：外缘半径 = pointSize + blurSize，
+        // circle-blur = blurSize / 外缘半径 ⇒ 实心核半径 = 外缘半径 × (1 - blur) = pointSize
+        var heatPointSize = Math.max(1, gl.size);
+        var heatBlurSize = Math.max(heatPointSize, 12);
+        var heatOuterRadius = heatPointSize + heatBlurSize;
         styleSources[heatId] = {
           type: "geojson",
           data: {
@@ -1114,13 +1115,13 @@ export const RUNTIME_CODE = String.raw`
             })
           }
         };
-        styleLayers.push(Object.assign({ id: heatId, type: "heatmap", source: heatId }, gWindow, {
+        styleLayers.push(Object.assign({ id: heatId, type: "circle", source: heatId }, gWindow, {
           paint: {
-            "heatmap-weight": heatMin === heatMax ? 1 : ["interpolate", ["linear"], ["get", "value"], heatMin, 0, heatMax, 1],
-            "heatmap-intensity": 1,
-            "heatmap-radius": Math.max(gl.size, 12),
-            "heatmap-opacity": gl.opacity,
-            "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0, 0, 0, 0)", 0.5, cfHexToRgba(gl.color, 0.55), 1, gl.color]
+            "circle-color": heatMin === heatMax ? gl.color : ["interpolate", ["linear"], ["get", "value"], heatMin, "#102b3d", heatMax, gl.color],
+            "circle-opacity": gl.opacity,
+            "circle-radius": heatOuterRadius,
+            "circle-blur": Math.round((heatBlurSize / heatOuterRadius) * 10000) / 10000,
+            "circle-stroke-width": 0
           }
         }));
         continue;

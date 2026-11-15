@@ -179,6 +179,58 @@ Task 11 遗留的 Minor（deferred）——「参考图为栅格/等高线/霓�
 
 **提交**：`192a4de`，tree `01cb6e2c`；本地 / origin / Harness 工作区 / GitHub 四方一致。
 
+### 6.5 点热力径向渐变与按值色带（Task 13-b，2026-11-15）
+
+Task 12 收口时登记的 deferred Minor ——「geoHeatmap 密度色带观感不正，
+应恢复旧实现应有的径向渐变与按值色带语义」——本轮补齐。
+
+**旧实现事实**（`a02dbdc:src/core/components/mapScene.ts` / `src/core/export/runtime.ts`）：
+
+```js
+series.push({
+  type: "heatmap", coordinateSystem: "geo",
+  data: rows.map((p) => [p.longitude, p.latitude, p.value]),
+  pointSize: layer.style.size,
+  blurSize: Math.max(layer.style.size, 12),
+  itemStyle: { color: layer.style.color, opacity: layer.style.opacity },
+});
+```
+
+- ECharts 用「实心圆 + `shadowBlur`」画笔绘制每个点：**实心核半径 = `pointSize`**，
+  渐变外缘半径 = `pointSize + blurSize`；
+- 配色走同一条 `visualMap.inRange.color = ["#102b3d", layerColor]` 色带（按值着色）；
+- 旧实现把 `visualMap` 只挂在 `regionFill` 的 `seriesIndex` 上，`geoHeatmap` 并不在
+  `visualMap` 的目标内（ECharts 对 heatmap 缺 visualMap 会直接抛
+  `Heatmap must use with visualMap`），因此「径向渐变 + 按值色带」只是**应有语义**而非既有观感。
+
+**偏差**：当前 MapLibre 实现用 `heatmap-density` 图层，色带为
+`0 transparent → 0.5 rgba(color,0.55) → 1 color`——颜色跟随**核密度**而非点值，
+且孤立低值点几乎不可见，与旧语义不符。
+
+**本轮实现**：
+
+| 项 | 取值 | 依据 |
+|---|---|---|
+| `circle-radius` | `pointSize + blurSize` | 旧画笔外缘半径；MapLibre 的 `circle-blur` 在外缘处全透明 |
+| `circle-blur` | `blurSize / (pointSize + blurSize)`（4 位小数规整） | MapLibre `circle.fragment.glsl` 的 `opacity_t = smoothstep(0, antialiased_blur, extrude_length-1)`：实心核 = 半径 × (1 − blur) |
+| `circle-color` | `["interpolate",["linear"],["get","value"], min, "#102b3d", max, layerColor]` | 旧 `visualMap.inRange.color` 按值色带；单值数据集退化为图层纯色 |
+| `circle-opacity` | `layer.style.opacity` | 旧 `itemStyle.opacity` |
+
+| # | 结论 | 证据 |
+|---|---|---|
+| T13b-1 | ✅ | 不再产出 `heatmap` 图层：`geoHeatmap` 落到 `circle` + `circle-blur`，逐点径向渐变团 |
+| T13b-2 | ✅ | 团几何与旧画笔一致：实心核半径 = `size`，外缘半径 = `size + max(size,12)`（`mapScene.ts` 导出 `HEAT_BLUR_MIN_RADIUS` / `roundHeatBlur`） |
+| T13b-3 | ✅ | 颜色按**点值**走 `#102b3d → layerColor` 色带；全同值时退化为图层纯色，不产生非法 `interpolate` |
+| T13b-4 | ✅ | 工作台 `buildMapLibreScene` 与离线 `RUNTIME_CODE` 逐位一致（`circle-radius` / `circle-blur` / `circle-color` 表达式相同），e2e 离线快照 `toEqual` 工作台快照 |
+| T13b-5 | ✅ | RED→GREEN：先写 3 条单测（既有断言改写 + 两条新用例）与 e2e 断言，实现前 3 红；实现后全绿 |
+| T13b-6 | ✅ | 门禁全绿：typecheck / vitest 60 文件 522 测试 / build / e2e **23/23** / `git diff --check` 0 |
+| T13b-7 | ✅ | 未复活旧皮肤体系；`hexToRgba` / `cfHexToRgba` 两个只为密度色带服务的死代码已删除 |
+
+**证据**：`/home/user/t13-shots/02-t10-heat-element.png`（工作台 T10 演示的新观感：
+低值点为近背景的深蓝团、高值点为亮红团）。
+
+**遗留**：Task 13-a（OD 飞线流动拖尾）另立 spec，见 §6.6。
+
 ## 7. 风险与开放问题
 
 | 风险 | 缓解 |

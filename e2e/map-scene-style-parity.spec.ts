@@ -78,8 +78,9 @@ const initialWorkspace = {
           type: "geoHeatmap",
           name: "热力",
           visible: true,
-          style: { color: "#ff6b6b", opacity: 0.9, size: 12 },
-          dataBinding: { datasetId: "pts", fields: { geo: { longitude: "lng", latitude: "lat", value: "score" } } },
+          // size=6 → 旧 ECharts 的 pointSize=6、blurSize=max(6,12)=12 → MapLibre 半径 12、blur 0.5
+          style: { color: "#ff6b6b", opacity: 0.9, size: 6 },
+          dataBinding: { datasetId: "heatPts", fields: { geo: { longitude: "lng", latitude: "lat", value: "score" } } },
         }],
       },
     }],
@@ -88,6 +89,7 @@ const initialWorkspace = {
   datasets: [
     { id: DATASET_ID, name: "省级热度", source: { kind: "static", data: rows }, pipeline: { filter: [] } },
     { id: "pts", name: "点线数据", source: { kind: "static", data: [{ city: "广州", lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31, score: 42 }] }, pipeline: { filter: [] } },
+    { id: "heatPts", name: "热力点", source: { kind: "static", data: [{ lng: 113.26, lat: 23.13, score: 20 }, { lng: 114.17, lat: 22.31, score: 80 }] }, pipeline: { filter: [] } },
   ],
   settings: { autosave: true },
 };
@@ -628,6 +630,8 @@ async function readGeoLayerSnapshot(page: Page) {
         color: l.paint["circle-color"] ?? l.paint["line-color"] ?? null,
         opacity: l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null,
         radius: l.paint["circle-radius"] ?? null,
+        // T13：点热力改用 circle + circle-blur 表达径向渐变团
+        blur: l.paint["circle-blur"] ?? null,
         width: l.paint["line-width"] ?? null,
         // 流动拖尾的 dash 相位逐帧变化，双端只断言「有虚线」
         dashed: Array.isArray(l.paint["line-dasharray"]) ? "dashed" : null,
@@ -658,6 +662,8 @@ async function readOfflineGeoLayerSnapshot(page: Page) {
         color: l.paint["circle-color"] ?? l.paint["line-color"] ?? null,
         opacity: l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null,
         radius: l.paint["circle-radius"] ?? null,
+        // T13：点热力改用 circle + circle-blur 表达径向渐变团
+        blur: l.paint["circle-blur"] ?? null,
         width: l.paint["line-width"] ?? null,
         dashed: Array.isArray(l.paint["line-dasharray"]) ? "dashed" : null,
         featureCount: features.length,
@@ -695,8 +701,16 @@ test("地理散点 / 点热力 / OD 飞线双端一致（T10 评审修复）", a
   expect(scatter.geometryType).toBe("Point");
   expect(scatter.coordinates).toEqual([113.26, 23.13]);
   const heat = workbench!.find((l: any) => l.id === "cf-heat-heat")!;
-  expect(heat.type).toBe("heatmap");
-  expect(heat.featureCount).toBe(1);
+  // T13：点热力 = 每点径向渐变团（circle + blur），颜色按点值走 visualMap 色带
+  expect(heat.type).toBe("circle");
+  expect(heat.featureCount).toBe(2);
+  // size=6 → blurSize=12 → 外缘半径 18，blur=0.6667 → 实心核 6
+  expect(heat.radius).toBe(18);
+  expect(heat.blur).toBe(0.6667);
+  expect(heat.opacity).toBe(0.9);
+  expect(heat.color).toEqual([
+    "interpolate", ["linear"], ["get", "value"], 20, "#102b3d", 80, "#ff6b6b",
+  ]);
   const flow = workbench!.find((l: any) => l.id === "cf-flow-flow")!;
   expect(flow.type).toBe("line");
   expect(flow.color).toBe("#32d6ff");
