@@ -174,7 +174,10 @@ Task 11 遗留的 Minor（deferred）——「参考图为栅格/等高线/霓�
 | T12-8 | ✅ | 门禁全绿：typecheck / vitest 60 文件 520 测试 / build / e2e **23/23** / `git diff --check` 0 |
 | T12-9 | ✅ | 旧皮肤体系仍未复活：`mapSkins.ts` 不存在，代码域 grep `MAP_SKINS|applyMapSkin|buildMapSceneOption` 与 `src/` 的 `underlay|appliedSkin` 均 0 命中 |
 
-**证据**：`/home/user/t12-shots/picker-artwork.png`（3×2 六种观感对照）。
+**证据**：`/home/user/t12-shots/picker-artwork.png`（3×2 六种观感对照）、
+`/home/user/t12-shots/02-workbench-nebula.png`（工作台渲染未受影响）。
+
+**提交**：`192a4de`，tree `01cb6e2c`；本地 / origin / Harness 工作区 / GitHub 四方一致。
 
 ## 7. 风险与开放问题
 

@@ -561,7 +561,12 @@ git commit -m "test+docs: map webgl migration acceptance record and plan checkli
 - `Ruling:` 不引入 DEM、瓦片或任何外链资源（沿用 D2/D3），地形起伏为构造近似。
 - `Ruling:` `main` 不合并；`feature/chartforge-datav-lite` 保持独立分支等待人工确认。
 
-**证据**：`/home/user/t12-shots/picker-artwork.png`（3×2 六种观感对照）。
+**证据**：`/home/user/t12-shots/picker-artwork.png`（3×2 六种观感对照）、
+`/home/user/t12-shots/02-workbench-nebula.png`（工作台渲染未受影响）。
+
+**提交与同步**：提交 `192a4de`（本地 `fef6b49` 为同一 tree `01cb6e2c`，
+远端 amend 后 hash 变化但 tree 相同）；本地镜像 / origin / Harness 工作区 / GitHub
+四方 head 与 tree 完全一致。
 
 ## 执行方式
 
