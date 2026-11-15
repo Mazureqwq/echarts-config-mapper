@@ -129,7 +129,9 @@ async function openOffline(page: Page, context: any, screenId: string) {
   await offlinePage.waitForFunction(() => {
     let map: any = null;
     document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
-    return Boolean(map && typeof map.loaded === "function" && map.loaded() && !map.isMoving());
+    // T13-a：逐帧动画会让 source 持续处于 reload 状态，map.loaded() / isStyleLoaded()
+    // 因此永远为 false；改用「样式已解析完成（style._loaded）+ 相机未移动」判定就绪。
+    return Boolean(map && map.style && map.style._loaded === true && !map.isMoving());
   }, null, { timeout: 25000 });
   return offlinePage;
 }

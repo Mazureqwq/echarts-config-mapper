@@ -97,6 +97,20 @@ export const MAP_LEGEND_DEFAULT: MapLegendConfig = { show: false, position: "top
 export const MAP_TOOLTIP_DEFAULT: MapTooltipStyle = { background: "#07121d", borderColor: "#1f2a3a", color: "#e7fbff", fontSize: 12 };
 export const MAP_EMPHASIS_DEFAULT: MapEmphasisStyle = { areaColor: "#3a95fd", borderColor: "#ffffff", labelColor: "#ffffff" };
 export const MAP_SELECTED_DEFAULT: MapSelectedStyle = { areaColor: "#58d6ff", borderColor: "#ffffff" };
+/**
+ * 飞线虚线节拍（底稿航线）。
+ *
+ * T13-a：MapLibre 的 `line-dasharray` 没有相位平移能力，逐帧改写 dasharray
+ * 还会耗尽 dash 纹理图集（LineAtlas 512 行）并让 geojson source 每帧 reload，
+ * 因此「真实流动拖尾」改由 Canvas2D 覆盖层实现（见 mapFlowTrail.ts）。
+ */
+export const FLOW_DASH_PATTERN = [3, 9] as const;
+/** T13-a：流动拖尾长度（px）。 */
+export const FLOW_TRAIL_LENGTH = 64;
+/** T13-a：流光头辉光直径（px）。 */
+export const FLOW_HEAD_LENGTH = 18;
+/** T13-a：彗星推进速度（px/s）。 */
+export const FLOW_TRAIL_SPEED = 170;
 export const MAP_FILL_DEFAULT_MIN = "#102b3d";
 /** T13：点热力径向渐变团的最小外缘半径（对应旧 ECharts 的 blurSize = max(size, 12)）。 */
 export const HEAT_BLUR_MIN_RADIUS = 12;

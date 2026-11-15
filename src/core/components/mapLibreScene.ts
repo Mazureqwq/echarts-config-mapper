@@ -1,6 +1,8 @@
 import type { DatasetBinding } from "../model/types";
+import type { FlowTrailLayerSpec } from "./mapFlowTrail";
 import { buildGeoChartDataFromRows } from "../chart/geoData";
 import {
+  FLOW_DASH_PATTERN,
   HEAT_BLUR_MIN_RADIUS,
   MAP_BORDER_DEFAULT,
   MAP_SCALE_BAR_DEFAULT,
@@ -42,11 +44,6 @@ export interface MapLibreSceneLabel {
   stroke?: string;
 }
 
-/**
- * 飞线虚线节拍（MapLibre 的 line-dasharray 无过渡属性，无法逐帧推进；
- * 旧 ECharts 的流动拖尾降级为静态虚线，见 Task 10 评审记录 minor(deferred)）
- */
-export const FLOW_DASH_PATTERN = [3, 9] as const;
 
 /** 统一的区域 tooltip 文案（工作台与离线同源，避免两端文案漂移） */
 export function formatMapTooltipText(name: string, value: number | null, fmt?: MapValueFormat): string {
@@ -88,6 +85,8 @@ export interface MapLibreSceneResult {
   scaleBar: MapScaleBarConfig;
   /** 标注最小缩放（null = 不设阈值） */
   labelMinZoom: number | null;
+  /** T13-a：需要 Canvas2D 流动拖尾覆盖层的飞线图层（geoFlow + animated） */
+  flowTrails: FlowTrailLayerSpec[];
   flags: MapLibreSceneFlags;
   errors: string[];
 }
@@ -191,6 +190,8 @@ export function buildMapLibreScene(
   const dashed = border.type === "dashed";
   const emphasisBorderColor = scene.emphasis?.borderColor ?? MAP_EMPHASIS_DEFAULT.borderColor;
   const selectedBorderColor = scene.selected?.borderColor ?? MAP_SELECTED_DEFAULT.borderColor;
+  // T13-a：交给 Canvas2D 覆盖层的流动拖尾目标（geoFlow + animated）
+  const flowTrails: FlowTrailLayerSpec[] = [];
   const layers: Array<Record<string, unknown>> = [
     {
       id: "cf-fill",
@@ -347,6 +348,7 @@ export function buildMapLibreScene(
           })),
         },
       };
+      const flowWidth = Math.max(1, layer.style.size / 4);
       layers.push({
         id: sourceId,
         type: "line",
@@ -354,11 +356,23 @@ export function buildMapLibreScene(
         ...window,
         paint: {
           "line-color": layer.style.color,
-          "line-width": Math.max(1, layer.style.size / 4),
+          "line-width": flowWidth,
           "line-opacity": layer.style.opacity,
           ...(layer.style.animated ? { "line-dasharray": [...FLOW_DASH_PATTERN] } : {}),
         },
       });
+      if (layer.style.animated) {
+        // T13-a：流动拖尾由 Canvas2D 覆盖层绘制（MapLibre 的 line-dasharray
+        // 无法平移相位，逐帧改写还会耗尽 dash 纹理图集 ⇒ 见 mapFlowTrail.ts）。
+        // 这里只把航线几何与配色交给覆盖层。
+        flowTrails.push({
+          id: layer.id,
+          color: layer.style.color,
+          opacity: layer.style.opacity,
+          width: flowWidth,
+          routes: lines.map((line) => ({ from: [line.from[0], line.from[1]], to: [line.to[0], line.to[1]], name: line.name })),
+        });
+      }
     }
   }
 
@@ -484,6 +498,7 @@ export function buildMapLibreScene(
       position: scene.scaleBar?.position ?? MAP_SCALE_BAR_DEFAULT.position,
     },
     labelMinZoom: typeof scene.label?.minZoom === "number" ? scene.label.minZoom : null,
+    flowTrails,
     flags: {
       dragEnabled: scene.view.dragEnabled,
       zoomEnabled: scene.view.zoomEnabled,

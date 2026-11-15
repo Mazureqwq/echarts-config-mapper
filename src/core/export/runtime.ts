@@ -662,6 +662,164 @@ export const RUNTIME_CODE = String.raw`
       }
     };
   }
+  /**
+   * T13-a：OD 飞线流动拖尾（离线侧，与工作台 mapFlowTrail.ts 逐项等价）。
+   *
+   * MapLibre 的 line-dasharray 没有 SVG stroke-dashoffset 那样的相位平移能力，
+   * 逐帧改写 dasharray 会把每种图案编成 LineAtlas 的一行纹理（256x512），
+   * 约 8 秒后耗尽并让整条飞线消失；同时每帧 setPaintProperty 还会让
+   * geojson source 每帧 reload。因此这里改用 Canvas2D 覆盖层直接绘制彗星：
+   * 渐隐拖尾 + 白热流光头，完全不触碰 MapLibre 图层的 paint 属性。
+   */
+  function cfStartFlowTrail(map, container, flowTrails) {
+    var FLOW_TRAIL_LENGTH = 64;
+    var FLOW_TRAIL_SPEED = 170;
+    if (!flowTrails || !flowTrails.length || !container) return null;
+    var targets = flowTrails.filter(function (spec) {
+      return spec && spec.routes && spec.routes.length > 0;
+    });
+    if (!targets.length) return null;
+
+    function smoothstep(edge0, edge1, x) {
+      if (edge1 <= edge0) return x < edge0 ? 0 : 1;
+      var t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+      return t * t * (3 - 2 * t);
+    }
+    function fade(phase) {
+      return smoothstep(0, 0.08, phase) * (1 - smoothstep(0.92, 1, phase));
+    }
+    function parseColor(color) {
+      var value = typeof color === "string" ? color.trim() : "";
+      var hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
+      if (hex) {
+        var raw = hex[1];
+        if (raw.length === 3) raw = raw[0] + raw[0] + raw[1] + raw[1] + raw[2] + raw[2];
+        return { r: parseInt(raw.slice(0, 2), 16), g: parseInt(raw.slice(2, 4), 16), b: parseInt(raw.slice(4, 6), 16) };
+      }
+      var rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(value);
+      if (rgb) return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
+      return { r: 255, g: 255, b: 255 };
+    }
+    function rgba(color, alpha) {
+      var a = Math.max(0, Math.min(1, alpha));
+      return "rgba(" + color.r + ", " + color.g + ", " + color.b + ", " + a + ")";
+    }
+
+    var canvas = document.createElement("canvas");
+    canvas.className = "cf-flow-trail-overlay";
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.style.position = "absolute";
+    canvas.style.left = "0";
+    canvas.style.top = "0";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    canvas.style.pointerEvents = "none";
+    canvas.style.zIndex = "1";
+    container.appendChild(canvas);
+    var ctx = canvas.getContext("2d");
+    if (!ctx) { canvas.remove(); return null; }
+
+    var stopped = false;
+    var frameId = 0;
+    var startTime = (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+    function resize() {
+      var width = container.clientWidth;
+      var height = container.clientHeight;
+      if (!width || !height) return false;
+      var dpr = typeof window !== "undefined" && window.devicePixelRatio ? window.devicePixelRatio : 1;
+      var pixelWidth = Math.round(width * dpr);
+      var pixelHeight = Math.round(height * dpr);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return true;
+    }
+
+    function draw() {
+      if (stopped) return;
+      if (!resize()) { frameId = requestAnimationFrame(draw); return; }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      var elapsed = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
+      for (var i = 0; i < targets.length; i++) {
+        var spec = targets[i];
+        var color = parseColor(spec.color);
+        var tailWidth = Math.max(2, spec.width * 2);
+        var headRadius = Math.max(5, spec.width * 3);
+        var projected = [];
+        var travel = 0;
+        for (var r = 0; r < spec.routes.length; r++) {
+          var route = spec.routes[r];
+          var from = map.project(route.from);
+          var to = map.project(route.to);
+          projected.push({ from: from, to: to });
+          var length = Math.sqrt((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y));
+          if (length > travel) travel = length;
+        }
+        if (travel <= 1) continue;
+        var position = (elapsed / 1000) * FLOW_TRAIL_SPEED % travel;
+        phases[spec.id] = position / travel;
+        var alpha = fade(position / travel) * spec.opacity;
+        if (alpha <= 0.002) continue;
+        for (var k = 0; k < projected.length; k++) {
+          var seg = projected[k];
+          var dx = seg.to.x - seg.from.x;
+          var dy = seg.to.y - seg.from.y;
+          var segLength = Math.sqrt(dx * dx + dy * dy);
+          if (segLength < 0.000001) continue;
+          if (position > segLength) continue;
+          var ux = dx / segLength;
+          var uy = dy / segLength;
+          var headX = seg.from.x + ux * position;
+          var headY = seg.from.y + uy * position;
+          var tailSpan = Math.min(FLOW_TRAIL_LENGTH, Math.max(0, position));
+          var tailX = headX - ux * tailSpan;
+          var tailY = headY - uy * tailSpan;
+          var gradient = ctx.createLinearGradient(tailX, tailY, headX, headY);
+          gradient.addColorStop(0, rgba(color, 0));
+          gradient.addColorStop(0.45, rgba(color, 0.4 * alpha));
+          gradient.addColorStop(1, rgba(color, alpha));
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = tailWidth;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          ctx.moveTo(tailX, tailY);
+          ctx.lineTo(headX, headY);
+          ctx.stroke();
+          var glow = ctx.createRadialGradient(headX, headY, 0, headX, headY, headRadius);
+          glow.addColorStop(0, rgba({ r: 255, g: 255, b: 255 }, alpha));
+          glow.addColorStop(0.35, rgba(color, 0.85 * alpha));
+          glow.addColorStop(1, rgba(color, 0));
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(headX, headY, headRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      frameId = requestAnimationFrame(draw);
+    }
+    frameId = requestAnimationFrame(draw);
+    // 测试钩子：e2e 读取覆盖层状态（与工作台 .cf-flow-trail-overlay 同构）
+    var phases = {};
+    canvas.__cfFlowTrail = {
+      kind: "flow-trail-overlay",
+      getPhases: function () { return phases; },
+      layerIds: targets.map(function (spec) { return spec.id; })
+    };
+    return {
+      stop: function () {
+        stopped = true;
+        if (frameId) cancelAnimationFrame(frameId);
+        frameId = 0;
+        targets = [];
+        canvas.remove();
+      }
+    };
+  }
+
   function safeMapSceneMaplibre(item, rootEl, rows, props, screen) {
     var fallbackPresentation = item.componentId === "chartforge.map-scene-tilted" ? "tilted" : "flat";
     var presentation = props.presentation === "tilted" || props.presentation === "flat" ? props.presentation : fallbackPresentation;
@@ -978,6 +1136,8 @@ export const RUNTIME_CODE = String.raw`
       ? { background: safeWidgetColor(props.tooltipStyle.background, "#07121d"), borderColor: safeWidgetColor(props.tooltipStyle.borderColor, "#1f2a3a"), color: safeWidgetColor(props.tooltipStyle.color, "#e7fbff"), fontSize: boundedWidgetNumber(props.tooltipStyle.fontSize, 12, 8, 32) }
       : { background: "#07121d", borderColor: "#1f2a3a", color: "#e7fbff", fontSize: 12 };
     var dashed = borderType === "dashed";
+    // T13-a：交给 Canvas2D 流动拖尾覆盖层的目标（geoFlow + animated）
+    var flowTrails = [];
     var styleLayers = [
       Object.assign({
         id: "cf-fill", type: "fill", source: "china"
@@ -1128,6 +1288,7 @@ export const RUNTIME_CODE = String.raw`
       }
       if (gl.type === "geoFlow") {
         var flowId = "cf-flow-" + gl.id;
+        var flowWidth = Math.max(1, gl.size / 4);
         styleSources[flowId] = {
           type: "geojson",
           data: {
@@ -1144,10 +1305,24 @@ export const RUNTIME_CODE = String.raw`
         styleLayers.push(Object.assign({ id: flowId, type: "line", source: flowId }, gWindow, {
           paint: Object.assign({
             "line-color": gl.color,
-            "line-width": Math.max(1, gl.size / 4),
+            "line-width": flowWidth,
             "line-opacity": gl.opacity
           }, gl.animated ? { "line-dasharray": [3, 9] } : {})
         }));
+        if (gl.animated) {
+          // T13-a：流动拖尾由 Canvas2D 覆盖层绘制（MapLibre 的 line-dasharray
+          // 无法平移相位，逐帧改写还会耗尽 dash 纹理图集）。这里只把航线
+          // 几何与配色交给覆盖层，与工作台 buildMapLibreScene().flowTrails 同构。
+          flowTrails.push({
+            id: gl.id,
+            color: gl.color,
+            opacity: gl.opacity,
+            width: flowWidth,
+            routes: converted.rows.map(function (line) {
+              return { from: line.from, to: line.to, name: line.name || "" };
+            })
+          });
+        }
       }
     }
 
@@ -1263,6 +1438,7 @@ export const RUNTIME_CODE = String.raw`
     };
     maplibrePromise.then(function (mod) {
       if (!mod) { if (!statusEl) showStatus("地图运行时缺失：离线包未注入 MapLibre 源"); return; }
+      var flowChart = null;
       try {
         var map = new mod.Map({
           container: canvas, style: style, minZoom: view.minZoom, maxZoom: view.maxZoom,
@@ -1521,9 +1697,14 @@ export const RUNTIME_CODE = String.raw`
         });
         map.on("load", function () {
           cfSyncCamera();
+          // T13-a：OD 飞线流动拖尾（与工作台同源：Canvas2D 覆盖层绘制彗星）
+          flowChart = cfStartFlowTrail(map, canvas, flowTrails);
         });
         cfSyncCamera();
-        charts.push({ dispose: function () { try { map.remove(); } catch (e) { /* 已销毁 */ } } });
+        charts.push({ dispose: function () {
+          try { if (flowChart) flowChart.stop(); } catch (e) { /* 已销毁 */ }
+          try { map.remove(); } catch (e) { /* 已销毁 */ }
+        } });
       } catch (createErr) {
         showStatus((createErr && createErr.message) || "地图渲染出错");
       }

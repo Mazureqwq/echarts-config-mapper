@@ -247,6 +247,73 @@ describe("buildMapLibreScene", () => {
     expect(heat.paint["circle-blur"]).toBe(0.5);
   });
 
+  it("renders geoFlow as a base path plus a canvas flow-trail target when animated is on", () => {
+    // T13-a：OD 飞线流动拖尾 —— 底稿虚线留在 MapLibre，彗星（拖尾 + 流光头）
+    // 交给 Canvas2D 覆盖层绘制（逐帧改写 line-dasharray 会耗尽 dash 纹理图集）。
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [{
+          id: "flow", type: "geoFlow", name: "飞线", visible: true,
+          style: { color: "#32d6ff", opacity: 1, size: 8, animated: true },
+          dataBinding: { datasetId: "flow", fields: { geo: { originLongitude: "lng", originLatitude: "lat", destinationLongitude: "lng2", destinationLatitude: "lat2" } } },
+        }],
+      },
+      [{ province: "广东省", score: 92 }],
+      { category: "province", value: "score" },
+      { flow: [{ lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31 }] },
+      chinaFixture,
+    );
+    expect(r.errors).toEqual([]);
+    const layers = r.style.layers as any[];
+    const flow = layers.find((l) => l.id === "cf-flow-flow");
+    expect(flow).toBeTruthy();
+    // 底稿：静态虚线保持既有观感
+    expect(flow.type).toBe("line");
+    expect(flow.paint["line-color"]).toBe("#32d6ff");
+    expect(flow.paint["line-width"]).toBe(2);
+    expect(flow.paint["line-opacity"]).toBe(1);
+    expect(flow.paint["line-dasharray"]).toEqual([3, 9]);
+    // 不再产出依赖 dasharray 的拖尾 / 流光头图层
+    const ids = layers.map((l) => l.id);
+    expect(ids).not.toContain("cf-flow-trail-flow");
+    expect(ids).not.toContain("cf-flow-head-flow");
+    // 覆盖层目标：航线几何 + 配色 + 宽度
+    expect(r.flowTrails).toHaveLength(1);
+    const target = r.flowTrails[0];
+    expect(target.id).toBe("flow");
+    expect(target.color).toBe("#32d6ff");
+    expect(target.opacity).toBe(1);
+    expect(target.width).toBe(2);
+    expect(target.routes).toEqual([{ from: [113.26, 23.13], to: [114.17, 22.31], name: undefined }]);
+  });
+
+  it("keeps geoFlow as a single static path when animated is off", () => {
+    const r = buildMapLibreScene(
+      {
+        presentation: "flat", view: baseView,
+        layers: [{
+          id: "flow", type: "geoFlow", name: "飞线", visible: true,
+          style: { color: "#32d6ff", opacity: 1, size: 8, animated: false },
+          dataBinding: { datasetId: "flow", fields: { geo: { originLongitude: "lng", originLatitude: "lat", destinationLongitude: "lng2", destinationLatitude: "lat2" } } },
+        }],
+      },
+      [{ province: "广东省", score: 92 }],
+      { category: "province", value: "score" },
+      { flow: [{ lng: 113.26, lat: 23.13, lng2: 114.17, lat2: 22.31 }] },
+      chinaFixture,
+    );
+    expect(r.errors).toEqual([]);
+    const ids = (r.style.layers as any[]).map((l) => l.id);
+    expect(ids).toContain("cf-flow-flow");
+    expect(ids).not.toContain("cf-flow-trail-flow");
+    expect(ids).not.toContain("cf-flow-head-flow");
+    // 动效关闭 ⇒ 不产出覆盖层目标（不启动动画循环）
+    expect(r.flowTrails).toEqual([]);
+    const flow = (r.style.layers as any[]).find((l) => l.id === "cf-flow-flow");
+    expect(flow.paint["line-dasharray"]).toBeUndefined();
+  });
+
   it("skips hidden geo layers and reports geo binding errors instead of dropping them silently", () => {
     const hidden = buildMapLibreScene(
       {

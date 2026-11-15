@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, watch } from "vue";
+import { createFlowTrailOverlay, type FlowTrailOverlay } from "../../core/components/mapFlowTrail";
 import { Map as MapLibreMap, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
@@ -55,7 +56,12 @@ function syncLayerSubscriptions(): void {
 }
 
 watch(bindingSignature, syncLayerSubscriptions, { immediate: true });
+/** T13-a：OD 飞线流动拖尾动画控制器（样式重建后需 refresh） */
+const flowTrail = shallowRef<FlowTrailOverlay | null>(null);
+
 onBeforeUnmount(() => {
+  flowTrail.value?.stop();
+  flowTrail.value = null;
   for (const stop of layerStops.values()) stop();
   layerStops.clear();
   if (map.value) {
@@ -340,6 +346,9 @@ function applyScene(): void {
   instance.setMinZoom(built.style.minZoom as number);
   instance.setMaxZoom(built.style.maxZoom as number);
   syncCamera();
+  // T13-a：样式重建后飞线图层 id 可能变化，重新收集动画目标
+  // T13-a：样式重建后把新的航线几何交给流动拖尾覆盖层
+  flowTrail.value?.refresh(result.value.flowTrails);
 }
 
 watch(result, applyScene);
@@ -383,6 +392,16 @@ onMounted(() => {
     });
     instance.on("load", () => {
       syncCamera();
+      // T13-a：OD 飞线流动拖尾（Canvas2D 覆盖层：彗星 + 渐隐拖尾）
+      flowTrail.value?.stop();
+      flowTrail.value = null;
+      if (result.value.flowTrails.length && hostEl.value) {
+        flowTrail.value = createFlowTrailOverlay(
+          instance as unknown as Parameters<typeof createFlowTrailOverlay>[0],
+          hostEl.value,
+          result.value.flowTrails,
+        );
+      }
     });
     map.value = instance;
     syncCamera();

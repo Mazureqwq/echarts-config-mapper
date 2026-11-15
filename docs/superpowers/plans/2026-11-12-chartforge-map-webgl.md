@@ -614,6 +614,72 @@ ECharts 以「实心圆 + shadowBlur」画笔绘制：实心核半径 = `pointSi
 
 **演示入口**：`http://localhost:5174/?demo=t10#/workbench/t10-geo-layers`。
 
+#### Task 13-a：OD 飞线真实流动拖尾（2026-11-15）
+
+独立 spec：`docs/superpowers/specs/2026-11-15-chartforge-map-od-flow-trail.md`。
+
+**问题**：`geoFlow` 在 MapLibre 侧只有静态虚线 `line-dasharray: [3, 9]`，
+旧 ECharts 的流动拖尾在 Task 10 被降级为 deferred Minor；用户要求**真实流动**。
+
+**v1（已废弃）**：逐帧 `setPaintProperty` 推进「唯一光点」图案 `[0, off, on, PERIOD]`。
+自动化（vitest 524、Playwright 24/24）虽全绿，但**视觉诊断发现流光完全不可见**，遂深挖：
+
+| 缺陷 | 证据 |
+|---|---|
+| dash 纹理图集被逐帧改写耗尽 | `LineAtlas(256,512)` 按 dasharray 内容新增行 ⇒ 第 1.5–2.5s 可见后消失，**第 13s 彻底不见** |
+| 超长 period 把亮斑压成亚像素 | 图案按总和归一化到 256px 纹理，`PERIOD=500000` 时亮段接近 0 纹素 |
+| 每帧改 paint ⇒ geojson source 每帧 reload | `map.loaded()` 永久 false；T10 帧率 **27.1**（关闭动画时 60.3） |
+| `line-gradient` 不可用 | `interpolate` 输入必须字面量，无法用 `feature-state` 推动渐变带 |
+
+**v2（最终实现）**：在 MapLibre 容器内叠一层 `pointer-events:none` 的 2D canvas，
+用 Canvas2D 直接绘制「渐隐拖尾 + 白热流光头」：
+
+- MapLibre 侧**只保留底稿图层** `cf-flow-<id>`（静态虚线观感不变）；
+  `buildMapLibreScene()` 新增返回值 `flowTrails: FlowTrailLayerSpec[]`
+  （`{ id, color, opacity, width, routes:[{from,to,name}] }`）。
+- 新模块 `src/core/components/mapFlowTrail.ts`：`createFlowTrailOverlay(map, container, specs)`
+  返回 `{ refresh, stop, getPhases }`；纯函数 `flowTrailFade` / `flowTrailPhase` /
+  `flowTrailTravelled` / `flowTrailGeometry` / `parseFlowColor` / `rgba` /
+  `flowTrailWidth` / `flowTrailHeadRadius` 供单测。
+- 语义：`position = (elapsed/1000 × 170px/s) mod (最长航线像素长度)`；
+  周期两端 `smoothstep(0,0.08)` × `(1 − smoothstep(0.92,1))` 淡出淡入 ⇒ 回绕不可见；
+  拖尾长 64px、宽 `max(2, width×2)`；光头辉光半径 `max(5, width×3)`，白核 + 航线色。
+- 常量收敛：`FLOW_TRAIL_LENGTH=64`、`FLOW_HEAD_LENGTH=18`、`FLOW_TRAIL_SPEED=170`
+  （单位统一为**像素**）；删除 `FLOW_TRAIL_PERIOD` / `FLOW_TRAIL_OPACITY_RATIO` /
+  `FLOW_BASE_OPACITY_RATIO` / `FLOW_TRAIL_FRAME_MS`。
+- 离线 `RUNTIME_CODE` 内 `cfStartFlowTrail(map, container, flowTrails)` 是**逐项等价**的内联实现，
+  在 `load` 后启动、`dispose` 时 `stop()` 再 `map.remove()`。
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run` | 61 文件 / **544** 测试全绿（新增 `tests/map-flow-trail.spec.ts` 20 条） |
+| `pnpm build` | exit 0 |
+| `pnpm test:e2e` | **24/24** 通过 |
+| `git diff --check` | 0 |
+
+**可见性回归补强**（本次的核心教训）：v1 的自动化只断言「dasharray 在变」，
+无法证明肉眼可见。v2 的 e2e 直接对覆盖层 canvas 采样像素：
+
+- `painted > 100`（拖尾 + 辉光真实着色）
+- `bright > 0`（出现接近白色的流光头核心）
+- 质心位移 `> 3px`（彗星确实在推进）
+- 工作台与离线 `file://` 两端都断言
+
+**性能**：T10 动画开启 **60.1 FPS**（v1 为 27.1），`map.loaded()` 保持 `true`。
+
+**附带修复**：`图例/tooltip/悬停` e2e 的悬停前新增 `waitForFillHit()`
+—— `style._loaded` 只保证样式解析完成，不保证区域填色已绘制，
+绘制完成前移动鼠标会让 tooltip / feature-state 断言偶发失败（本地复现 1/5）。
+
+**证据**：`/home/user/t13-shots/t10-1.png`（T10 全景，两条彗星在飞）、
+`/home/user/t13-shots/close-2.png` 与 `close-4.png`（放大后同一彗星推进的两帧）、
+`/home/user/t13-shots/fix-0.png` 与 `fix-2.png`（夹具屏彗星推进）。
+
+**演示入口**：`http://localhost:5174/?demo=t10#/workbench/t10-geo-layers`。
+
 ## 执行方式
 
 - `superpowers:executing-plans` 会话内连续执行（无子代理）；四道 D6 门（M1–M4 截图）为**计划内停止点**：停止 → 呈交截图 → 收到「继续/停/改」→ 恢复/返工。

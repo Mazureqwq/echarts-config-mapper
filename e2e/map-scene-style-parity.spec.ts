@@ -201,7 +201,10 @@ async function waitForMapReady(page: Page) {
     const vueInstance = (root as HTMLElement & { __vueParentComponent?: any }).__vueParentComponent;
     const map = vueInstance?.exposed?.getMap?.();
     if (!map) return false;
-    return Boolean(map.loaded && map.loaded() && !map.isMoving());
+    // T13-a：飞线流动拖尾逐帧改写 paint 属性，MapLibre 会持续把 source 标记为 reload，
+    // map.loaded() / isStyleLoaded() 因此永远为 false；
+    // 改用「样式已解析完成（style._loaded）+ 相机未移动」判定就绪。
+    return Boolean(map && map.style && map.style._loaded === true && !map.isMoving());
   }), { timeout: 25000 }).toBe(true);
 }
 
@@ -257,6 +260,29 @@ async function projectOfflinePoint(page: Page, coords: [number, number]) {
   return { x: data!.rx + data!.px * scaleX, y: data!.ry + data!.py * scaleY };
 }
 
+/**
+ * 等到目标经纬度上真的能查询到 `cf-fill` 要素再移动鼠标。
+ *
+ * `style._loaded` 只保证样式解析完成，不保证区域填色已经绘制到画布；
+ * 悬停命中依赖 `queryRenderedFeatures`，绘制完成前移动鼠标会让
+ * tooltip / feature-state 断言偶发失败。
+ */
+async function waitForFillHit(page: Page, coords: [number, number], offline: boolean) {
+  await page.waitForFunction(({ target, isOffline }) => {
+    let map: any = null;
+    if (isOffline) {
+      document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
+    } else {
+      const chart = document.querySelector(".map-scene__chart") as any;
+      map = chart?.__vueParentComponent?.exposed?.getMap?.() ?? null;
+    }
+    if (!map || !map.isStyleLoaded?.()) return false;
+    const point = map.project(target);
+    const hits = map.queryRenderedFeatures([point.x, point.y], { layers: ["cf-fill"] });
+    return hits.length > 0;
+  }, { target: coords, isOffline: offline }, { timeout: 15000 });
+}
+
 async function buildOfflineHtml(page: Page, screenId: string) {
   const workspace = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), STORAGE_KEY);
   return page.evaluate(async ({ workspace, screenId }) => {
@@ -296,7 +322,9 @@ async function openOffline(page: Page, context: any, screenId: string) {
   await offlinePage.waitForFunction(() => {
     let map: any = null;
     document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
-    return Boolean(map && typeof map.loaded === "function" && map.loaded() && !map.isMoving());
+    // T13-a：逐帧动画会让 source 持续处于 reload 状态，map.loaded() / isStyleLoaded()
+    // 因此永远为 false；改用「样式已解析完成（style._loaded）+ 相机未移动」判定就绪。
+    return Boolean(map && map.style && map.style._loaded === true && !map.isMoving());
   }, null, { timeout: 25000 });
   return offlinePage;
 }
@@ -398,6 +426,7 @@ test("图例 / tooltip / 悬停与点击态双端一致（T7）", async ({ page,
   expect(workbenchLegendText.replace(/\s+/g, "")).toContain("31分–92分");
 
   // —— 工作台端：悬停 → tooltip + cf_hover feature-state ——
+  await waitForFillHit(page, REGION_POINT, false);
   const wbPoint = await projectWorkbenchPoint(page, REGION_POINT);
   await page.mouse.move(wbPoint.x - 6, wbPoint.y - 6);
   await page.mouse.move(wbPoint.x, wbPoint.y);
@@ -422,6 +451,7 @@ test("图例 / tooltip / 悬停与点击态双端一致（T7）", async ({ page,
   const offlineLegendText = await offlinePage.locator(".cf-map-legend").innerText();
   expect(offlineLegendText.replace(/\s+/g, "")).toBe(workbenchLegendText.replace(/\s+/g, ""));
 
+  await waitForFillHit(offlinePage, REGION_POINT, true);
   const offPoint = await projectOfflinePoint(offlinePage, REGION_POINT);
   await offlinePage.mouse.move(offPoint.x - 6, offPoint.y - 6);
   await offlinePage.mouse.move(offPoint.x, offPoint.y);
@@ -628,13 +658,17 @@ async function readGeoLayerSnapshot(page: Page) {
         source: l.source,
         sourceType: source?.type ?? null,
         color: l.paint["circle-color"] ?? l.paint["line-color"] ?? null,
-        opacity: l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null,
+        // T13-a：拖尾 / 流光头的不透明度与 dash 相位逐帧变化，双端只比对结构
+        opacity: l.id.includes("-trail-") || l.id.includes("-head-")
+          ? null
+          : (l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null),
         radius: l.paint["circle-radius"] ?? null,
         // T13：点热力改用 circle + circle-blur 表达径向渐变团
-        blur: l.paint["circle-blur"] ?? null,
+        blur: l.paint["circle-blur"] ?? l.paint["line-blur"] ?? null,
         width: l.paint["line-width"] ?? null,
         // 流动拖尾的 dash 相位逐帧变化，双端只断言「有虚线」
         dashed: Array.isArray(l.paint["line-dasharray"]) ? "dashed" : null,
+        animated: l.id.includes("-trail-") || l.id.includes("-head-"),
         featureCount: features.length,
         geometryType: features[0]?.geometry?.type ?? null,
         coordinates: features[0]?.geometry?.coordinates ?? null,
@@ -660,12 +694,16 @@ async function readOfflineGeoLayerSnapshot(page: Page) {
         source: l.source,
         sourceType: source?.type ?? null,
         color: l.paint["circle-color"] ?? l.paint["line-color"] ?? null,
-        opacity: l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null,
+        // T13-a：拖尾 / 流光头的不透明度与 dash 相位逐帧变化，双端只比对结构
+        opacity: l.id.includes("-trail-") || l.id.includes("-head-")
+          ? null
+          : (l.paint["circle-opacity"] ?? l.paint["line-opacity"] ?? null),
         radius: l.paint["circle-radius"] ?? null,
         // T13：点热力改用 circle + circle-blur 表达径向渐变团
-        blur: l.paint["circle-blur"] ?? null,
+        blur: l.paint["circle-blur"] ?? l.paint["line-blur"] ?? null,
         width: l.paint["line-width"] ?? null,
         dashed: Array.isArray(l.paint["line-dasharray"]) ? "dashed" : null,
+        animated: l.id.includes("-trail-") || l.id.includes("-head-"),
         featureCount: features.length,
         geometryType: features[0]?.geometry?.type ?? null,
         coordinates: features[0]?.geometry?.coordinates ?? null,
@@ -673,6 +711,146 @@ async function readOfflineGeoLayerSnapshot(page: Page) {
     }).sort((a: any, b: any) => a.id.localeCompare(b.id));
   });
 }
+
+test("OD 飞线流动拖尾逐帧推进且肉眼可见（工作台 / 离线双端，T13-a）", async ({ page, context }) => {
+  await context.addInitScript(({ storageKey, workspace }) => {
+    if (localStorage.getItem(storageKey) === null) {
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+  }, { storageKey: STORAGE_KEY, workspace: initialWorkspace });
+
+  /** 读取覆盖层挂载状态与各图层归一化相位 */
+  const readOverlay = async (target: Page) => target.evaluate(() => {
+    const canvas = document.querySelector("canvas.cf-flow-trail-overlay") as any;
+    if (!canvas || !canvas.__cfFlowTrail) return null;
+    return { kind: canvas.__cfFlowTrail.kind, phases: canvas.__cfFlowTrail.getPhases() };
+  });
+
+  /**
+   * 覆盖层画布的像素统计：统计「非透明」像素与「亮」像素。
+   * 覆盖层是独立的 2D canvas，直接读它就能证明彗星真的被画出来了
+   * （此前的自动化只断言 dasharray 在变，无法证明可见性）。
+   */
+  const readOverlayPixels = async (target: Page) => target.evaluate(() => {
+    const canvas = document.querySelector("canvas.cf-flow-trail-overlay") as HTMLCanvasElement;
+    if (!canvas || !canvas.width) return null;
+    const scratch = document.createElement("canvas");
+    scratch.width = canvas.width;
+    scratch.height = canvas.height;
+    const ctx = scratch.getContext("2d")!;
+    ctx.drawImage(canvas, 0, 0);
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let painted = 0;
+    let bright = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let maxAlpha = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3];
+      if (alpha > maxAlpha) maxAlpha = alpha;
+      if (alpha > 8) {
+        painted++;
+        const px = (i / 4) % canvas.width;
+        const py = Math.floor(i / 4 / canvas.width);
+        sumX += px;
+        sumY += py;
+        // 流光头核心接近白色
+        if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) bright++;
+      }
+    }
+    return {
+      painted,
+      bright,
+      maxAlpha,
+      centroid: painted ? { x: sumX / painted, y: sumY / painted } : null,
+    };
+  });
+
+  /** 把地图放大到航线范围：夹具里的航线只有约 1.2 度跨度，缩到最大才看得清彗星推进 */
+  const focusRoute = async (target: Page, maxZoom: number) => target.evaluate((limit) => {
+    let map: any = null;
+    const chart = document.querySelector(".map-scene__chart") as any;
+    if (chart?.__vueParentComponent?.exposed?.getMap) {
+      map = chart.__vueParentComponent.exposed.getMap();
+    } else {
+      document.querySelectorAll("[data-item]").forEach((el) => { if ((el as any).__cfMap && !map) map = (el as any).__cfMap; });
+    }
+    if (!map) return false;
+    map.jumpTo({ zoom: Math.min(limit, map.getMaxZoom()), center: [113.7, 22.7] });
+    return true;
+  }, maxZoom);
+
+  await page.goto(`/#/workbench/${SCREEN_ID}`);
+  await expect(page.locator(".map-scene__chart")).toBeVisible();
+  await waitForMapReady(page);
+
+  // 1) 覆盖层已挂载且接管了飞线动画
+  await expect(page.locator("canvas.cf-flow-trail-overlay")).toHaveCount(1);
+  const first = await readOverlay(page);
+  expect(first?.kind).toBe("flow-trail-overlay");
+  const firstPhase = first!.phases.flow;
+  expect(typeof firstPhase).toBe("number");
+
+  // 2) 相位确实在推进
+  await page.waitForTimeout(400);
+  const second = await readOverlay(page);
+  expect(second!.phases.flow).not.toBe(firstPhase);
+
+  // 3) 可见性：覆盖层上必须有实画出来的像素，且出现接近白色的流光头
+  //    先把地图放大到航线附近，让「彗星沿航线推进」在像素上真的可测
+  expect(await focusRoute(page, 7)).toBe(true);
+  await page.waitForTimeout(300);
+  //    采样一小段时间，覆盖彗星穿过航线中段（fade 全不透明）的时刻
+  let best = { painted: 0, bright: 0, maxAlpha: 0, centroid: null as any };
+  let moved = false;
+  let previousCentroid: any = null;
+  for (let i = 0; i < 14; i++) {
+    const px = await readOverlayPixels(page);
+    if (px) {
+      if (px.painted > best.painted) best = px as any;
+      if (px.bright > best.bright) best.bright = px.bright;
+      if (previousCentroid && px.centroid && px.painted > 200) {
+        const shift = Math.hypot(px.centroid.x - previousCentroid.x, px.centroid.y - previousCentroid.y);
+        if (shift > 3) moved = true;
+      }
+      if (px.centroid && px.painted > 200) previousCentroid = px.centroid;
+    }
+    await page.waitForTimeout(120);
+  }
+  // 拖尾（宽 4px × 长度最长 64px）+ 辉光半径 6px ⇒ 正常应远大于 100 像素
+  expect(best.painted).toBeGreaterThan(100);
+  expect(best.maxAlpha).toBeGreaterThan(60);
+  // 流光头白热核心必须真实着色
+  expect(best.bright).toBeGreaterThan(0);
+  // 彗星沿航线移动（质心发生位移）
+  expect(moved).toBe(true);
+
+  // 4) 离线产物：同样的覆盖层、同样的推进
+  const offlinePage = await openOffline(page, context, SCREEN_ID);
+  await expect(offlinePage.locator("canvas.cf-flow-trail-overlay")).toHaveCount(1);
+  expect(await focusRoute(offlinePage, 7)).toBe(true);
+  await offlinePage.waitForTimeout(300);
+  const offlineFirst = await readOverlay(offlinePage);
+  expect(offlineFirst?.kind).toBe("flow-trail-overlay");
+  const offlinePhaseA = offlineFirst!.phases.flow;
+  expect(typeof offlinePhaseA).toBe("number");
+  await offlinePage.waitForTimeout(400);
+  const offlineSecond = await readOverlay(offlinePage);
+  expect(offlineSecond!.phases.flow).not.toBe(offlinePhaseA);
+  let offlineBest = { painted: 0, bright: 0, maxAlpha: 0 };
+  for (let i = 0; i < 14; i++) {
+    const px = await readOverlayPixels(offlinePage);
+    if (px) {
+      if (px.painted > offlineBest.painted) offlineBest.painted = px.painted;
+      if (px.bright > offlineBest.bright) offlineBest.bright = px.bright;
+      if (px.maxAlpha > offlineBest.maxAlpha) offlineBest.maxAlpha = px.maxAlpha;
+    }
+    await offlinePage.waitForTimeout(120);
+  }
+  expect(offlineBest.painted).toBeGreaterThan(100);
+  expect(offlineBest.bright).toBeGreaterThan(0);
+  await offlinePage.close();
+});
 
 test("地理散点 / 点热力 / OD 飞线双端一致（T10 评审修复）", async ({ page, context }) => {
   await context.addInitScript(({ storageKey, workspace }) => {
@@ -690,7 +868,10 @@ test("地理散点 / 点热力 / OD 飞线双端一致（T10 评审修复）", a
 
   const workbench = await readGeoLayerSnapshot(page);
   expect(workbench).not.toBeNull();
-  expect(workbench!.map((l: any) => l.id)).toEqual(["cf-flow-flow", "cf-heat-heat", "cf-scatter-pts-scatter"]);
+  // T13-a：拖尾改由 Canvas2D 覆盖层绘制 ⇒ 飞线只剩底稿图层
+  expect(workbench!.map((l: any) => l.id)).toEqual([
+    "cf-flow-flow", "cf-heat-heat", "cf-scatter-pts-scatter",
+  ]);
   const scatter = workbench!.find((l: any) => l.id === "cf-scatter-pts-scatter")!;
   expect(scatter.type).toBe("circle");
   expect(scatter.sourceType).toBe("geojson");
@@ -716,14 +897,21 @@ test("地理散点 / 点热力 / OD 飞线双端一致（T10 评审修复）", a
   expect(flow.color).toBe("#32d6ff");
   expect(flow.width).toBe(2);
   expect(flow.dashed).toBe("dashed");
+  expect(flow.animated).toBe(false);
   expect(flow.geometryType).toBe("LineString");
   expect(flow.coordinates).toEqual([[113.26, 23.13], [114.17, 22.31]]);
+  // T13-a：流动拖尾不进 MapLibre 图层（dasharray 无法平移相位且会耗尽 dash 图集），
+  // 改由 Canvas2D 覆盖层绘制；此处断言覆盖层已挂载
+  expect(workbench!.find((l: any) => l.id === "cf-flow-trail-flow")).toBeUndefined();
+  expect(workbench!.find((l: any) => l.id === "cf-flow-head-flow")).toBeUndefined();
+  await expect(page.locator("canvas.cf-flow-trail-overlay")).toHaveCount(1);
   // 散点标注进 HTML 覆盖层
   await expect(page.locator(".map-scene__label", { hasText: "广州" })).toBeVisible();
 
   const offlinePage = await openOffline(page, context, SCREEN_ID);
   const offline = await readOfflineGeoLayerSnapshot(offlinePage);
   expect(offline).toEqual(workbench);
+  await expect(offlinePage.locator("canvas.cf-flow-trail-overlay")).toHaveCount(1);
   await expect(offlinePage.locator(".cf-map-label", { hasText: "广州" })).toBeVisible();
   await offlinePage.close();
 });
