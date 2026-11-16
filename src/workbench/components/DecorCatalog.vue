@@ -2,20 +2,24 @@
 /**
  * T17：内置装饰素材目录（DataV 设计库风格）。
  *
- * 缩略图直接复用 `decorSvg()` 产出的矢量——**所见即所插**，
- * 不存在「缩略图是另画一张、插进去却是另一张」的偏差。
+ * 缩略图按条目类型分两条路，但都是**所见即所插**——
+ * 不存在「缩略图是另画一张、插进去却是另一张」的偏差：
+ *   · 矢量条目 → `decorSvg()` 现场画（带 `crispStrokes`，缩到卡片里也不糊）；
+ *   · 成品 PNG 条目 → 直接用素材数据 URL（T18）。
  */
 import { computed, ref } from "vue";
 import {
   DECOR_GROUP_META,
   DEFAULT_DECOR_ACCENT,
   decorSvg,
+  isDecorPngEntry,
   listDecorEntries,
   type DecorEntry,
   type DecorGroup,
 } from "@/core/design/decorations";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { getThemeById } from "@/core/design/library";
+import { decorPngDataUrl } from "@/core/design/decorPng";
 import { decorDragPayload } from "@/workbench/decorActions";
 import { setActiveCanvasDragPayload } from "@/shared/dnd";
 
@@ -35,6 +39,7 @@ const accent = computed(() => {
 
 /** 缩略图：描边保持显示像素宽度，否则 480×300 缩进卡片会变成一块黑。 */
 function thumb(entry: DecorEntry): string {
+  if (isDecorPngEntry(entry)) return decorPngDataUrl(entry.asset as string) ?? "";
   return `data:image/svg+xml;utf8,${encodeURIComponent(
     decorSvg(entry.id, accent.value, { crispStrokes: true })
   )}`;
@@ -90,12 +95,14 @@ function startDrag(event: DragEvent, entry: DecorEntry): void {
           draggable="true"
           :aria-label="`插入 ${entry.name}`"
           :data-decor-id="entry.id"
+          :data-decor-png="isDecorPngEntry(entry) ? entry.asset : undefined"
           :title="entry.description"
           @click="emit('select', entry)"
           @dragstart="startDrag($event, entry)"
         >
           <span class="decor-thumb" :class="{ 'decor-thumb--screen': entry.group === 'screen-border' }">
             <img :src="thumb(entry)" alt="" aria-hidden="true" />
+            <em v-if="isDecorPngEntry(entry)" class="decor-badge">PNG</em>
           </span>
           <span class="decor-copy"><strong>{{ entry.name }}</strong><small>{{ entry.description }}</small></span>
         </button>
@@ -127,9 +134,10 @@ function startDrag(event: DragEvent, entry: DecorEntry): void {
 .decor-card:active { cursor: grabbing; }
 
 /* 深色底衬让浅色描边的装饰缩略图看得清 */
-.decor-thumb { display: block; width: 100%; height: 54px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cf-border) 75%, transparent); border-radius: 5px; background: radial-gradient(circle at 50% 45%, #16233a, #080d16 70%); }
+.decor-thumb { position: relative; display: block; width: 100%; height: 54px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cf-border) 75%, transparent); border-radius: 5px; background: radial-gradient(circle at 50% 45%, #16233a, #080d16 70%); }
 .decor-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; filter: saturate(1.2) brightness(1.15); }
 .decor-thumb--screen { height: 46px; }
+.decor-badge { position: absolute; right: 3px; bottom: 3px; padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, #000 62%, transparent); color: #9fd8ff; font-size: 8px; font-style: normal; letter-spacing: .04em; line-height: 1.5; }
 
 .decor-copy { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
 .decor-copy strong { overflow: hidden; font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }

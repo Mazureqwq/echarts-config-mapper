@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * T17：内置装饰素材的真实 UI 行为。
+ * T17 + T18：内置装饰素材的真实 UI 行为。
  *
  * 单测证明几何与落位规则；这里证明「分类筛得到、点击能插入、
  * 大屏边框真的铺满、能拖到画布、能收藏、能撤销」。
@@ -41,9 +41,10 @@ async function readItems(page: Page) {
     if (!raw) return [];
     const ws = JSON.parse(raw);
     const screen = (ws.screens ?? []).find((s: { id: string }) => s.id === screenId);
-    return (screen?.items ?? []).map((item: { name: string; kind: string; frame: Record<string, number> }) => ({
+    return (screen?.items ?? []).map((item: { name: string; kind: string; src?: string; frame: Record<string, number> }) => ({
       name: item.name,
       kind: item.kind,
+      src: item.src,
       frame: item.frame,
     }));
   }, { key: STORAGE_KEY, screenId: SCREEN_ID });
@@ -65,17 +66,21 @@ test("装饰目录按四个分组展示，筛选生效（T17）", async ({ page 
 
   // 四个分组筛选 + 全部
   await expect(page.locator("[data-decor-filter]")).toHaveCount(5);
-  await expect(page.locator("[data-decor-id]")).toHaveCount(23);
+  // 23 个矢量 + 11 个成品 PNG（T18）
+  await expect(page.locator("[data-decor-id]")).toHaveCount(34);
 
   await page.locator('[data-decor-filter="screen-border"]').click();
-  await expect(page.locator("[data-decor-id]")).toHaveCount(5);
+  await expect(page.locator("[data-decor-id]")).toHaveCount(9);
   await expect(page.locator('[data-decor-id="decor-border-bracket"]')).toBeVisible();
 
   await page.locator('[data-decor-filter="panel-frame"]').click();
-  await expect(page.locator("[data-decor-id]")).toHaveCount(6);
+  await expect(page.locator("[data-decor-id]")).toHaveCount(8);
+
+  await page.locator('[data-decor-filter="ornament"]').click();
+  await expect(page.locator("[data-decor-id]")).toHaveCount(10);
 
   await page.locator('[data-decor-filter="all"]').click();
-  await expect(page.locator("[data-decor-id]")).toHaveCount(23);
+  await expect(page.locator("[data-decor-id]")).toHaveCount(34);
 });
 
 test("点击大屏边框 → 铺满画布并落到最底层（T17）", async ({ page }) => {
@@ -144,4 +149,81 @@ test("把装饰拖到画布指定位置（T17）", async ({ page }) => {
   // 落点被夹在画布内
   expect(item.frame.x).toBeGreaterThanOrEqual(0);
   expect(item.frame.y).toBeGreaterThanOrEqual(0);
+});
+
+test("四类里都有 PNG 成品素材，缩略图是真的位图（T18）", async ({ page }) => {
+  await openScreen(page);
+
+  const pngCards = page.locator("[data-decor-png]");
+  await expect(pngCards).toHaveCount(11);
+
+  // 每个分组至少一张 PNG
+  for (const group of ["screen-border", "title-frame", "panel-frame", "ornament"]) {
+    await page.locator(`[data-decor-filter="${group}"]`).click();
+    await expect(page.locator("[data-decor-png]").first()).toBeVisible();
+  }
+
+  // 缩略图真的是 PNG 且已解码出像素（不是空 src、也不是矢量占位）
+  await page.locator('[data-decor-filter="all"]').click();
+  const thumb = page.locator('[data-decor-id="decor-png-border-violet"] img');
+  await expect(thumb).toHaveAttribute("src", /^data:image\/png;base64,/);
+  await expect
+    .poll(() => thumb.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
+  await expect(page.locator('[data-decor-id="decor-png-border-violet"] .decor-badge')).toHaveText("PNG");
+});
+
+test("点击 PNG 大屏边框 → 铺满画布，src 是 PNG 数据 URL（T18）", async ({ page }) => {
+  await openScreen(page);
+  await page.locator('[data-decor-id="decor-png-border-carbon"]').click();
+
+  await expect.poll(async () => (await readItems(page)).length).toBe(1);
+  const [item] = await readItems(page);
+  expect(item.name).toBe("碳纤折角边框");
+  expect(item.kind).toBe("image");
+  expect(item.src).toMatch(/^data:image\/png;base64,/);
+  expect(item.frame).toMatchObject({ x: 0, y: 0, w: 1600, h: 900 });
+});
+
+test("点击 PNG 背景框 → 按素材原生尺寸居中（T18）", async ({ page }) => {
+  await openScreen(page);
+  await page.locator('[data-decor-id="decor-png-panel-azure"]').click();
+
+  await expect.poll(async () => (await readItems(page)).length).toBe(1);
+  const [item] = await readItems(page);
+  expect(item.name).toBe("冰蓝玻璃面板框");
+  expect(item.frame).toMatchObject({ x: 540, y: 300, w: 520, h: 300 });
+});
+
+test("PNG 与矢量装饰可混着插，互不干扰（T18）", async ({ page }) => {
+  await openScreen(page);
+  await page.locator('[data-decor-id="decor-png-border-neon"]').click();
+  await page.locator('[data-decor-id="decor-png-title-violet"]').click();
+  await page.locator('[data-decor-id="decor-border-bracket"]').click();
+  await page.locator('[data-decor-id="decor-png-orn-stars"]').click();
+
+  await expect.poll(async () => (await readItems(page)).length).toBe(4);
+  const items = await readItems(page);
+  // 插入即压到最底层，所以数组顺序是插入顺序的倒序
+  expect(items.map((item) => item.name)).toEqual([
+    "霓虹星簇角饰",
+    "四角折角边框",
+    "紫曜铭牌标题框",
+    "霓虹星环边框",
+  ]);
+  // 位图走 png，矢量仍走 svg
+  expect(items.filter((item) => item.src?.startsWith("data:image/png;base64,"))).toHaveLength(3);
+  expect(items.filter((item) => item.src?.startsWith("data:image/svg+xml;base64,"))).toHaveLength(1);
+});
+
+test("把 PNG 装饰拖到画布也能落位（T18）", async ({ page }) => {
+  await openScreen(page);
+  const source = page.locator('[data-decor-id="decor-png-orn-ticks"]');
+  const stage = page.locator(".canvas-stage__surface, .canvas-stage").first();
+
+  await source.dragTo(stage, { targetPosition: { x: 500, y: 360 } });
+  await expect.poll(async () => (await readItems(page)).length).toBe(1);
+  const [item] = await readItems(page);
+  expect(item.name).toBe("碳纤刻度块");
+  expect(item.src).toMatch(/^data:image\/png;base64,/);
 });

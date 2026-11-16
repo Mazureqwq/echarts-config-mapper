@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DECOR_ENTRIES,
+  isDecorPngEntry,
   DECOR_GROUPS,
   DECOR_GROUP_META,
   DEFAULT_DECOR_ACCENT,
@@ -13,6 +14,8 @@ import {
 import type { ImageItem } from "../src/core/model/types";
 
 const CANVAS = { width: 1600, height: 900 };
+/** 矢量条目：T18 之后目录里还混着成品 PNG 条目，走 SVG 断言的只挑矢量那条路。 */
+const SVG_ENTRIES = DECOR_ENTRIES.filter((entry) => !isDecorPngEntry(entry));
 
 describe("装饰素材目录（T17）", () => {
   it("四个分组都非空，且分组顺序稳定", () => {
@@ -50,13 +53,13 @@ describe("装饰素材目录（T17）", () => {
 
 describe("decorSvg 是纯函数", () => {
   it("同输入必然同输出", () => {
-    for (const entry of DECOR_ENTRIES) {
+    for (const entry of SVG_ENTRIES) {
       expect(decorSvg(entry.id, "#29d3ff")).toBe(decorSvg(entry.id, "#29d3ff"));
     }
   });
 
-  it("每个条目都能产出合法 SVG，且 viewBox 与标称尺寸一致", () => {
-    for (const entry of DECOR_ENTRIES) {
+  it("每个矢量条目都能产出合法 SVG，且 viewBox 与标称尺寸一致", () => {
+    for (const entry of SVG_ENTRIES) {
       const svg = decorSvg(entry.id);
       expect(svg.startsWith("<svg"), `${entry.id} 应以 <svg 开头`).toBe(true);
       expect(svg.endsWith("</svg>")).toBe(true);
@@ -69,7 +72,7 @@ describe("decorSvg 是纯函数", () => {
   it("不引用任何外部资源（离线可用）", () => {
     // 唯一允许出现的 URL 是 SVG 命名空间声明本身——它是标识符，不会发起请求
     const NAMESPACE = "http://www.w3.org/2000/svg";
-    for (const entry of DECOR_ENTRIES) {
+    for (const entry of SVG_ENTRIES) {
       const svg = decorSvg(entry.id);
       expect(svg.split(NAMESPACE).join(""), `${entry.id} 引用了外部 URL`).not.toMatch(/https?:\/\//i);
       expect(svg).not.toMatch(/<image/i);
@@ -92,7 +95,7 @@ describe("decorSvg 是纯函数", () => {
   });
 
   it("同一 SVG 内的渐变 / 图案 id 不重复（避免互相覆盖）", () => {
-    for (const entry of DECOR_ENTRIES) {
+    for (const entry of SVG_ENTRIES) {
       const ids = [...decorSvg(entry.id).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
       expect(new Set(ids).size, `${entry.id} 存在重复 id`).toBe(ids.length);
     }

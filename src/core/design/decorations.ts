@@ -21,8 +21,18 @@
  * 3. **离线可用**：全部内联 SVG，转成 data URL 后随工作区持久化，
  *    不引用任何外部图片，导出产物同样可用。
  * 4. **不抢戏**：装饰默认低不透明度 + 强调色单色系，避免盖住图表数据。
+ *
+ * ── 两条交付路径（T18 补充）────────────────────────────────────────────
+ * 条目分两类，同处 `DECOR_ENTRIES`、同一套分组筛选：
+ *   · **矢量条目**：`decorSvg(id, accent)` 现场画，随主题强调色变化。
+ *   · **位图条目**：带 `asset` 字段，指向 `src/assets/decor-png/` 里的成品
+ *     PNG（由 `scripts/sync-decor-png.mjs` 内联成数据 URL）。成品素材的
+ *     光泽 / 渐变 / 纹理是矢量画不出来的，所以它**不吃强调色**——
+ *     `decorSvg()` 对这类 id 一律返回空串，插入时走 `decorPngDataUrl()`。
+ * 两条路径产出同一个 `ImageItem` 形状，画布、撤销、收藏、导出都不区分。
  */
 
+import { decorPngDataUrl } from "./decorPng";
 import { createItem } from "../model/schema";
 import type { ImageItem, ScreenItem } from "../model/types";
 
@@ -43,8 +53,13 @@ export interface DecorEntry {
   readonly group: DecorGroup;
   readonly name: string;
   readonly description: string;
-  /** 标称尺寸；大屏边框忽略它，按画布铺满。 */
+  /** 标称尺寸；大屏边框忽略它，按画布铺满。PNG 条目等于素材原生像素尺寸。 */
   readonly size: { readonly w: number; readonly h: number };
+  /**
+   * 成品 PNG 素材的 slug（对应 `src/assets/decor-png/<slug>.png`）。
+   * 有值时不走 `decorSvg()`，直接用素材字节，强调色对它无效。
+   */
+  readonly asset?: string;
 }
 
 /** 默认强调色：与 `monitor-dark` 主题的 accent 一致，保证未设主题时观感不跳。 */
@@ -105,6 +120,46 @@ export const DECOR_ENTRIES: readonly DecorEntry[] = (
       description: "三段虚线箭头，示意数据流向。" },
     { id: "decor-orn-vert-scale", group: "ornament", name: "竖向刻度尺", size: { w: 40, h: 300 },
       description: "细竖向刻度尺，贴面板左右边当仪表边饰。" },
+
+    // ── 成品 PNG 素材（T18）─────────────────────────────────────────────
+    // 全部为 CC0 / 内容许可可再分发的成品位图，来源见 src/assets/decor-png/README.md。
+    // 标称尺寸 = 素材原生像素尺寸，与 decorPng.ts 里的 IHDR 一致（有测试守着）。
+    { id: "decor-png-border-violet", group: "screen-border", asset: "border-violet",
+      name: "紫曜光轨边框", size: { w: 1150, h: 618 },
+      description: "紫调渐变光轨 + 底部铭牌，成品位图，暗色大屏压得住场。" },
+    { id: "decor-png-border-azure", group: "screen-border", asset: "border-azure",
+      name: "冰蓝竞技边框", size: { w: 1150, h: 618 },
+      description: "冰蓝到宝蓝的金属边条，配底部铭牌，冷色大屏首选。" },
+    { id: "decor-png-border-carbon", group: "screen-border", asset: "border-carbon",
+      name: "碳纤折角边框", size: { w: 1280, h: 721 },
+      description: "黑白碳纤纹理 + 折角切边，中性色可搭配任意主题。" },
+    { id: "decor-png-border-neon", group: "screen-border", asset: "border-neon",
+      name: "霓虹星环边框", size: { w: 1265, h: 704 },
+      description: "双色霓虹发光描边带星簇角饰，适合活动 / 直播类大屏。" },
+
+    { id: "decor-png-title-violet", group: "title-frame", asset: "title-violet",
+      name: "紫曜铭牌标题框", size: { w: 1150, h: 71 },
+      description: "与紫曜边框同源的底部铭牌，取来当分区标题条。", },
+    { id: "decor-png-title-azure", group: "title-frame", asset: "title-azure",
+      name: "冰蓝铭牌标题框", size: { w: 1150, h: 71 },
+      description: "与冰蓝边框同源的底部铭牌，取来当分区标题条。", },
+
+    { id: "decor-png-panel-violet", group: "panel-frame", asset: "panel-violet",
+      name: "紫曜玻璃面板框", size: { w: 520, h: 300 },
+      description: "由紫曜边框九宫格缩放而来的面板框，四角不变形。" },
+    { id: "decor-png-panel-azure", group: "panel-frame", asset: "panel-azure",
+      name: "冰蓝玻璃面板框", size: { w: 520, h: 300 },
+      description: "由冰蓝边框九宫格缩放而来的面板框，四角不变形。" },
+
+    { id: "decor-png-orn-stars", group: "ornament", asset: "orn-stars",
+      name: "霓虹星簇角饰", size: { w: 144, h: 125 },
+      description: "三颗霓虹星星 + 折角光带，贴角点亮画面。" },
+    { id: "decor-png-orn-sideline", group: "ornament", asset: "orn-sideline",
+      name: "紫曜侧光条", size: { w: 32, h: 190 },
+      description: "竖向渐变光条，贴面板左右边当高亮边饰。" },
+    { id: "decor-png-orn-ticks", group: "ornament", asset: "orn-ticks",
+      name: "碳纤刻度块", size: { w: 175, h: 80 },
+      description: "斜切白色刻度块，与碳纤边框同源，可重复排列。" },
   ] as const satisfies readonly DecorEntry[]
 ).map((entry) => Object.freeze(entry));
 
@@ -112,6 +167,11 @@ const DECOR_INDEX: ReadonlyMap<string, DecorEntry> = new Map(DECOR_ENTRIES.map((
 
 export function getDecorEntry(id: string): DecorEntry | undefined {
   return DECOR_INDEX.get(id);
+}
+
+/** 是否为成品 PNG 条目（有 `asset` 就走位图路径）。 */
+export function isDecorPngEntry(entry: DecorEntry): boolean {
+  return typeof entry.asset === "string" && entry.asset.length > 0;
 }
 
 export function isDecorId(id: string): boolean {
@@ -468,8 +528,13 @@ export function createDecorItems(
   const position = options.position;
   if (position && (!Number.isFinite(position.x) || !Number.isFinite(position.y))) return [];
 
-  const svg = decorSvg(id, options.accent ?? DEFAULT_DECOR_ACCENT);
-  if (!svg) return [];
+  const source = isDecorPngEntry(entry)
+    ? decorPngDataUrl(entry.asset as string)
+    : (() => {
+        const svg = decorSvg(id, options.accent ?? DEFAULT_DECOR_ACCENT);
+        return svg ? svgDataUrl(svg) : undefined;
+      })();
+  if (!source) return [];
 
   let w = Math.min(entry.size.w, canvas.width);
   let h = Math.min(entry.size.h, canvas.height);
@@ -489,7 +554,7 @@ export function createDecorItems(
 
   const item = createItem("image", { x, y, w, h }) as ImageItem;
   item.name = entry.name;
-  item.src = svgDataUrl(svg);
+  item.src = source;
   item.fit = "fill";
   return [item];
 }
