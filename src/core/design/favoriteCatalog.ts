@@ -11,6 +11,7 @@
 import { componentRegistry } from "../components/builtins";
 import { builtInBlocks } from "./library";
 import { LAYOUT_BACKGROUND_ENTRIES } from "./layoutBackgrounds";
+import { getDecorEntry } from "./decorations";
 import type { FavoriteKind, FavoriteRef } from "./favorites";
 
 /** 收藏项解析后的展示数据。 */
@@ -59,6 +60,14 @@ export function resolveFavorite(ref: FavoriteRef): ResolvedFavorite {
     return { ref, kind: "block", name: ref.id, description: "该区块已不在当前版本中", available: false };
   }
 
+  if (ref.kind === "decor") {
+    const decor = getDecorEntry(ref.id);
+    if (decor) {
+      return { ref, kind: "decor", name: decor.name, description: decor.description, available: true };
+    }
+    return { ref, kind: "decor", name: ref.id, description: "该装饰素材已不在当前版本中", available: false };
+  }
+
   const layout = LAYOUT_BACKGROUND_ENTRIES.find((entry) => entry.id === ref.id);
   if (layout) {
     return { ref, kind: "layout", name: layout.name, description: layout.description, available: true };
@@ -75,4 +84,5 @@ export const FAVORITE_KIND_LABELS: Readonly<Record<FavoriteKind, string>> = Obje
   component: "组件",
   block: "区块",
   layout: "布局资产",
+  decor: "装饰素材",
 });

@@ -18,6 +18,8 @@ import Icon from "@/shared/ui/Icon.vue";
 import { ASSET_DND_MIME, DESIGN_DND_MIME, clearActiveCanvasDragPayload, getActiveCanvasDragPayload } from "@/shared/dnd";
 import { builtInBlocks, getThemeById, themeCssVariables } from "@/core/design/library";
 import { parseLayoutBackgroundDragPayload } from "@/workbench/layoutBackgroundActions";
+import { parseDecorDragPayload } from "@/workbench/decorActions";
+import { getDecorEntry } from "@/core/design/decorations";
 import type { AlignMode } from "@/stores/documentStore";
 
 const ALIGN_TOOLS: Array<{ mode: AlignMode; icon: string; title: string }> = [
@@ -329,6 +331,17 @@ function dragPlacementPreview(mime: string, raw: string, point: Point): Placemen
   }
 
   if (mime !== DESIGN_DND_MIME) return null;
+  const decorPayload = parseDecorDragPayload(raw);
+  if (decorPayload) {
+    const entry = getDecorEntry(decorPayload.id);
+    if (!entry) return null;
+    // 大屏边框铺满整屏，预览即整屏；其余按标称尺寸
+    const size = entry.group === "screen-border"
+      ? { w: canvas.width, h: canvas.height }
+      : { w: entry.size.w, h: entry.size.h };
+    return framePreview(point, size, canvas, false, entry.group === "screen-border");
+  }
+
   const layoutPayload = parseLayoutBackgroundDragPayload(raw);
   if (layoutPayload?.kind === "layout-background") {
     return { frame: { x: 0, y: 0, w: canvas.width, h: canvas.height }, guides: [], fullCanvas: true };
@@ -760,6 +773,12 @@ function onDrop(ev: DragEvent): void {
   clearDropPreview();
   const designRaw = ev.dataTransfer?.getData(DESIGN_DND_MIME);
   if (designRaw) {
+    const decorPayload = parseDecorDragPayload(designRaw);
+    if (decorPayload) {
+      doc.insertDecoration(decorPayload.id, snapPlacementPoint(canvasPoint(ev)));
+      return;
+    }
+
     const backgroundPayload = parseLayoutBackgroundDragPayload(designRaw);
     if (backgroundPayload) {
       if (backgroundPayload.kind === "layout-background") {

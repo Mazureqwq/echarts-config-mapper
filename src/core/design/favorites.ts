@@ -19,8 +19,8 @@
  *    重复条目，避免坏数据一路带到 UI。
  */
 
-/** 可收藏的资源类别。刻意只做这三类：它们都已存在于内置资源表里。 */
-export const FAVORITE_KINDS = Object.freeze(["component", "block", "layout"] as const);
+/** 可收藏的资源类别。都对应内置资源表里的稳定 id（decor 见 decorations.ts）。 */
+export const FAVORITE_KINDS = Object.freeze(["component", "block", "layout", "decor"] as const);
 export type FavoriteKind = (typeof FAVORITE_KINDS)[number];
 
 export interface FavoriteRef {

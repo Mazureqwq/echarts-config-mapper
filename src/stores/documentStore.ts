@@ -29,6 +29,7 @@ import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates"
 import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
 import { applyThemeToScreen, builtInBlocks, getThemeById, instantiateComponentBlock } from "@/core/design/library";
+import { createDecorItems } from "@/core/design/decorations";
 import { createLayoutAssetItems, createLayoutBackgroundItems } from "@/core/design/layoutBackgrounds";
 import {
   applyStyleToItem,
@@ -137,6 +138,16 @@ export const useDocumentStore = defineStore("document", {
     styleClipboard: null as StyleClipboardPayload | null,
     liveStatus: {} as Record<string, LiveStatus>,
     history: markRaw(new History<Workspace>({ limit: HISTORY_LIMIT, clone: (v) => deepClone(v) })),
+    /**
+     * 历史栈的版本计数。
+     *
+     * `history` 是 `markRaw` 的（不能把 History 实例交给 Pinia 深度代理），
+     * 于是 `history.canUndo` 这类 getter 对 Vue **不可追踪**——顶栏的撤销按钮
+     * 只依赖它，结果就是编辑之后按钮仍然禁用、用户点不动。
+     * 所有改动历史栈的 action 都会自增此计数，`canUndo` / `canRedo` getter
+     * 读一下它来建立依赖。
+     */
+    historyVersion: 0,
   }),
   getters: {
     currentScreen(state): Screen | null {
@@ -146,13 +157,25 @@ export const useDocumentStore = defineStore("document", {
     items(): ScreenItem[] {
       return this.currentScreen?.items ?? [];
     },
+    /** 可撤销（响应式：读 historyVersion 建立依赖，见 state 里的说明）。 */
+    canUndo(): boolean {
+      void this.historyVersion;
+      return this.history.canUndo;
+    },
+    /** 可重做（同上）。 */
+    canRedo(): boolean {
+      void this.historyVersion;
+      return this.history.canRedo;
+    },
   },
   actions: {
     initHistory() {
       this.history.push(useWorkspaceStore().workspace);
+      this.historyVersion += 1;
     },
     saveSnapshot() {
       this.history.push(useWorkspaceStore().workspace);
+      this.historyVersion += 1;
     },
     commit() {
       this.saveSnapshot();
@@ -326,6 +349,38 @@ export const useDocumentStore = defineStore("document", {
         item.frame.w <= 0 || item.frame.h <= 0
       )) return [];
 
+      screen.items.unshift(...items);
+      this.selectedIds = items.map((item) => item.id);
+      this.commit();
+      return this.selectedIds;
+    },
+    /**
+     * T17：插入内置装饰素材。
+     *
+     * 与 `insertLayoutAsset` 的区别：装饰按自己的分组决定落位
+     * （大屏边框铺满画布，其余按标称尺寸居中），强调色跟随当前屏幕主题。
+     */
+    insertDecoration(id: string, position?: { x: number; y: number }): string[] {
+      const screen = this.currentScreen;
+      if (!screen) return [];
+      const accent = getThemeById(screen.themeId)?.tokens.accent;
+      const items = createDecorItems(id, screen.canvas, { position, accent });
+      if (!items.length) return [];
+
+      const usedIds = new Set(screen.items.map((item) => item.id));
+      for (const item of items) {
+        let itemId = newId();
+        while (usedIds.has(itemId)) itemId = newId();
+        usedIds.add(itemId);
+        item.id = itemId;
+        Object.assign(item.frame, clampFrameToCanvas(item.frame, screen.canvas.width, screen.canvas.height));
+      }
+      if (items.some((item) =>
+        ![item.frame.x, item.frame.y, item.frame.w, item.frame.h, item.frame.rotate].every(Number.isFinite) ||
+        item.frame.w <= 0 || item.frame.h <= 0
+      )) return [];
+
+      // unshift：装饰是背景层，应压在图表下面
       screen.items.unshift(...items);
       this.selectedIds = items.map((item) => item.id);
       this.commit();
@@ -849,12 +904,14 @@ export const useDocumentStore = defineStore("document", {
       const prev = this.history.undo();
       if (prev === null) return;
       restoreWorkspace(useWorkspaceStore().workspace, prev);
+      this.historyVersion += 1;
       useWorkspaceStore().scheduleSave();
     },
     redo() {
       const next = this.history.redo();
       if (next === null) return;
       restoreWorkspace(useWorkspaceStore().workspace, next);
+      this.historyVersion += 1;
       useWorkspaceStore().scheduleSave();
     },
   },

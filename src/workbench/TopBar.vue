@@ -124,10 +124,10 @@ function goPlay(): void {
     </span>
 
     <div class="topbar__center">
-      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.history.canUndo" title="撤销 (Ctrl+Z)" @click="doc.undo()">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.canUndo" title="撤销 (Ctrl+Z)" @click="doc.undo()">
         <Icon name="undo" :size="15" />
       </button>
-      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.history.canRedo" title="重做 (Ctrl+Y)" @click="doc.redo()">
+      <button class="cf-button cf-button--plain cf-button--small topbar__btn" :disabled="!doc.canRedo" title="重做 (Ctrl+Y)" @click="doc.redo()">
         <Icon name="redo" :size="15" />
       </button>
       <button class="cf-button cf-button--plain cf-button--small topbar__btn" title="查找画布元素 (Ctrl+F)" @click="ui.setSearchVisible(true)">查找元素</button>

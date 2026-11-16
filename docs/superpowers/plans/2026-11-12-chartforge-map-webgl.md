@@ -939,6 +939,81 @@ e2e 夹具屏（无种子，需先跑一次 spec）：
 **演示入口**：`http://localhost:5174/?demo=t16#/workbench/t16-favorites-demo`
 （种子 `examples/screens/demo-seed-t16.js` 预置 2 条有效 + 1 条故意失效的收藏）。
 
+### Task 17: 内置装饰素材扩充（仿 DataV 设计库）
+
+用户要求：「仿照阿里云 DataV 设计库再内置一些大屏边框、标题框、背景框、装饰素材」。
+
+**现状缺口**：`layoutBackgrounds.ts` 已有 16 个装饰，但**平铺成一列、无分类**，
+且只有「信息面板框 / 标题带 / 角标装饰条」三个是结构化组件，其余是零散 SVG。
+继续往那个平铺列表里续条目只会越滚越乱。
+
+#### 新增模块 `src/core/design/decorations.ts`（23 个，四类分组）
+
+| 分组 | 数量 | 内容 |
+|---|---|---|
+| 大屏边框 `screen-border` | 5 | 四角折角 / 扫描光带 / 六边齿 / 流光接缝 / 刻度导轨 |
+| 标题框 `title-frame` | 5 | 斜切 / 双轨 / 缺口 / 六角胶囊 / 渐隐锥形 |
+| 背景框 `panel-frame` | 6 | 玻璃 / 虚线科技 / 切角 / 页签 / 蜂巢网点 / 波浪底座 |
+| 装饰素材 `ornament` | 7 | LED 灯带 / 脉冲折线 / 三角角饰 / 同心环 / 网格点阵 / 流向箭头 / 竖向刻度尺 |
+
+**设计约束**：
+
+1. **纯函数** `decorSvg(id, accent, options)`——只吃 id 与强调色，无 DOM、无随机、
+   无时间，同输入必然同输出，可直接单测。
+2. **强调色跟随主题**：插入时读当前屏幕 `themeId` 的 `tokens.accent`，
+   非法颜色回退 `DEFAULT_DECOR_ACCENT` 而不是拼进 SVG（防注入，有测试守）。
+3. **落位由分组决定**：大屏边框**铺满画布**（位置概念对它无意义），
+   其余按标称尺寸居中并夹在画布内。
+4. **离线可用**：全部内联 SVG → data URL，不引用任何外部资源。
+5. **压在最底层**：装饰是背景层，`insertDecoration` 用 `unshift` 插到 items 前面。
+6. **缩略图所见即所插**：目录直接用 `decorSvg` 产出缩略图，不存在
+   「缩略图另画一张、插进去是另一张」的偏差。
+
+#### 缩略图可读性：`crispStrokes`
+
+第一版缩略图**全是一块黑**。原因：480×300 的装饰缩进 60px 卡片，
+2px 描边被等比压成 0.25px，肉眼近乎不可见。
+修法是给 `decorSvg` 加 `crispStrokes` 选项，输出
+`vector-effect: non-scaling-stroke`（描边按显示像素绘制）；
+缩略图底衬也改成深色径向渐变 + 亮度提升，浅色描边才立得住。
+
+#### 顺带修掉一个真实缺陷：撤销/重做按钮永远禁用
+
+`documentStore.history` 是 `markRaw(new History(...))`（不能把实例交给 Pinia
+深度代理），于是 `history.canUndo` 对 Vue **不可追踪**；而顶栏按钮**只**依赖它。
+结果：任何编辑之后撤销按钮都停在 disabled，用户点不动。
+这是既有缺陷，被本轮 e2e 撞出来（我写「装饰可撤销」时点不到按钮）。
+
+修法：store 加 `historyVersion` 计数，`initHistory` / `saveSnapshot` / `undo` /
+`redo` 都自增；暴露可追踪的 `canUndo` / `canRedo` getter（内部读一次计数建立依赖），
+顶栏改用它。测试用 `watchEffect` 断言依赖真的建立了（`nextTick` 后应看到 `[false, true]`）。
+
+#### 收藏打通
+
+`FAVORITE_KINDS` 增加 `decor`，`favoriteCatalog` 增加 decor 解析分支。
+于是装饰素材和组件/区块/布局一样可以 ☆ 收藏、从「我的收藏」一键插入。
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| RED | `tests/design-decorations.spec.ts`（17 条）→ 模块不存在整文件失败 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run` | 69 文件 / **658** 测试全绿（Task 16 的 627 + 31） |
+| `pnpm build` | exit 0 |
+| `pnpm exec playwright test` | **44/44**（新增 `e2e/design-decorations.spec.ts` 7 条，37 → 44） |
+| `git diff --check` | 0 |
+
+**e2e 覆盖的七个真实场景**：分组筛选计数、大屏边框铺满且落底层、
+背景框按标称尺寸居中、连续插入 4 个 id 唯一、可撤销（验证按钮真的可点）、
+收藏并在「我的收藏」一键插入、拖到画布指定位置。
+
+**证据**：`/home/user/t17-shots/01-decor-catalog.png`（目录全貌）、
+`02-decor-groups.png`（分组与缩略图）、`03-title-frames.png`（标题框 5 个）、
+`04-panel-frames.png`（背景框 6 个）、`05-on-canvas.png`（四种装饰真实落到画布）。
+
+**演示入口**：`http://localhost:5174/?demo=t17#/workbench/t17-decor-demo`
+
 ## 执行方式
 
 - `superpowers:executing-plans` 会话内连续执行（无子代理）；四道 D6 门（M1–M4 截图）为**计划内停止点**：停止 → 呈交截图 → 收到「继续/停/改」→ 恢复/返工。

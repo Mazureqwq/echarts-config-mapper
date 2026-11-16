@@ -10,6 +10,8 @@ import type { DesignAsset } from "@/core/model/types";
 import { LAYOUT_BACKGROUND_ENTRIES, type LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
 import { insertLayoutBackgroundEntry } from "@/workbench/layoutBackgroundActions";
 import LayoutBackgroundCatalog from "@/workbench/components/LayoutBackgroundCatalog.vue";
+import DecorCatalog from "@/workbench/components/DecorCatalog.vue";
+import type { DecorEntry } from "@/core/design/decorations";
 import { BUILT_IN_SUITES, suiteForScreen } from "@/core/design/suites";
 import type { FavoriteRef } from "@/core/design/favorites";
 import { FAVORITE_KIND_LABELS, resolveFavorites, type ResolvedFavorite } from "@/core/design/favoriteCatalog";
@@ -52,6 +54,19 @@ function addLayoutBackground(entry: LayoutBackgroundEntry): void {
     insertLayoutAsset: (id, position) => doc.insertLayoutAsset(id, position),
   });
 }
+/** T17：插入内置装饰（大屏边框铺满画布，其余按标称尺寸居中）。 */
+function addDecoration(entry: DecorEntry): void {
+  error.value = "";
+  notice.value = "";
+  if (!requireScreen()) return;
+  const ids = doc.insertDecoration(entry.id);
+  if (!ids.length) {
+    error.value = `「${entry.name}」无法插入当前画布。`;
+    return;
+  }
+  notice.value = `已插入「${entry.name}」。`;
+}
+
 function applyBackgroundPreset(id: string): void {
   error.value = "";
   if (!requireScreen()) return;
@@ -84,6 +99,10 @@ function insertFavorite(entry: ResolvedFavorite): void {
   }
   if (entry.kind === "block") {
     if (requireScreen()) doc.insertBlock(entry.ref.id);
+    return;
+  }
+  if (entry.kind === "decor") {
+    if (requireScreen()) doc.insertDecoration(entry.ref.id);
     return;
   }
   if (entry.kind === "layout") {
@@ -228,6 +247,8 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
     </section>
 
     <LayoutBackgroundCatalog @select="addLayoutBackground" @apply-background="applyBackgroundPreset" />
+
+    <DecorCatalog @select="addDecoration" />
 
     <section class="library-section">
       <header class="section-head">

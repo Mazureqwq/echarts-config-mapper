@@ -11,14 +11,16 @@ import { resolveFavorite, resolveFavorites } from "../src/core/design/favoriteCa
 import { componentRegistry } from "../src/core/components/builtins";
 import { builtInBlocks } from "../src/core/design/library";
 import { LAYOUT_BACKGROUND_ENTRIES } from "../src/core/design/layoutBackgrounds";
+import { DECOR_ENTRIES } from "../src/core/design/decorations";
 
 const kpi: FavoriteRef = { kind: "component", id: "chartforge.kpi", version: 1 };
 const titleBlock: FavoriteRef = { kind: "block", id: "title-panel", version: 1 };
 const layout: FavoriteRef = { kind: "layout", id: "monitor-main-side" };
 
 describe("收藏引用（T16 P1-4）", () => {
-  it("只支持组件 / 区块 / 布局三类引用", () => {
-    expect([...FAVORITE_KINDS]).toEqual(["component", "block", "layout"]);
+  it("支持组件 / 区块 / 布局 / 装饰四类引用", () => {
+    // T17 起装饰素材也可收藏；顺序即 UI 中「我的收藏」的稳定顺序
+    expect([...FAVORITE_KINDS]).toEqual(["component", "block", "layout", "decor"]);
   });
 
   it("favoriteKey 把 kind/id/version 归一为一个稳定字符串", () => {
@@ -123,6 +125,13 @@ describe("resolveFavorite（引用 → 可展示条目）", () => {
     expect(resolved!.name).toBe("主辅分栏");
   });
 
+  it("装饰引用能解析出名称与描述（T17）", () => {
+    const resolved = resolveFavorite({ kind: "decor", id: "decor-panel-glass" });
+    expect(resolved).toMatchObject({ available: true, kind: "decor", name: "玻璃面板框" });
+    expect(resolved!.description.length).toBeGreaterThan(0);
+    expect(resolveFavorite({ kind: "decor", id: "decor-ghost" })).toMatchObject({ available: false });
+  });
+
   it("引用已失效（组件被删 / 版本不存在）时标记不可用，但保留引用本身", () => {
     const gone = resolveFavorite({ kind: "component", id: "chartforge.does-not-exist", version: 1 });
     expect(gone).toMatchObject({ available: false });
@@ -155,6 +164,12 @@ describe("收藏引用与真实注册表对齐（防假引用）", () => {
     }
     for (const entry of LAYOUT_BACKGROUND_ENTRIES) {
       expect(resolveFavorite({ kind: "layout", id: entry.id })).toMatchObject({ available: true });
+    }
+    for (const entry of DECOR_ENTRIES) {
+      expect(resolveFavorite({ kind: "decor", id: entry.id }), `${entry.id} 应可解析`).toMatchObject({
+        available: true,
+        name: entry.name,
+      });
     }
   });
 });
