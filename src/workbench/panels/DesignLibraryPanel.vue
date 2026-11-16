@@ -2,15 +2,17 @@
 import { computed, ref } from "vue";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { BUILT_IN_BLOCKS, BUILT_IN_THEMES } from "@/core/design/library";
+import { BUILT_IN_THEMES, builtInBlocks } from "@/core/design/library";
 import { getBuiltInBackgroundPreset } from "@/core/design/backgroundPresets";
 import { compressDesignImageFile, getDesignAssetTotalBytes } from "@/core/design/assets";
 import { DESIGN_DND_MIME, setActiveCanvasDragPayload } from "@/shared/dnd";
 import type { DesignAsset } from "@/core/model/types";
-import type { LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
+import { LAYOUT_BACKGROUND_ENTRIES, type LayoutBackgroundEntry } from "@/core/design/layoutBackgrounds";
 import { insertLayoutBackgroundEntry } from "@/workbench/layoutBackgroundActions";
 import LayoutBackgroundCatalog from "@/workbench/components/LayoutBackgroundCatalog.vue";
 import { BUILT_IN_SUITES, suiteForScreen } from "@/core/design/suites";
+import type { FavoriteRef } from "@/core/design/favorites";
+import { FAVORITE_KIND_LABELS, resolveFavorites, type ResolvedFavorite } from "@/core/design/favoriteCatalog";
 
 const doc = useDocumentStore();
 const ws = useWorkspaceStore();
@@ -19,9 +21,14 @@ const error = ref("");
 const notice = ref("");
 const assets = computed(() => ws.designAssets);
 const usedMiB = computed(() => (getDesignAssetTotalBytes(assets.value) / 1024 / 1024).toFixed(1));
+const blocks = computed(() => builtInBlocks());
 const activeTheme = computed(() => doc.currentScreen?.themeId ?? "");
 // T15：当前套件（未设置时回退默认套件）
 const activeSuite = computed(() => (doc.currentScreen ? suiteForScreen(doc.currentScreen).id : ""));
+
+function getLayoutEntry(id: string): LayoutBackgroundEntry | undefined {
+  return LAYOUT_BACKGROUND_ENTRIES.find((entry) => entry.id === id);
+}
 
 function requireScreen(): boolean {
   if (doc.currentScreen) return true;
@@ -58,6 +65,48 @@ function applyTheme(id: string): void {
   if (!requireScreen()) return;
   doc.applyTheme(id);
   notice.value = "主题已应用；现有元素位置与显式样式保持不变。";
+}
+
+/**
+ * T16：「我的收藏」。
+ *
+ * 收藏只存引用，因此这里必须**重新解析**成可展示条目再插入——
+ * 绝不把内容复制进收藏，否则内置组件升级后收藏里会留陈旧副本。
+ */
+const resolvedFavorites = computed<ResolvedFavorite[]>(() => resolveFavorites(ws.favorites));
+
+/** 点击收藏项：按类别走既有的插入路径（不新开一套插入逻辑）。 */
+function insertFavorite(entry: ResolvedFavorite): void {
+  error.value = "";
+  if (!entry.available) {
+    error.value = `「${entry.name}」已失效，请移除后再试。`;
+    return;
+  }
+  if (entry.kind === "block") {
+    if (requireScreen()) doc.insertBlock(entry.ref.id);
+    return;
+  }
+  if (entry.kind === "layout") {
+    if (!requireScreen()) return;
+    const layout = getLayoutEntry(entry.ref.id);
+    if (layout) addLayoutBackground(layout);
+    return;
+  }
+  // component
+  if (requireScreen()) doc.addComponent(entry.ref.id, entry.ref.version ?? 1);
+}
+
+function removeFavorite(ref: FavoriteRef): void {
+  error.value = "";
+  ws.removeFavorite(ref);
+}
+
+function toggleBlockFavorite(blockId: string, version: number): void {
+  ws.toggleFavorite({ kind: "block", id: blockId, version });
+}
+
+function isBlockFavorited(blockId: string, version: number): boolean {
+  return ws.isFavorite({ kind: "block", id: blockId, version });
 }
 
 /** T15：显式套用套件 —— 只改画布背景与 suiteId，已有元素原样保留。 */
@@ -117,6 +166,45 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
 
 <template>
   <div class="design-library">
+    <section class="library-section" data-favorites-section>
+      <header class="section-head">
+        <div><h3>我的收藏</h3><p>只存引用；点一下即插入，星标可随时取消</p></div>
+      </header>
+      <p v-if="resolvedFavorites.length === 0" class="favorites-empty">
+        还没有收藏。在「组件」卡片或下方区块上点 ☆ 即可加入。
+      </p>
+      <ul v-else class="favorites-list">
+        <li
+          v-for="entry in resolvedFavorites"
+          :key="`${entry.kind}:${entry.ref.id}`"
+          class="favorites-item"
+          :class="{ 'favorites-item--stale': !entry.available }"
+          :data-favorite-key="`${entry.kind}:${entry.ref.id}`"
+        >
+          <button
+            class="favorites-insert"
+            type="button"
+            :disabled="!entry.available"
+            :aria-label="`插入收藏 ${entry.name}`"
+            @click="insertFavorite(entry)"
+          >
+            <span class="favorites-kind">{{ FAVORITE_KIND_LABELS[entry.kind] }}</span>
+            <span class="favorites-copy">
+              <strong>{{ entry.name }}</strong>
+              <small>{{ entry.available ? entry.description : "已失效 · 该资源不在当前版本中" }}</small>
+            </span>
+          </button>
+          <button
+            class="favorites-remove"
+            type="button"
+            :aria-label="`取消收藏 ${entry.name}`"
+            title="取消收藏"
+            @click="removeFavorite(entry.ref)"
+          >×</button>
+        </li>
+      </ul>
+    </section>
+
     <section class="library-section" data-suite-section>
       <header class="section-head">
         <div><h3>可视化套件</h3><p>一次性统一画布、地图与新建组件的风格；已有元素保持不变</p></div>
@@ -166,17 +254,26 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
       <header class="section-head">
         <div><h3>可复用区块</h3><p>插入为副本；不会替换已有元素</p></div>
       </header>
-      <button
-        v-for="block in BUILT_IN_BLOCKS"
-        :key="block.id"
-        class="resource-row"
-        type="button"
-        draggable="true"
-        @dragstart="startDrag($event, 'block', block.id)"
-        @click="addBlock(block.id)"
-      >
-        <span class="resource-icon">▤</span><span class="resource-copy"><strong>{{ block.name }}</strong><small>{{ block.description }}</small></span><span class="insert-mark">＋</span>
-      </button>
+      <div v-for="block in blocks" :key="block.id" class="resource-cell">
+        <button
+          class="resource-row"
+          type="button"
+          draggable="true"
+          @dragstart="startDrag($event, 'block', block.id)"
+          @click="addBlock(block.id)"
+        >
+          <span class="resource-icon">▤</span><span class="resource-copy"><strong>{{ block.name }}</strong><small>{{ block.description }}</small></span><span class="insert-mark">＋</span>
+        </button>
+        <button
+          class="resource-fav"
+          type="button"
+          :class="{ 'resource-fav--on': isBlockFavorited(block.id, block.version) }"
+          :aria-pressed="isBlockFavorited(block.id, block.version)"
+          :aria-label="`${isBlockFavorited(block.id, block.version) ? '取消收藏' : '收藏'} ${block.name}`"
+          :data-block-favorite-id="block.id"
+          @click.stop="toggleBlockFavorite(block.id, block.version)"
+        >{{ isBlockFavorited(block.id, block.version) ? "★" : "☆" }}</button>
+      </div>
     </section>
 
     <section class="library-section">
@@ -204,6 +301,26 @@ async function removeAsset(asset: DesignAsset): Promise<void> {
 </template>
 
 <style scoped>
+.favorites-empty { margin: 0; padding: 8px 9px; border: 1px dashed var(--cf-border); border-radius: 6px; color: var(--cf-text-2); font-size: 10px; line-height: 1.5; }
+.favorites-list { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.favorites-item { display: flex; align-items: stretch; gap: 4px; }
+.favorites-item--stale { opacity: .6; }
+.favorites-insert { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--cf-border); border-radius: 6px; background: var(--cf-bg); color: inherit; cursor: pointer; font: inherit; text-align: left; }
+.favorites-insert:hover:not(:disabled) { border-color: color-mix(in srgb, var(--cf-primary) 60%, var(--cf-border)); }
+.favorites-insert:disabled { cursor: not-allowed; }
+.favorites-kind { flex: 0 0 auto; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--cf-primary) 14%, transparent); color: var(--cf-primary); font-size: 9px; }
+.favorites-copy { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
+.favorites-copy strong { font-size: 11px; font-weight: 600; }
+.favorites-copy small { overflow: hidden; color: var(--cf-text-2); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.favorites-remove { flex: 0 0 auto; width: 24px; border: 1px solid var(--cf-border); border-radius: 6px; background: transparent; color: var(--cf-text-2); cursor: pointer; font-size: 13px; line-height: 1; }
+.favorites-remove:hover { border-color: #e2606a; color: #e2606a; }
+.resource-cell { position: relative; display: flex; align-items: stretch; gap: 4px; }
+.resource-cell .resource-row { flex: 1 1 auto; min-width: 0; }
+.resource-fav { flex: 0 0 auto; width: 22px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--cf-text-2); cursor: pointer; font-size: 12px; line-height: 1; opacity: .55; }
+.resource-cell:hover .resource-fav { opacity: 1; }
+.resource-fav--on { color: #f4c542; opacity: 1; }
+.resource-fav:hover { border-color: var(--cf-border); color: #f4c542; }
+
 .design-library { display: flex; flex-direction: column; gap: 18px; padding: 12px; color: var(--cf-text); }
 .library-section { min-width: 0; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }

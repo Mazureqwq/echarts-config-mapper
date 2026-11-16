@@ -28,7 +28,7 @@ import { setPath } from "@/core/model/path";
 import { placeholdersToClear, PLACEHOLDER_PREFIX } from "@/core/model/templates";
 import { exportJson } from "@/core/storage/workspaceRepo";
 import { useWorkspaceStore } from "./workspaceStore";
-import { BUILT_IN_BLOCKS, applyThemeToScreen, getThemeById, instantiateComponentBlock } from "@/core/design/library";
+import { applyThemeToScreen, builtInBlocks, getThemeById, instantiateComponentBlock } from "@/core/design/library";
 import { createLayoutAssetItems, createLayoutBackgroundItems } from "@/core/design/layoutBackgrounds";
 import {
   applyStyleToItem,
@@ -237,7 +237,7 @@ export const useDocumentStore = defineStore("document", {
     },
     insertBlock(blockId: string, position?: { x: number; y: number }): string[] {
       const screen = this.currentScreen;
-      const block = BUILT_IN_BLOCKS.find((entry) => entry.id === blockId);
+      const block = builtInBlocks().find((entry) => entry.id === blockId);
       if (!screen || !block) return [];
       const xs = block.items.map((item) => item.frame.x);
       const ys = block.items.map((item) => item.frame.y);

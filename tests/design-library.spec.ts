@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { BUILT_IN_BLOCKS, BUILT_IN_THEMES, applyThemeChartPalette, applyThemeToScreen, instantiateComponentBlock } from "../src/core/design/library";
+import { builtInBlocks, BUILT_IN_THEMES, applyThemeChartPalette, applyThemeToScreen, instantiateComponentBlock } from "../src/core/design/library";
 import { createDesignAsset, addDesignAssetToWorkspace, normalizeDesignAssets, sanitizeSvg, MAX_DESIGN_ASSET_BYTES, MAX_DESIGN_ASSETS_TOTAL_BYTES } from "../src/core/design/assets";
 import { createChartSpec, createScreen, createWorkspace, normalizeWorkspace } from "../src/core/model/schema";
 import { buildPackagePayload } from "../src/core/export/snapshot";
@@ -49,8 +49,8 @@ describe("design library, themes and bounded local assets", () => {
   });
 
   it("inserts built-in blocks with fresh item IDs and offset frames without mutating definitions", () => {
-    expect(BUILT_IN_BLOCKS.map((block) => block.id)).toEqual(["title-panel", "kpi-group"]);
-    const block = BUILT_IN_BLOCKS[0]!;
+    expect(builtInBlocks().map((block) => block.id)).toEqual(["title-panel", "kpi-group"]);
+    const block = builtInBlocks()[0]!;
     const first = instantiateComponentBlock(block, { x: 40, y: 25 }, (index) => `new-${index + 1}`);
     const second = instantiateComponentBlock(block, { x: 80, y: 50 }, (index) => `copy-${index}-${Math.random()}`);
     expect(first.map((item) => item.id)).toEqual(block.items.map((_, index) => `new-${index + 1}`));
@@ -125,10 +125,10 @@ describe("design library, themes and bounded local assets", () => {
       const existing = makeText("existing", 100);
       doc.addItem(existing);
       const firstIds = doc.insertBlock("title-panel", { x: 960, y: 540 });
-      expect(firstIds).toHaveLength(BUILT_IN_BLOCKS[0]!.items.length);
+      expect(firstIds).toHaveLength(builtInBlocks()[0]!.items.length);
       expect(screen.items.some((item) => item.id === existing.id)).toBe(true);
       const secondIds = doc.insertBlock("title-panel", { x: 960, y: 540 });
-      expect(screen.items).toHaveLength(1 + BUILT_IN_BLOCKS[0]!.items.length * 2);
+      expect(screen.items).toHaveLength(1 + builtInBlocks()[0]!.items.length * 2);
       expect(new Set([...firstIds, ...secondIds]).size).toBe(firstIds.length + secondIds.length);
     } finally {
       vi.useRealTimers();

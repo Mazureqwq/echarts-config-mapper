@@ -862,6 +862,83 @@ e2e 夹具屏（无种子，需先跑一次 spec）：
 **UI 位置**：`DesignLibraryPanel` 顶部新增「可视化套件」区（`[data-suite-section]`），
 置于「布局底板 / 画布背景」之前——它是全局开关，不应埋在面板底部。
 
+### Task 16: 设计库 P1-4（我的收藏）
+
+来源：同一份缺口对齐稿的 **P1-4「我的收藏」**。
+缺口稿 §3.4 把它列为 ChartForge 唯一标 ❌ 的设计库交互项，§4 给出边界：
+**只存引用（kind + id + version），不复制内容**。
+
+**要解决的问题**：组件库 / 区块 / 布局资产全是平铺的。用得熟的少数几个
+每次都要重新翻找、重新挑分类。收藏就是「把我常用的钉在顶上」。
+
+#### 分层：纯逻辑 / 解析层 / 状态层 三层，且方向单向
+
+| 文件 | 职责 | 允许依赖 |
+|---|---|---|
+| `src/core/design/favorites.ts` | 引用类型、`favoriteKey`、`toggleFavorite`、`normalizeFavorites` | **不得** import 任何资源表 |
+| `src/core/design/favoriteCatalog.ts` | `resolveFavorite`（引用 → 可展示条目） | 组件注册表 / 内置区块 / 布局表 |
+| `src/stores/workspaceStore.ts` | 只存 `favorites: FavoriteRef[]`，不解析 | `favorites.ts` |
+
+这不是风格偏好，是被 TDZ 崩溃逼出来的架构约束（见下）。
+
+#### 边界
+
+- **只存引用**：载荷就是 `{kind, id, version?}`，测试断言 `Object.keys(...)` 恰好是这三个。
+- **失效引用不静默消失**：解析不到时返回 `available: false`、name 回落 id、
+  UI 灰显并标注「已失效 · 该资源不在当前版本中」，由用户自己 `×` 移除。
+  直接过滤掉会让收藏「凭空少了东西」，用户无从察觉。
+- **收藏不进画布历史栈**：撤销应回退画布编辑，而不是回退「我点了个星」。
+  因此走 `scheduleSave()` 而非 `documentStore.commit()`。
+- **可收藏范围**：内置组件（`source === "component"`）、内置区块、布局资产。
+  图表类型与基础元素不给星标——它们没有稳定 id/version，收藏了也无法可靠解析。
+
+#### 三个真实缺陷（均由本轮测试暴露并修复）
+
+1. **循环依赖 TDZ（两次）**：
+   `schema → favorites → library → schema` 直接崩
+   `Cannot access 'DEFAULT_FRAME' before initialization`。
+   第一次修法（把解析拆到 `favoriteCatalog.ts`）不够——真正致命的边是
+   `builtins → MapSceneWidget.vue → workspaceStore → favoriteCatalog → library → schema`：
+   **core 组件反向 import 了 store**。最终修法两步：
+   - `workspaceStore` 不再 import 解析层（解析交给 UI 面板），切断 `store → catalog`；
+   - `favorites.ts` 去掉对解析层的类型 re-export（`export type {…} from` 在
+     rolldown/vite 下仍会建立模块边，是这次崩第二次的原因）。
+2. **`library.ts` 模块顶层就调用 `createItem()`**：
+   `export const BUILT_IN_BLOCKS = [makeTitlePanelBlock(), …]` 在模块求值期
+   读 `schema.DEFAULT_FRAME`，任何提前抵达该模块的 import 链都会 TDZ。
+   改为惰性 `builtInBlocks()`（首次使用时构建并缓存），6 处调用点同步迁移。
+   这是**根因修复**，不是绕过。
+3. **既有 UI 测试的全局前置缺失**：`component-catalog-ui.spec.ts` 是 SSR 渲染，
+   卡片新增星标后需要 Pinia；补 `beforeEach(() => setActivePinia(createPinia()))`。
+   `layout-background-ui.spec.ts` 的按钮计数 26 → 28（新增 2 个布局星标），
+   同时显式断言 `.layout-fav` 出现 2 次，避免以后数字变了却不知道变了什么。
+
+**门禁**
+
+| 门禁 | 实测 |
+|---|---|
+| RED | `tests/design-favorites.spec.ts`（17 条）→ 模块不存在整文件失败；`tests/design-favorites-store.spec.ts`（8 条）→ 8 红 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm vitest run` | 67 文件 / **627** 测试全绿（Task 15 的 602 + 25） |
+| `pnpm build` | exit 0 |
+| `pnpm exec playwright test` | **37/37**（新增 `e2e/design-favorites.spec.ts` 5 条，总 e2e 32 → 37） |
+| `git diff --check` | 0 |
+
+**e2e 覆盖的五个真实场景**：
+
+1. 设计库区块点 ☆ → 收藏区出现条目 → 一键插入画布
+2. 组件点 ☆ → **刷新页面后收藏仍在**（真的落盘，不是内存态）
+3. 组件收藏一键插入画布
+4. 注入一条指向不存在组件的收藏 → 灰显「已失效」+ 插入按钮禁用 + 可 `×` 移除
+5. 取消收藏：星标 `aria-pressed` 与收藏区同步移除
+
+**证据**：`/home/user/t16-shots/01-favorites-section.png`（收藏区置顶，含一条失效项）、
+`02-star-on-cards.png`（指标卡实心 ★、其余空心 ☆、图表/地图卡无星标）、
+`03-star-toggled.png`、`04-inserted-from-favorite.png`（从收藏一键插入的标题栏落在画布上）。
+
+**演示入口**：`http://localhost:5174/?demo=t16#/workbench/t16-favorites-demo`
+（种子 `examples/screens/demo-seed-t16.js` 预置 2 条有效 + 1 条故意失效的收藏）。
+
 ## 执行方式
 
 - `superpowers:executing-plans` 会话内连续执行（无子代理）；四道 D6 门（M1–M4 截图）为**计划内停止点**：停止 → 呈交截图 → 收到「继续/停/改」→ 恢复/返工。

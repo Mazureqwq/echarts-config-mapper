@@ -212,6 +212,8 @@ export function importJson(text: string, mode: "merge" | "replace"): Workspace {
     version: 2,
     assets: [...current.assets, ...merged.assets],
     designAssets: [...current.designAssets, ...merged.designAssets],
+    // 导入不覆盖用户已有收藏：收藏是「我的」，不是被导入的内容
+    favorites: [...current.favorites],
     screens: [...current.screens, ...merged.screens],
     datasets: [...current.datasets, ...merged.datasets],
     settings: { ...current.settings },

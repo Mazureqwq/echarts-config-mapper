@@ -21,6 +21,7 @@ import { THUMBNAIL_VERSION } from "@/core/storage/thumbnail";
 import { DatasetRuntime } from "@/core/data/datasetRuntime";
 import { addDesignAssetToWorkspace, createDesignAsset, getDesignAssetTotalBytes, MAX_DESIGN_ASSETS_TOTAL_BYTES, normalizeDesignAssets, type DesignAssetInput, type DesignAssetResult } from "@/core/design/assets";
 import { loadDesignAssets, saveDesignAssets } from "@/core/storage/designAssetRepo";
+import { isFavorite as isFavoriteIn, toggleFavorite as toggleFavoriteIn, type FavoriteRef } from "@/core/design/favorites";
 
 export const SAVE_DEBOUNCE_MS = 500;
 
@@ -41,6 +42,15 @@ export const useWorkspaceStore = defineStore("workspace", {
     designAssets: (s) => s.workspace.designAssets,
     datasets: (s) => s.workspace.datasets,
     settings: (s) => s.workspace.settings,
+    /**
+     * T16：收藏引用列表（只存引用，不复制内容）。
+     *
+     * **刻意不在这里做解析**：解析要读组件注册表 / 内置区块表 / 布局表，
+     * 而这些表经 `schema` 又反向依赖本 store（`MapSceneWidget.vue` 会 import store），
+     * 一旦在 store 里 import 解析层就会形成循环依赖，模块初始化时 TDZ 崩溃。
+     * 解析交给 UI 层（`DesignLibraryPanel` 用 `resolveFavorites(ws.favorites)`）。
+     */
+    favorites: (s): FavoriteRef[] => s.workspace.favorites,
   },
   actions: {
     async load(): Promise<void> {
@@ -125,6 +135,35 @@ export const useWorkspaceStore = defineStore("workspace", {
           /* saveState 已置 error，顶栏提示并可重试 */
         }
       }, SAVE_DEBOUNCE_MS);
+    },
+    /**
+     * T16（P1-4）：切换收藏状态。
+     *
+     * 收藏属于工作区元数据，随工作区一起持久化（走 scheduleSave 防抖），
+     * 但**不进大屏历史栈**——撤销应该回退画布编辑，而不是回退「我点了个星」。
+     */
+    toggleFavorite(ref: FavoriteRef): { ok: boolean; favorited: boolean } {
+      const next = toggleFavoriteIn(this.workspace.favorites, ref);
+      const favorited = next.length > this.workspace.favorites.length;
+      this.workspace.favorites = next;
+      this.scheduleSave();
+      return { ok: true, favorited };
+    },
+    isFavorite(ref: FavoriteRef): boolean {
+      return isFavoriteIn(this.workspace.favorites, ref);
+    },
+    /** 移除一条引用（含已失效引用）。不存在时 removed: false，不抛错。 */
+    removeFavorite(ref: FavoriteRef): { ok: boolean; removed: boolean } {
+      const before = this.workspace.favorites.length;
+      const next = toggleFavoriteIn(this.workspace.favorites, ref).filter(
+        (entry) => entry.kind !== ref.kind || entry.id !== ref.id || entry.version !== ref.version,
+      );
+      const removed = next.length < before;
+      if (removed) {
+        this.workspace.favorites = next;
+        this.scheduleSave();
+      }
+      return { ok: true, removed };
     },
     async addDesignAsset(input: DesignAssetInput): Promise<DesignAssetResult> {
       const result = createDesignAsset({ ...input, id: input.id ?? this.assetId() });

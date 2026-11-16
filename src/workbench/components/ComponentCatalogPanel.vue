@@ -4,14 +4,41 @@ import { filterComponentCatalog, getComponentCatalog } from "@/core/components/c
 import type { ComponentCatalogEntry, ComponentCatalogGroup } from "@/core/components/types";
 import { catalogDragPayload } from "../catalogActions";
 import { setActiveCanvasDragPayload } from "@/shared/dnd";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import type { FavoriteRef } from "@/core/design/favorites";
 
 const props = withDefaults(defineProps<{ entries?: readonly ComponentCatalogEntry[] }>(), {
   entries: () => getComponentCatalog(),
 });
 const emit = defineEmits<{ (event: "select", entry: ComponentCatalogEntry): void }>();
 
+const ws = useWorkspaceStore();
 const query = ref("");
 const activeGroup = ref<ComponentCatalogGroup | "all">("all");
+
+/**
+ * T16：只有 built-in 组件可收藏（图表类型与基础元素不在收藏范围内，
+ * 它们由 `source` 字段区分，收藏引用只认 `component` kind）。
+ */
+function favoriteRefOf(entry: ComponentCatalogEntry): FavoriteRef | null {
+  if (entry.source !== "component" || !entry.componentId) return null;
+  return { kind: "component", id: entry.componentId, version: entry.componentVersion };
+}
+
+/** 模板里无法对联合类型收窄，导出 id 字符串给 DOM 断言用。 */
+function favoriteId(entry: ComponentCatalogEntry): string {
+  return entry.source === "component" ? entry.componentId : "";
+}
+
+function isFavorited(entry: ComponentCatalogEntry): boolean {
+  const ref = favoriteRefOf(entry);
+  return ref ? ws.isFavorite(ref) : false;
+}
+
+function toggleFavorite(entry: ComponentCatalogEntry): void {
+  const ref = favoriteRefOf(entry);
+  if (ref) ws.toggleFavorite(ref);
+}
 
 const GROUP_OPTIONS: readonly { value: ComponentCatalogGroup | "all"; label: string }[] = [
   { value: "all", label: "全部" },
@@ -140,9 +167,8 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
       <section v-for="section in visibleGroups" :key="section.group" class="catalog-section">
         <h3>{{ section.label }}</h3>
         <div class="catalog-grid">
+          <div v-for="entry in section.entries" :key="entry.key" class="catalog-cell">
           <button
-            v-for="entry in section.entries"
-            :key="entry.key"
             class="catalog-card"
             type="button"
             draggable="true"
@@ -237,6 +263,18 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
             </span>
             <span class="catalog-card__add" aria-hidden="true">＋</span>
           </button>
+          <button
+            v-if="favoriteRefOf(entry)"
+            class="catalog-fav"
+            type="button"
+            :class="{ 'catalog-fav--on': isFavorited(entry) }"
+            :aria-pressed="isFavorited(entry)"
+            :aria-label="`${isFavorited(entry) ? '取消收藏' : '收藏'} ${entry.name}`"
+            :title="isFavorited(entry) ? '取消收藏' : '收藏'"
+            :data-favorite-id="favoriteId(entry)"
+            @click.stop="toggleFavorite(entry)"
+          >{{ isFavorited(entry) ? "★" : "☆" }}</button>
+          </div>
         </div>
       </section>
     </div>
@@ -256,6 +294,13 @@ function onDragStart(event: DragEvent, entry: ComponentCatalogEntry): void {
 .catalog-sections { display: flex; min-width: 0; flex-direction: column; gap: 13px; }
 .catalog-section h3 { margin: 0 0 6px; color: var(--cf-text-2); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 .catalog-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.catalog-cell { position: relative; display: flex; min-width: 0; }
+.catalog-cell .catalog-card { flex: 1 1 auto; min-width: 0; padding-right: 30px; }
+.catalog-fav { position: absolute; top: 5px; right: 5px; display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--cf-text-2); cursor: pointer; font-size: 13px; line-height: 1; opacity: .55; transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease; }
+.catalog-cell:hover .catalog-fav { opacity: 1; }
+.catalog-fav:hover { border-color: var(--cf-border); background: color-mix(in srgb, var(--cf-primary) 10%, transparent); color: var(--cf-primary); }
+.catalog-fav--on { color: #f4c542; opacity: 1; }
+.catalog-fav:focus-visible { outline: 2px solid color-mix(in srgb, var(--cf-primary) 45%, transparent); outline-offset: 1px; opacity: 1; }
 .catalog-card { display: flex; min-width: 0; min-height: 62px; flex-direction: row; align-items: center; gap: 9px; padding: 7px; border: 1px solid var(--cf-border); border-radius: 8px; background: var(--cf-bg); color: inherit; cursor: grab; font: inherit; text-align: left; transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease; }
 .catalog-card:hover { border-color: color-mix(in srgb, var(--cf-primary) 65%, var(--cf-border)); background: color-mix(in srgb, var(--cf-primary) 4%, var(--cf-bg)); }
 .catalog-card:focus-visible { border-color: var(--cf-primary); outline: 2px solid color-mix(in srgb, var(--cf-primary) 42%, transparent); outline-offset: 1px; }

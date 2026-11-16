@@ -1,4 +1,5 @@
 import type { BlueprintGraph } from "@/core/blueprint/types";
+import type { FavoriteRef } from "@/core/design/favorites";
 
 export type GeoChartType = "geoScatter" | "geoHeatmap" | "geoFlow";
 export type ChartType = "line" | "bar" | "pie" | "map" | "scatter" | "radar" | GeoChartType;
@@ -271,6 +272,8 @@ export interface Workspace {
   version: 2;
   assets: ChartAsset[];
   designAssets: DesignAsset[];
+  /** T16：收藏（只存引用，见 core/design/favorites.ts） */
+  favorites: FavoriteRef[];
   screens: Screen[];
   datasets: DatasetDefinition[];
   settings: { autosave: boolean; api?: ApiSettings };

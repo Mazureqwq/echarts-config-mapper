@@ -16,7 +16,7 @@ import SelectionOverlay from "./SelectionOverlay.vue";
 import TransformHandles from "./TransformHandles.vue";
 import Icon from "@/shared/ui/Icon.vue";
 import { ASSET_DND_MIME, DESIGN_DND_MIME, clearActiveCanvasDragPayload, getActiveCanvasDragPayload } from "@/shared/dnd";
-import { BUILT_IN_BLOCKS, getThemeById, themeCssVariables } from "@/core/design/library";
+import { builtInBlocks, getThemeById, themeCssVariables } from "@/core/design/library";
 import { parseLayoutBackgroundDragPayload } from "@/workbench/layoutBackgroundActions";
 import type { AlignMode } from "@/stores/documentStore";
 
@@ -348,7 +348,7 @@ function dragPlacementPreview(mime: string, raw: string, point: Point): Placemen
     return framePreview(point, { w: definition.defaultFrame.w, h: definition.defaultFrame.h }, canvas, true, false);
   }
   if (payload.kind === "block") {
-    const block = BUILT_IN_BLOCKS.find((entry) => entry.id === payload.id);
+    const block = builtInBlocks().find((entry) => entry.id === payload.id);
     if (!block || block.items.length === 0) return null;
     const minX = Math.min(...block.items.map((item) => item.frame.x));
     const minY = Math.min(...block.items.map((item) => item.frame.y));

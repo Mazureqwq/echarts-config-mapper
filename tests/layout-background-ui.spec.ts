@@ -69,7 +69,9 @@ describe("LayoutBackgroundCatalog", () => {
     }
     expect((html.match(/class=\"layout-background-card/g) ?? []).length).toBe(18);
     expect((html.match(/class=\"background-preset-card/g) ?? []).length).toBe(8);
-    expect((html.match(/type=\"button\"/g) ?? []).length).toBe(26);
+    // 26 个原有按钮（布局卡 + 背景预设卡 + 装饰素材卡）+ T16 新增的 2 个布局星标
+    expect((html.match(/type=\"button\"/g) ?? []).length).toBe(28);
+    expect((html.match(/class=\"layout-fav/g) ?? []).length).toBe(2);
     expect(html).not.toMatch(/https?:\/\//i);
   });
 

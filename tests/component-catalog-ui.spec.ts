@@ -1,13 +1,16 @@
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { createPinia, setActivePinia } from "pinia";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { componentRegistry } from "../src/core/components/builtins";
 import { getComponentCatalog } from "../src/core/components/catalog";
 import { DESIGN_DND_MIME } from "../src/shared/dnd";
 import { catalogDragPayload, insertCatalogEntry } from "../src/workbench/catalogActions";
 import ComponentCatalogPanel from "../src/workbench/components/ComponentCatalogPanel.vue";
 import DesignLibraryPanel from "../src/workbench/panels/DesignLibraryPanel.vue";
+
+// T16：目录卡片现在带收藏星标，需要 workspace store 提供收藏状态
+beforeEach(() => setActivePinia(createPinia()));
 
 describe("component catalog actions", () => {
   const entries = getComponentCatalog();

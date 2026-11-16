@@ -30,6 +30,7 @@ import { sanitizeHexColor } from "../components/props";
 import { normalizeMapSceneProps } from "../components/mapScene";
 import { initialChartData } from "../chart/chartData";
 import { normalizeDesignAssets } from "../design/assets";
+import { normalizeFavorites } from "../design/favorites";
 
 export const DEFAULT_FRAME: Frame = { x: 100, y: 100, w: 400, h: 300, rotate: 0 };
 export const DEFAULT_BACKGROUND: Background = { kind: "color", color: "#12161d" };
@@ -63,7 +64,7 @@ function initialDataFor(type: ChartType): ChartData {
 }
 
 export function createWorkspace(): Workspace {
-  return { version: 2, assets: [], designAssets: [], screens: [], datasets: [], settings: { autosave: true } };
+  return { version: 2, assets: [], designAssets: [], favorites: [], screens: [], datasets: [], settings: { autosave: true } };
 }
 
 export function createScreen(name: string, canvas?: { width: number; height: number }): Screen {
@@ -663,6 +664,7 @@ export function normalizeWorkspace(raw: unknown): Workspace {
     version: 2,
     assets: assetsRaw.map((a) => normalizeAsset(a)).filter((a): a is ChartAsset => a !== null),
     designAssets: normalizeDesignAssets(designAssetsRaw),
+    favorites: normalizeFavorites(raw.favorites),
     screens: screensRaw.map((s) => normalizeScreen(s)).filter((s): s is Screen => s !== null),
     datasets: datasetsRaw.map((d) => normalizeDataset(d)).filter((d): d is DatasetDefinition => d !== null),
     settings: {

@@ -4,8 +4,19 @@ import { LAYOUT_BACKGROUND_ENTRIES, type LayoutBackgroundEntry } from "@/core/de
 import { BUILT_IN_BACKGROUND_PRESETS } from "@/core/design/backgroundPresets";
 import { layoutBackgroundDragPayload } from "@/workbench/layoutBackgroundActions";
 import { setActiveCanvasDragPayload } from "@/shared/dnd";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const emit = defineEmits<{ select: [entry: LayoutBackgroundEntry]; applyBackground: [presetId: string] }>();
+const ws = useWorkspaceStore();
+
+/** T16：布局底板的收藏（只存 kind+id，不复制几何）。 */
+function isFavorited(entry: LayoutBackgroundEntry): boolean {
+  return ws.isFavorite({ kind: "layout", id: entry.id });
+}
+
+function toggleFavorite(entry: LayoutBackgroundEntry): void {
+  ws.toggleFavorite({ kind: "layout", id: entry.id });
+}
 const layouts = computed(() => LAYOUT_BACKGROUND_ENTRIES.filter((entry) => entry.kind === "layout"));
 const assets = computed(() => LAYOUT_BACKGROUND_ENTRIES.filter((entry) => entry.kind === "asset"));
 
@@ -26,9 +37,8 @@ function startDrag(event: DragEvent, entry: LayoutBackgroundEntry): void {
       <header class="section-head">
         <div><h3 id="layout-background-layouts-heading">布局底板</h3><p>整屏背景分区；不移动现有图表</p></div>
       </header>
+      <div v-for="entry in layouts" :key="entry.id" class="layout-background-cell">
       <button
-        v-for="entry in layouts"
-        :key="entry.id"
         class="layout-background-card"
         type="button"
         draggable="true"
@@ -48,6 +58,16 @@ function startDrag(event: DragEvent, entry: LayoutBackgroundEntry): void {
         <span class="layout-background-copy"><strong>{{ entry.name }}</strong><small>{{ entry.description }}</small></span>
         <span class="insert-mark" aria-hidden="true">＋</span>
       </button>
+        <button
+          class="layout-fav"
+          type="button"
+          :class="{ 'layout-fav--on': isFavorited(entry) }"
+          :aria-pressed="isFavorited(entry)"
+          :aria-label="`${isFavorited(entry) ? '取消收藏' : '收藏'} ${entry.name}`"
+          :data-layout-favorite-id="entry.id"
+          @click.stop="toggleFavorite(entry)"
+        >{{ isFavorited(entry) ? "★" : "☆" }}</button>
+      </div>
     </section>
 
     <section class="library-section" aria-labelledby="layout-background-presets-heading">
@@ -96,6 +116,13 @@ function startDrag(event: DragEvent, entry: LayoutBackgroundEntry): void {
 </template>
 
 <style scoped>
+.layout-background-cell { position: relative; display: flex; align-items: stretch; gap: 4px; }
+.layout-background-cell .layout-background-card { flex: 1 1 auto; min-width: 0; }
+.layout-fav { flex: 0 0 auto; width: 22px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--cf-text-2); cursor: pointer; font-size: 12px; line-height: 1; opacity: .55; }
+.layout-background-cell:hover .layout-fav { opacity: 1; }
+.layout-fav--on { color: #f4c542; opacity: 1; }
+.layout-fav:hover { border-color: var(--cf-border); color: #f4c542; }
+
 .layout-background-catalog { display: flex; flex-direction: column; gap: 18px; }
 .library-section { min-width: 0; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }

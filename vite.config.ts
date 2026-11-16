@@ -4,13 +4,15 @@ import { readFileSync, existsSync } from "fs";
 import vue from "@vitejs/plugin-vue";
 import vueJsx from "@vitejs/plugin-vue-jsx";
 
-/** 本地演示副本专用：?demo=t9 / t10 / t11 / t15 时在 index.html 注入演示种子（不改业务源码）。 */
+/** 本地演示副本专用：?demo=t9 / t10 / t11 / t15 / t16 时在 index.html 注入演示种子（不改业务源码）。 */
 function demoSeedPlugin() {
   return {
     name: "cf-demo-seed-t9",
     transformIndexHtml(html: string, ctx: { originalUrl?: string }) {
       const url = (ctx as unknown as { originalUrl?: string }).originalUrl ?? "";
-      const seedFile = url.includes("demo=t15")
+      const seedFile = url.includes("demo=t16")
+        ? "examples/screens/demo-seed-t16.js"
+        : url.includes("demo=t15")
         ? "examples/screens/demo-seed-t15.js"
         : url.includes("demo=t11")
         ? "examples/screens/demo-seed-t11.js"

@@ -74,7 +74,23 @@ function makeKpiBlock(): ComponentBlock {
   return { id: "kpi-group", name: "KPI 指标组", version: 1, description: "标题与三个已注册的 KPI 指标卡，可绑定工作区数据集。", items };
 }
 
-export const BUILT_IN_BLOCKS: readonly ComponentBlock[] = [makeTitlePanelBlock(), makeKpiBlock()];
+/**
+ * 内置区块**惰性构建**。
+ *
+ * 曾经是模块顶层的 `export const BUILT_IN_BLOCKS = [makeTitlePanelBlock(), …]`，
+ * 而 `makeTitlePanelBlock()` 会调用 `schema.createItem()` → 读 `DEFAULT_FRAME`。
+ * 只要有一条 import 链在 `schema.ts` 初始化完成之前抵达本模块
+ * （例如 `schema → builtins → MapSceneWidget.vue → workspaceStore → favoriteCatalog → library`），
+ * 就会立刻 `Cannot access 'DEFAULT_FRAME' before initialization`。
+ * 改成函数后，构建时机推迟到第一次真正使用，循环依赖不再致命。
+ */
+let cachedBlocks: readonly ComponentBlock[] | null = null;
+
+export function builtInBlocks(): readonly ComponentBlock[] {
+  cachedBlocks ??= [makeTitlePanelBlock(), makeKpiBlock()];
+  return cachedBlocks;
+}
+
 
 export function getThemeById(id: string | undefined): DesignTheme | undefined {
   return BUILT_IN_THEMES.find((theme) => theme.id === id);
